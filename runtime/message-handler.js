@@ -15,6 +15,10 @@
 import fs from "node:fs";
 import path from "node:path";
 
+// Generic/new task ids must never be treated as explicit task identity.
+// Kept in sync with index.js GENERIC_TASK.
+const GENERIC_TASK = /^(default-task|task|general|)$/;
+
 // ---------------------------------------------------------------------------
 // CONSTANTS
 // ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } f
 import { ContextDecisionTracer } from "./context-decision-audit.js";
 import { guardAction } from "./runtime-guards.js";
 import { WamPolicyBlock } from "./risk-engine.js";
+import { classifyByCapabilities, buildCandidate } from "./policy/strategy-capabilities.js";
 import { getStatusReport } from "./execution-state.js";
 import { createSnapshot, checkContinuation, rebuildScope } from "./context-snapshot.js";
 import fs from "node:fs";
@@ -17,6 +18,8 @@ import path from "node:path";
 
 const sessionExecutions = new Map();
 export { sessionExecutions };
+
+const SAFE_READ_TOOLS = new Set(["read", "read_file", "list_directory", "list_files", "get_file"]);
 
 function isSafeReadTool(tool) {
   const normalized = String(tool || "").toLowerCase();
@@ -75,10 +78,10 @@ async function bridgeExecution({ taskId, taskRoot, state, tool, args, callID, se
   const resolvedTool = tool;
   const resolvedArgs = args || {};
   const resolvedState = state || {};
-  const requirements = Array.isArray(state.requirements) ? state.requirements : [];
+  const requirements = Array.isArray(resolvedState.requirements) ? resolvedState.requirements : [];
   const requirement = requirements.find((item) => item?.status !== "done" && item?.status !== "verified") || requirements[0] || null;
-  const contractApproved = state.contract?.status === "APPROVED";
-  const phase = state.phase;
+  const contractApproved = resolvedState.contract?.status === "APPROVED";
+  const phase = resolvedState.phase;
 
   if (!taskId || !taskRoot || !tool || (!contractApproved && !["IMPLEMENTING", "VERIFYING"].includes(phase)) || isSafeReadTool(tool)) {
     return;
@@ -457,7 +460,6 @@ function classifyActionAgainstStrategy(action, tool, args, approvedStrategy) {
     return { covered: null, reason: "No active approved strategy" };
   }
 
-  const { classifyByCapabilities, buildCandidate } = require_policy_capabilities();
   const candidate = buildCandidate({ action, tool, args });
 
   // Normalize legacy string-list strategies into structured capability records
@@ -492,14 +494,6 @@ function classifyActionAgainstStrategy(action, tool, args, approvedStrategy) {
     return { covered: false, reason: verdict.reason };
   }
   return { covered: true, reason: verdict.reason };
-}
-
-function require_policy_capabilities() {
-  return require_capabilities_module || (require_capabilities_module = loadCapabilities());
-}
-let require_capabilities_module = null;
-function loadCapabilities() {
-  return require("./policy/strategy-capabilities.js");
 }
 
 // (Legacy substring-matching path removed. Strategy continuity is now evaluated
@@ -700,7 +694,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
       output.parts.push({
         id: genPartId(),
         type: "text",
-        text: wamCli((input.arguments || "").split(/\s+/), cfg, root, taskKey),
+        text: await wamCli((input.arguments || "").split(/\s+/), cfg, root, taskKey),
       });
     },
 
@@ -710,12 +704,16 @@ const WaitAMinutePlugin = async (pluginInput) => {
     // (openmode web multi-proyecto: el cwd de la sesión llega por aquí, no
     // por pluginInput.directory que es el cwd del proceso server).
     "tool.execute.before": async (input, output) => {
+      let sid;
+      let taskRoot;
+      let taskId;
+      let st;
       try {
         if (bypassed) return;
-        const sid = input?.sessionID;
-        const taskRoot = await resolveSessionBase(sid);
-        let taskId = sessionTasks.get(sid) || readActiveTaskIdFresh(taskRoot) || (sid ? `ses-${sid.slice(-10)}` : "default-task");
-        let st = getTaskState(taskId, taskRoot);
+        sid = input?.sessionID;
+        taskRoot = await resolveSessionBase(sid);
+        taskId = sessionTasks.get(sid) || readActiveTaskIdFresh(taskRoot) || (sid ? `ses-${sid.slice(-10)}` : "default-task");
+        st = getTaskState(taskId, taskRoot);
         // Fallback: try the active task from disk if first lookup failed
         if (!st && !sid) {
           const activeId = readActiveTaskIdFresh(taskRoot);
@@ -747,9 +745,9 @@ const WaitAMinutePlugin = async (pluginInput) => {
         // está cubierta antes de proceder con la lógica de ASKING.
         if (st?.approvedStrategy && st.approvedStrategy.status === "ACTIVE") {
           const stratCheck = classifyActionAgainstStrategy(
-            input?.description || "",
+            input?.description || tool,
             tool,
-            input.args || input.parameters || {},
+            output?.args || input?.args || input?.parameters || {},
             st.approvedStrategy
           );
           if (stratCheck.covered === true) {
@@ -919,7 +917,7 @@ function classifyAskingMessage(text = "") {
  * /wam CLI — opencode 1.18.25 entrega comandos vía command.execute.before,
  * no vía ctx.command. Lógica extraída del handler antiguo.
  */
-function wamCli(args, cfg = {}, root = process.cwd(), taskId = readActiveTaskId(root) || "default-task") {
+async function wamCli(args, cfg = {}, root = process.cwd(), taskId = readActiveTaskId(root) || "default-task") {
   const [sub, action, ...rest] = args || [];
   // taskId de la sesión del comando (namespaced ses-<id> si genérico)
 
@@ -1011,9 +1009,9 @@ function wamCli(args, cfg = {}, root = process.cwd(), taskId = readActiveTaskId(
         .map(r => `${r.id} [${r.status}] ${r.title}${r.evidence?.length ? " | evidence: " + r.evidence.join("; ") : ""}`)
         .join("\n");
     }
-    if (op === "done") return JSON.stringify(waitAMinute.markRequirement(taskId, reqId, "done", evidence.join(" "), root));
-    if (op === "verified") return JSON.stringify(waitAMinute.markRequirement(taskId, reqId, "verified", evidence.join(" "), root));
-    if (op === "pending") return JSON.stringify(waitAMinute.markRequirement(taskId, reqId, "pending", "", root));
+    if (op === "done") return JSON.stringify(await waitAMinute.markRequirement(taskId, reqId, "done", evidence.join(" "), root));
+    if (op === "verified") return JSON.stringify(await waitAMinute.markRequirement(taskId, reqId, "verified", evidence.join(" "), root));
+    if (op === "pending") return JSON.stringify(await waitAMinute.markRequirement(taskId, reqId, "pending", "", root));
     return "Uso: /wam progress | /wam progress <id> done <evidencia> | /wam progress <id> verified <evidencia> | /wam progress <id> pending";
   }
 
@@ -1479,7 +1477,14 @@ const waitAMinute = {
 
   /** Transición de fase basada en el resultado del Completion Gate. */
   applyPhaseTransition: function(state, gate) {
-    const phase = gate?.allDone ? "DONE" : state?.phase || "IMPLEMENTING";
+    let phase;
+    if (gate?.allDone) {
+      phase = "DONE";
+    } else if (gate?.blocked && gate?.verifying) {
+      phase = "VERIFYING";
+    } else {
+      phase = state?.phase || "IMPLEMENTING";
+    }
     const nextAction = gate?.blocked ? "Continuar con requisitos pendientes" : state?.nextAction;
     return { phase, nextAction };
   },

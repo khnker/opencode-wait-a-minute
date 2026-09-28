@@ -1,4 +1,5 @@
 
+import fs from "node:fs";
 import {
   createHypothesis,
   listHypotheses,
@@ -32,7 +33,7 @@ function resolveTaskId(taskRoot, explicitTaskId) {
   // Convención: el primer directorio bajo .wam/tasks/
   const tasksRoot = `${taskRoot}/.wam/tasks`;
   try {
-    const entries = require("node:fs").readdirSync(tasksRoot, { withFileTypes: true });
+    const entries = fs.readdirSync(tasksRoot, { withFileTypes: true });
     const dir = entries.find((e) => e.isDirectory());
     return dir ? dir.name : "default";
   } catch {

@@ -13,7 +13,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, readFileSync, statSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync, statSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -24,7 +24,6 @@ const MIN_SKILL_COUNT = 500;
 // Critical runtime files that MUST ship in the tarball.
 const REQUIRED_FILES = [
   "index.js",
-  "engine.js",
   "preflight/request-classifier.js",
   "skills/registry.json",
 ];
@@ -136,6 +135,42 @@ async function main() {
       "registry",
       `OK: ${skillIds.length} skills, ${withSkillMd} with SKILL.md content`,
     );
+
+    // 6) Strategy Continuity smoke: drive the packaged plugin hook with an ACTIVE
+    //    approved strategy so capability loading + candidate selection execute
+    //    from the tarball. Guards against ESM `require()` regressions in release.
+    log("strategy-continuity", "activating persisted strategy from packed artifact...");
+    const smokeRoot = join(tmp, "wam-continuity-smoke");
+    mkdirSync(join(smokeRoot, ".wam", "tasks", "default-task"), { recursive: true });
+    writeFileSync(
+      join(smokeRoot, ".wam", "tasks", "default-task", "state.yaml"),
+      JSON.stringify({
+        phase: "IMPLEMENTING",
+        contract: { status: "APPROVED", objective: "packaged strategy continuity smoke", unknowns: [] },
+        requirements: [],
+        assumptions: [],
+        nextAction: null,
+        approvedStrategy: {
+          strategy: "packaged strategy continuity smoke",
+          approvedAt: Date.now(),
+          scope: "packaged strategy continuity smoke",
+          allowedActions: ["read", "write", "edit"],
+          prohibitedActions: ["production deploy"],
+          invalidationConditions: [],
+          status: "ACTIVE",
+        },
+      }, null, 2),
+    );
+    const factory = typeof mod.default === "function" ? mod.default : api;
+    if (typeof factory !== "function") {
+      fail("strategy-continuity", "plugin default export is not a factory function");
+    }
+    const smokeHooks = await factory({ directory: smokeRoot, client: {}, project: {}, $: {} });
+    if (typeof smokeHooks?.["tool.execute.before"] !== "function") {
+      fail("strategy-continuity", "tool.execute.before hook missing");
+    }
+    await smokeHooks["tool.execute.before"]({ tool: "write", callID: "smoke" }, { args: {} });
+    log("strategy-continuity", "OK");
 
     log("done", "pack:test PASSED ✓");
   } catch (err) {

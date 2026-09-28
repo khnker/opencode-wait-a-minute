@@ -40,9 +40,10 @@
     "validation/",
     "replay/",
     "metrics/",
+    "policy/",
+    "strategy/",
     "README.md",
-    "LICENSE",
-    "SKILL.md"
+    "LICENSE"
   ],
   "scripts": {
     "test": "node scripts/run-tests.mjs",
@@ -54,6 +55,14 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/khnker/wait-a-minute-plugin.git"
+  },
+  "homepage": "https://github.com/khnker/wait-a-minute-plugin#readme",
+  "bugs": {
+    "url": "https://github.com/khnker/wait-a-minute-plugin/issues"
+  },
+  "publishConfig": {
+    "provenance": true,
+    "access": "public"
   },
   "keywords": [
     "opencode",

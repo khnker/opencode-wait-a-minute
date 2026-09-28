@@ -198,7 +198,7 @@ test("VERIFYING: done sin verificar bloquea DONE → fase VERIFYING; verified pe
   const reqs = st1.requirements;
   assert.ok(reqs.length >= 3, "contrato específico");
   for (const req of reqs) {
-    const done = pluginDefault.markRequirement(taskId, req.id, "done", `implementado ${req.title}`);
+    const done = await pluginDefault.markRequirement(taskId, req.id, "done", `implementado ${req.title}`);
     assert.equal(done.ok, true);
   }
 
@@ -209,7 +209,7 @@ test("VERIFYING: done sin verificar bloquea DONE → fase VERIFYING; verified pe
   assert.equal(st2.phase, "VERIFYING", "fase pasa a VERIFYING");
 
   for (const req of getTaskState(taskId).requirements) {
-    const ver = pluginDefault.markRequirement(taskId, req.id, "verified", "npm test pasa");
+    const ver = await pluginDefault.markRequirement(taskId, req.id, "verified", "npm test pasa");
     assert.equal(ver.ok, true);
   }
   const inp2 = { parts: [{ type: "text", text: "listo, done" }], taskId };

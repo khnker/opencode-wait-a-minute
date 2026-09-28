@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit/invariant tests
+        run: npm test
+
+      - name: Run smoke test
+        run: npm run smoke
+
+      - name: Run package verification
+        run: npm run pack:test
+
+      - name: Run production validation gate
+        run: node scripts/production-gate.mjs
+
+      - name: Verify package metadata
+        run: node -e "const p=require('./package.json'); for (const k of ['repository','license','engines']) { if(!p[k]) { console.error('missing '+k); process.exit(1);} } console.log('metadata ok')"
+
+      - name: Publish to npm (Trusted Publishing / OIDC)
+        run: npm publish --provenance --access public

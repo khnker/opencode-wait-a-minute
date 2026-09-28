@@ -9,3 +9,7 @@
 # Engram AI agent memory
 .engram/
 node_modules/
+
+# Local search index (tgrep) and editor backups
+.tgrep/
+*.bak
