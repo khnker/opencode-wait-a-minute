@@ -46,12 +46,14 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node scripts/run-tests.mjs",
-    "test:legacy": "node --test --test-concurrency=1 wait-a-minute-test.mjs",
-    "smoke": "node -e \"import('./index.js').then(m => console.log('WAM plugin loaded successfully'))\"",
+    "bench:validation": "node benchmarks/run-validation.mjs",
     "benchmark": "node benchmarks/run.mjs",
     "benchmark:real": "node benchmarks/run-real.mjs",
     "pack:test": "node scripts/verify-package.mjs",
+    "smoke": "node -e \"import('./index.js').then(m => console.log('WAM plugin loaded successfully'))\"",
+    "test": "node scripts/run-tests.mjs",
+    "test:legacy": "node --test --test-concurrency=1 wait-a-minute-test.mjs",
+    "test:validation": "node --test benchmarks/validation/*.test.mjs",
     "wam:next": "node scripts/autonomous-task-runner.mjs --all"
   },
   "repository": {
