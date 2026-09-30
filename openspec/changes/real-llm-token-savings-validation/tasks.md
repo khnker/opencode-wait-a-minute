@@ -1,9 +1,10 @@
 # Tasks
 
 ## 1. Provider Adapter + Runners
-* [ ] Implement OpenAI-compatible provider adapter.
-* [ ] Implement `baseline-runner.mjs`.
-* [ ] Implement `wam-runner.mjs`.
+* [x] Implement OpenAI-compatible provider adapter.
+* [x] Implement `baseline-runner.mjs` (raw context via `buildRuntimeContextGraph`).
+* [x] Implement `wam-runner.mjs` + `real-session.mjs` (multi-turn, instrumentation).
+* [ ] Ground scenarios in real graph inputs so baseline > assembled (see §5) — REQUIRED before savings are meaningful.
 
 ## 2. Instrumentation
 * [x] Instrument `assembly.js` seams (`admissionItems`, `reserve`, `spend`).
