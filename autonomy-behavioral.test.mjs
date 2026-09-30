@@ -172,11 +172,12 @@ test("Autonomy: T-D — Replanning preserves prior discoveries", () => {
     recordObservation(root, taskId, { experimentId: e2.id, result: "H2 confirmed" });
     updateHypothesisStatus(root, taskId, h2.id, "supported");
 
-    // Compact state must preserve both
+    // Compact state must preserve both: h1 → rejected, h2 → supported.
+    // Note: supported hypotheses are NOT active (canonical semantics).
     const compact = buildCompactState(root, taskId);
-    assert.ok(compact.rejectedHypotheses.length >= 1);
-    assert.ok(compact.activeHypotheses.length >= 1);
-    assert.ok(compact.recentExperiments.length >= 1);
+    assert.ok(compact.rejectedHypotheses.length >= 1, "h1 should appear in rejectedHypotheses");
+    assert.ok(compact.supportedHypotheses.length >= 1, "h2 should appear in supportedHypotheses");
+    assert.ok(compact.recentExperiments.length >= 1, "experiments should be preserved");
   } finally {
     cleanup();
   }

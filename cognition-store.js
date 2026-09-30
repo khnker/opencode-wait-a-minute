@@ -27,18 +27,18 @@ export const DELETION_POLICY = "soft-archive";
 // -- Status constants (single source of truth) --
 // Hypotheses lifecycle: PROPOSED → TESTING → SUPPORTED | REJECTED → ARCHIVED
 export const HYPOTHESIS_STATUS = Object.freeze({
-  PROPOSED: "PROPOSED",
-  TESTING: "TESTING",
-  SUPPORTED: "SUPPORTED",
-  REJECTED: "REJECTED",
-  ARCHIVED: "ARCHIVED",
+  PROPOSED: "proposed",
+  TESTING: "testing",
+  SUPPORTED: "supported",
+  REJECTED: "rejected",
+  ARCHIVED: "archived",
 });
 
-// Experiment lifecycle: PROPOSED → COMPLETED | FAILED
+// Experiment lifecycle: proposed → completed | failed
 export const EXPERIMENT_STATUS = Object.freeze({
-  PROPOSED: "PROPOSED",
-  COMPLETED: "COMPLETED",
-  FAILED: "FAILED",
+  PROPOSED: "proposed",
+  COMPLETED: "completed",
+  FAILED: "failed",
 });
 
 export function migrateLegacyCognition(taskRoot, taskId) {

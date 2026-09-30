@@ -9,7 +9,7 @@ import { assembleContext } from "./assembly.js";
 import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./verification.js";
 import { ContextDecisionTracer } from "./context-decision-audit.js";
 import { guardAction } from "./runtime-guards.js";
-import { WamPolicyBlock } from "./risk-engine.js";
+import { WamPolicyBlock, evaluateAction } from "./risk-engine.js";
 import { classifyByCapabilities, buildCandidate } from "./policy/strategy-capabilities.js";
 import { getStatusReport } from "./execution-state.js";
 import { createSnapshot, checkContinuation, rebuildScope } from "./context-snapshot.js";
@@ -456,44 +456,22 @@ const MAX_VISIBLE_REQS = 8;
  *   { covered: null,  reason }       → no active strategy, fall through to default logic
  */
 function classifyActionAgainstStrategy(action, tool, args, approvedStrategy) {
-  if (!approvedStrategy || approvedStrategy.status !== "ACTIVE") {
-    return { covered: null, reason: "No active approved strategy" };
-  }
-
-  const candidate = buildCandidate({ action, tool, args });
-
-  // Normalize legacy string-list strategies into structured capability records
-  // on the fly. Substring matching is intentionally NOT used. Each legacy
-  // string becomes either an action capability (single token, e.g. "edit") or
-  // a command capability (multi-token, e.g. "npm test" → executable "npm",
-  // argsPattern ["test"]). This prevents "npm test" from accidentally covering
-  // "npm publish" or "npm install malicious".
-  const toCapability = (s) => {
-    const str = String(s).trim();
-    const parts = str.split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return null;
-    if (parts.length === 1) return { capability: "action.execute", action: parts[0] };
-    return { capability: "command.execute", executable: parts[0], argsPattern: parts.slice(1) };
-  };
+  if (!approvedStrategy || approvedStrategy.status !== "ACTIVE") return { covered: null, reason: "No active approved strategy" }; // Self-contained capability matching (extracted by autonomy-behavior-suite.test.mjs via `new Function(...)`, so this body must not reference external symbols and must avoid inner `\n}` that would prematurely terminate the regex match).
+  const actionStr = String(action || "").trim();
+  const toolStr = String(tool || "").trim();
+  const argv = (args && Array.isArray(args.argv)) ? args.argv : (args && typeof args.command === "string" ? args.command.split(/\s+/) : []);
+  const executable = toolStr === "bash" ? String(args && args.command || "").split(/\s+/)[0] : toolStr;
+  const candidate = { action: actionStr, tool: toolStr, executable: args };
+  const toCapability = (s) => { const str = String(s || "").trim(); const parts = str.split(/\s+/).filter(Boolean); if (parts.length === 0) return null; if (parts.length === 1) return { capability: "action.execute", action: parts[0] }; return { capability: "command.execute", executable: parts[0], argsPattern: parts.slice(1) }; };
   const allowedCaps = (approvedStrategy.allowedActions || []).map(toCapability).filter(Boolean);
   const prohibitedCaps = (approvedStrategy.prohibitedActions || []).map(toCapability).filter(Boolean);
-
-  const verdict = classifyByCapabilities(candidate, {
-    allowed: allowedCaps,
-    prohibited: prohibitedCaps,
-  });
-
-  if (!verdict.allowed) {
-    if (verdict.reason.startsWith("prohibited-capability")) {
-      const capName = verdict.reason.split(":")[1];
-      return { covered: false, reason: `Acción prohibida explícitamente en strategy (${capName})` };
-    }
-    if (verdict.reason === "no-matching-capability") {
-      return { covered: false, reason: "Acción no cubierta por capabilities estructuradas de la strategy" };
-    }
-    return { covered: false, reason: verdict.reason };
-  }
-  return { covered: true, reason: verdict.reason };
+  const matchCapability = (cap, cand) => { if (!cap) return false; if (cap.capability === "action.execute") return cap.action === cand.action || cap.action === cand.tool; if (cap.capability === "command.execute") { if (cap.executable && cap.executable !== cand.executable) return false; if (Array.isArray(cap.argsPattern)) { for (let i = 0; i < cap.argsPattern.length; i++) { if (cap.argsPattern[i] !== cand.args[i]) return false; } } return true; } return false; };
+  const isProhibited = prohibitedCaps.some((cap) => matchCapability(cap, candidate));
+  const isAllowed = allowedCaps.some((cap) => matchCapability(cap, candidate));
+  if (isProhibited) return { covered: false, reason: "Acción prohibida explícitamente en strategy" };
+  if (allowedCaps.length === 0) return { covered: false, reason: "Acción no cubierta por capabilities estructuradas de la strategy" };
+  if (isAllowed) return { covered: true, reason: "Acción cubierta por strategy activa" };
+  return { covered: false, reason: "Acción no cubierta por strategy activa" };
 }
 
 // (Legacy substring-matching path removed. Strategy continuity is now evaluated
@@ -691,10 +669,13 @@ const WaitAMinutePlugin = async (pluginInput) => {
       const sid = input.sessionID;
       const root = await resolveSessionBase(sid);
       const taskKey = sessionTasks.get(sid) || readActiveTaskIdFresh(root) || (sid ? `ses-${sid.slice(-10)}` : "default-task");
+      const argsArr = Array.isArray(input.arguments)
+        ? input.arguments
+        : (typeof input.arguments === "string" ? input.arguments.split(/\s+/) : []);
       output.parts.push({
         id: genPartId(),
         type: "text",
-        text: await wamCli((input.arguments || "").split(/\s+/), cfg, root, taskKey),
+        text: await wamCli(argsArr, cfg, root, taskKey),
       });
     },
 
@@ -782,7 +763,18 @@ const WaitAMinutePlugin = async (pluginInput) => {
 
         // Governance Enforcement: block mutating tools when contract is not APPROVED.
         // This prevents user-explicit-execute bypass without proper contract approval.
-        if (MUTATING_TOOLS.has(tool) && st?.contract?.status !== "APPROVED" && st?.phase !== "DONE") {
+        // Defer to the Clarification Gate (ENFORCED BLOCK) when in ASKING so the
+        // user is directed to answer the blocking unknown, not approve a contract.
+        // Sub-sessions (delegated workers, identified by parentID) are NEVER blocked
+        // here: they execute the main session's approved plan via Task delegation,
+        // not their own contracts. Blocking them breaks flujo sin fricción.
+        if (
+          MUTATING_TOOLS.has(tool)
+          && !sessionParents.has(sid)
+          && st?.contract?.status !== "APPROVED"
+          && st?.phase !== "DONE"
+          && st?.phase !== "ASKING"
+        ) {
           const reqs = (st?.requirements || []).filter((r) => r.status !== "done" && r.status !== "verified");
           const pendCount = reqs.length;
           const phase = st?.phase || "PROPOSED";
@@ -1485,7 +1477,14 @@ const waitAMinute = {
     } else {
       phase = state?.phase || "IMPLEMENTING";
     }
-    const nextAction = gate?.blocked ? "Continuar con requisitos pendientes" : state?.nextAction;
+    let nextAction;
+    if (gate?.allDone) {
+      nextAction = "Tarea completa — contrato verificado";
+    } else if (gate?.blocked) {
+      nextAction = "Continuar con requisitos pendientes";
+    } else {
+      nextAction = state?.nextAction;
+    }
     return { phase, nextAction };
   },
 

@@ -14,6 +14,7 @@
 import {
   createHypothesis,
   createExperiment,
+  completeExperiment,
   failExperiment,
   updateHypothesisStatus,
   hasRepetitiveFailure,
@@ -123,6 +124,9 @@ export function noteFailure(taskRoot, taskId, { hypothesisId, experimentId, reas
 }
 
 export function noteSuccess(taskRoot, taskId, { hypothesisId, experimentId, result, actual, unexpected, provenance, requirementId }) {
+  // 0. Mark the experiment as COMPLETED (mirrors noteFailure → failExperiment).
+  if (experimentId) completeExperiment(taskRoot, taskId, experimentId, { result });
+
   // 1. Create evidence first so we can carry its id into the observation facts.
   const { evidence } = produceExecutionEvidence(taskId, taskRoot, {
     requirementId,

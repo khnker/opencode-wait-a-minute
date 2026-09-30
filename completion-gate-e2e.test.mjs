@@ -60,7 +60,7 @@ test("G5: DONE sin evidencia -> BLOCK (markRequirement lo rechaza y gate lo dete
   pluginDefault.approveContract(taskId);
   const r1 = getTaskState(taskId).requirements[0];
 
-  const refused = pluginDefault.markRequirement(taskId, r1.id, "done", "");
+  const refused = await pluginDefault.markRequirement(taskId, r1.id, "done", "");
   assert.equal(refused.ok, false, "markRequirement rechaza done sin evidencia");
   assert.ok(refused.reason.includes("evidencia"), "razón menciona evidencia");
   assert.equal(getTaskState(taskId).requirements[0].status, "pending", "no marca done sin evidencia");
@@ -95,11 +95,11 @@ test("G5: DONE con todo verificado y evidencia -> ALLOW, fase DONE, summary.md, 
   pluginDefault.approveContract(taskId);
   let reqs = getTaskState(taskId).requirements;
   for (const r of reqs) {
-    const rMark = pluginDefault.markRequirement(taskId, r.id, "done", `evidencia: ${r.title} -> npm test passed, typecheck passed`);
+    const rMark = await pluginDefault.markRequirement(taskId, r.id, "done", `evidencia: ${r.title} -> npm test passed, typecheck passed`);
     assert.equal(rMark.ok, true, `${r.id} marcado done con evidencia`);
   }
   for (const r of getTaskState(taskId).requirements) {
-    const rVerify = pluginDefault.markRequirement(taskId, r.id, "verified", `npm test passed for ${r.title}`);
+    const rVerify = await pluginDefault.markRequirement(taskId, r.id, "verified", `npm test passed for ${r.title}`);
     assert.equal(rVerify.ok, true, `${r.id} verificado`);
   }
   const out = await runHook("todo verificado, tarea completa done", taskId, "g5c2");

@@ -71,7 +71,14 @@ export function nextActionFrom(state) {
   const unverified = (state?.requirements || []).find((r) => r.status === "done");
   if (unverified)
     return `Verificar ${truncate(unverified.title)} — /wam progress ${unverified.id} verified <evidencia>`;
-  if (state?.requirements?.length) return "Verificar requisitos completos antes de DONE";
+  if (state?.requirements?.length) {
+    // If all requirements are verified, we are done
+    const allVerified = (state.requirements || []).every(r => r.status === "verified");
+    if (allVerified) {
+      return "Tarea completa — contrato verificado";
+    }
+    return "Verificar requisitos completos antes de DONE";
+  }
   return "Continuar tarea";
 }
 

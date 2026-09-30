@@ -24,21 +24,21 @@ import {
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "wam-cog-"));
 const taskId = "test-task";
 
-test("Cognition: HYPOTHESIS_STATUS constants are uppercase", () => {
-  assert.equal(HYPOTHESIS_STATUS.PROPOSED, "PROPOSED");
-  assert.equal(HYPOTHESIS_STATUS.TESTING, "TESTING");
-  assert.equal(HYPOTHESIS_STATUS.SUPPORTED, "SUPPORTED");
-  assert.equal(HYPOTHESIS_STATUS.REJECTED, "REJECTED");
-  assert.equal(HYPOTHESIS_STATUS.ARCHIVED, "ARCHIVED");
+test("Cognition: HYPOTHESIS_STATUS constants are lowercase canonical", () => {
+  assert.equal(HYPOTHESIS_STATUS.PROPOSED, "proposed");
+  assert.equal(HYPOTHESIS_STATUS.TESTING, "testing");
+  assert.equal(HYPOTHESIS_STATUS.SUPPORTED, "supported");
+  assert.equal(HYPOTHESIS_STATUS.REJECTED, "rejected");
+  assert.equal(HYPOTHESIS_STATUS.ARCHIVED, "archived");
 });
 
-test("Cognition: EXPERIMENT_STATUS constants are uppercase", () => {
-  assert.equal(EXPERIMENT_STATUS.PROPOSED, "PROPOSED");
-  assert.equal(EXPERIMENT_STATUS.COMPLETED, "COMPLETED");
-  assert.equal(EXPERIMENT_STATUS.FAILED, "FAILED");
+test("Cognition: EXPERIMENT_STATUS constants are lowercase canonical", () => {
+  assert.equal(EXPERIMENT_STATUS.PROPOSED, "proposed");
+  assert.equal(EXPERIMENT_STATUS.COMPLETED, "completed");
+  assert.equal(EXPERIMENT_STATUS.FAILED, "failed");
 });
 
-test("Cognition: createHypothesis persists with PROPOSED status", () => {
+test("Cognition: createHypothesis persists with proposed status", () => {
   const h = createHypothesis(tmpRoot, taskId, { statement: "H1: parser bug" });
   assert.ok(h.id.startsWith("H"));
   assert.equal(h.status, HYPOTHESIS_STATUS.PROPOSED);

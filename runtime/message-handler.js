@@ -211,13 +211,44 @@ export async function handleMessage(input, output, deps) {
           ? `⛔ [wait-a-minute] BLOQUEADO: Pregunta pendiente — ${u.id}: ${u.question}\nResponder: /wam answer ${u.id} <respuesta>`
           : "⛔ [wait-a-minute] BLOQUEADO: Tienes preguntas sin responder.";
         emitTextPart(output, directive, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+        // Rewrite the original prompt so the implementation attempt is NOT
+        // consumed downstream as an instruction (AC5).
+        const rewrite = `[wait-a-minute] BLOQUEADO — prompt de implementación no consumido como respuesta. ${directive}`;
+        if (input?.message?.parts && input.message.parts.length > 0) {
+          const tp = input.message.parts.find((p) => p.type === "text" && typeof p.text === "string");
+          if (tp) tp.text = rewrite;
+        }
+        if (input?.parts && input.parts.length > 0) {
+          const tp = input.parts.find((p) => p.type === "text" && typeof p.text === "string");
+          if (tp) tp.text = rewrite;
+        }
         return;
       }
       if (kind === "new-intent") {
         emitTextPart(output, "[wait-a-minute] Nueva intención detectada. Abriendo tarea nueva.", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
-        return;
+        // Override the explicit taskId so subsequent analysis creates a fresh
+        // task (task-<ts>) without contaminating unknowns from the previous task.
+        const newTaskId = `task-${Date.now()}`;
+        if (input) input.taskId = newTaskId;
+        try {
+          if (input?.sessionID) sessionTasks.set(input.sessionID, newTaskId);
+          writeActiveTaskId(newTaskId, wamRoot);
+        } catch {}
+        // Update local taskId so the rest of handleMessage uses the new task.
+        taskId = newTaskId;
+        // Fall through to normal analysis: a new task-<ts> task gets created.
       }
-      // answer: continue to normal analysis below
+      // answer: in ASKING a natural-language message resolves the blocking question.
+      const ansRes = waitAMinute.answerFromMessage(taskId, trimmed, wamRoot);
+      if (ansRes && ansRes.ok) {
+        const u = ansRes.u;
+        emitTextPart(
+          output,
+          `[wait-a-minute] question answered — ${u?.id || "U1"}: ${u?.answer || trimmed}. Ready → Proceed (${u?.question || "pregunta resuelta"})`,
+          { sessionID: input.sessionID, messageID: output.message?.id || input.messageID },
+        );
+        // After resolving, fall through to re-analysis so contract is rebuilt.
+      }
     }
 
     // Project scope change → backlog + new task
