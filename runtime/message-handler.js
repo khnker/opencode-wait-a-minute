@@ -86,6 +86,7 @@ const ASKING_CMD_RE = /^(answer|resolve|contract|progress|task|skills|assumption
  */
 export async function handleMessage(input, output, deps) {
   const {
+    collector = null,
     bypassed,
     sessionTasks,
     sessionStore,
@@ -272,6 +273,7 @@ export async function handleMessage(input, output, deps) {
         const snapshotCheck = checkContinuation(taskId, existingState, wamRoot);
 
         if (snapshotCheck.status === "VALID") {
+          if (collector) collector.record("Context_fast_path");
           input.waitAnalysis = sessionStore.get("waitAnalysis") || null;
           try { updateProjectMemo({}, wamRoot); } catch {}
           try {
@@ -286,7 +288,7 @@ export async function handleMessage(input, output, deps) {
           return;
         }
 
-        const scope = rebuildScope(snapshotCheck.changedSignals);
+        const scope = rebuildScope(snapshotCheck.changedSignals, collector);
         if (scope.rebuildN1 || scope.rebuildN3) {
           input.waitAnalysis = sessionStore.get("waitAnalysis") || null;
           try { updateProjectMemo({}, wamRoot); } catch {}

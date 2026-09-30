@@ -107,6 +107,7 @@ export function assembleContext({
   skillRegistry = null,
   selectedSkills = [],
   useLegacySelector = false,
+  collector = null,
 } = {}) {
   const levels = { N0: [], N1: [], N2: [], N3: [], N4: [] };
   const rationale = [];
@@ -386,6 +387,16 @@ if (!isTrivial) {
     sufficiency = "insufficient";
   } else {
     sufficiency = "sufficient";
+  }
+
+  // Instrumentation: record assembly metrics
+  if (collector) {
+    collector.record("Context_assembled");
+    collector.set("Mandatory_items", admissionItems.filter((i) => i.admission === ADMISSION.MANDATORY).length);
+    collector.set("Conditional_items", admissionItems.filter((i) => i.admission === ADMISSION.CONDITIONAL).length);
+    collector.set("Optional_items", admissionItems.filter((i) => i.admission === ADMISSION.OPTIONAL).length);
+    collector.set("Tokens_before", admissionItems.reduce((sum, i) => sum + i.tokenCost, 0));
+    collector.set("Tokens_after", lines.reduce((sum, line) => sum + estTokens(line), 0));
   }
 
   return {

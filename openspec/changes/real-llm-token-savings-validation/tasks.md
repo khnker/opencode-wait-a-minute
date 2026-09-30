@@ -6,10 +6,10 @@
 * [ ] Implement `wam-runner.mjs`.
 
 ## 2. Instrumentation
-* [ ] Instrument `assembly.js` seams (`admissionItems`, `reserve`, `spend`).
-* [ ] Instrument `runtime/message-handler.js` fast-path/rebuild logic.
-* [ ] Instrument `context/context-snapshot.js` for continuation/rebuild.
-* [ ] Implement file sink for `telemetry/telemetry.js`.
+* [x] Instrument `assembly.js` seams (`admissionItems`, `reserve`, `spend`).
+* [x] Instrument `runtime/message-handler.js` fast-path/rebuild logic.
+* [x] Instrument `context-snapshot.js` for continuation/rebuild.
+* [x] Implement file sink for instrumentation counters.
 
 ## 3. Evaluation
 * [ ] Implement `benchmarks/evaluation/success.mjs`.

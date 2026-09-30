@@ -16,8 +16,8 @@ In-process runner.
 Reuse existing seams:
 * `assembly.js`: `admissionItems`, `reserve`, `spend` (root path).
 * `runtime/message-handler.js`: VALID fast-path / STALE rebuild.
-* `context/context-snapshot.js`: `checkContinuation`, `rebuildScope`.
-* Wire to `telemetry/telemetry.js` `createTelemetry({sink})` with file sink.
+* `context-snapshot.js`: `checkContinuation`, `rebuildScope`.
+* Optional `collector` param on those seams (`benchmarks/instrumentation/collector.mjs`), with `benchmarks/instrumentation/file-sink.mjs` writing counters; behavior is identical when no collector is passed.
 
 Counters: `Context_assembled`, `Context_reconstructed`, `Context_fast_path`, `Snapshot_hit`, `Snapshot_miss`, `Mandatory_items`, `Conditional_items`, `Optional_items`, `Tokens_before`, `Tokens_after`, `Reconstruction_count`.
 

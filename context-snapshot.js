@@ -143,10 +143,14 @@ export function loadSnapshot(taskId, root) {
  * @param {string} root
  * @returns {SnapshotCheck}
  */
-export function checkContinuation(taskId, currentTaskState, root) {
+export function checkContinuation(taskId, currentTaskState, root, collector = null) {
+  const finish = (result) => {
+    if (collector) collector.record(result.status === "VALID" ? "Snapshot_hit" : "Snapshot_miss");
+    return result;
+  };
   const previous = loadSnapshot(taskId, root);
   if (!previous) {
-    return { status: "STALE", reason: "no-previous-snapshot", changedSignals: ["no-snapshot"] };
+    return finish({ status: "STALE", reason: "no-previous-snapshot", changedSignals: ["no-snapshot"] });
   }
 
   const changed = [];
@@ -170,16 +174,16 @@ export function checkContinuation(taskId, currentTaskState, root) {
   }
 
   if (changed.length === 0) {
-    return { status: "VALID", reason: "no-changes", changedSignals: [] };
+    return finish({ status: "VALID", reason: "no-changes", changedSignals: [] });
   }
 
   // Task state changes = INVALID (need full rebuild)
   if (changed.includes("task-state")) {
-    return { status: "INVALID", reason: "task-state-changed", changedSignals: changed };
+    return finish({ status: "INVALID", reason: "task-state-changed", changedSignals: changed });
   }
 
   // Other changes = STALE (need partial rebuild)
-  return { status: "STALE", reason: "context-changed", changedSignals: changed };
+  return finish({ status: "STALE", reason: "context-changed", changedSignals: changed });
 }
 
 /**
@@ -188,7 +192,11 @@ export function checkContinuation(taskId, currentTaskState, root) {
  * @param {string[]} changedSignals
  * @returns {{ rebuildN1: boolean, rebuildN2: boolean, rebuildN3: boolean }}
  */
-export function rebuildScope(changedSignals) {
+export function rebuildScope(changedSignals, collector = null) {
+  if (collector) {
+    collector.record("Reconstruction_count");
+    collector.record("Context_reconstructed");
+  }
   const scope = { rebuildN1: false, rebuildN2: false, rebuildN3: false };
 
   for (const signal of changedSignals) {
