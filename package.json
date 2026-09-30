@@ -50,6 +50,7 @@
     "test:legacy": "node --test --test-concurrency=1 wait-a-minute-test.mjs",
     "smoke": "node -e \"import('./index.js').then(m => console.log('WAM plugin loaded successfully'))\"",
     "benchmark": "node benchmarks/run.mjs",
+    "benchmark:real": "node benchmarks/run-real.mjs",
     "pack:test": "node scripts/verify-package.mjs",
     "wam:next": "node scripts/autonomous-task-runner.mjs --all"
   },

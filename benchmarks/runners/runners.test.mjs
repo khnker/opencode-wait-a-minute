@@ -5,7 +5,7 @@ import { runBaselineTurn, getRepoCommit } from "./baseline-runner.mjs";
 import { runWamTurn } from "./wam-runner.mjs";
 import { runRealScenario } from "./real-session.mjs";
 import { createCollector } from "../instrumentation/collector.mjs";
-import { getRealScenario } from "../scenarios/real.mjs";
+import { getRealScenario, REAL_SCENARIOS } from "../scenarios/real.mjs";
 
 test("Provider Adapter", async (t) => {
   await t.test("successful completion", async () => {
@@ -43,26 +43,47 @@ test("Runners", async (t) => {
     })
   };
 
-  await t.test("A: S7 (multi-turn) wiring", async () => {
+  await t.test("A: S7 savings (baseline > wam)", async () => {
     const scenario = getRealScenario("S7");
     const res = await runRealScenario({ scenario, provider: fakeProvider, repoCommit: "test" });
     assert.strictEqual(res.counters.Context_assembled, scenario.turns.length);
-    assert.ok(res.totals.baselineTokens > 0 && res.totals.wamTokens > 0);
-    for (const t of res.turns) {
-      assert.ok(t.wam.prompt.length > 0 && t.baseline.prompt.length > 0);
-    }
+    assert.ok(
+      res.totals.baselineTokens > res.totals.wamTokens,
+      `Baseline (${res.totals.baselineTokens}) should be > Wam (${res.totals.wamTokens})`
+    );
   });
 
-  await t.test("B: continuation -> fast-path/hit", async () => {
-    const scenario = getRealScenario("S7");
+  await t.test("B: S17 continuation -> fast-path/hit", async () => {
+    const scenario = getRealScenario("S17");
     const res = await runRealScenario({ scenario, provider: fakeProvider, repoCommit: "test" });
     assert.ok(res.counters.Snapshot_hit > 0, `Snapshot_hit (${res.counters.Snapshot_hit}) should be > 0`);
     assert.ok(res.counters.Context_fast_path > 0, `Context_fast_path (${res.counters.Context_fast_path}) should be > 0`);
   });
 
-  await t.test("C: S9 (changed state) -> reconstruction", async () => {
-    const scenario = getRealScenario("S9");
+  await t.test("C: S7 changed state -> reconstruction", async () => {
+    const scenario = getRealScenario("S7");
     const res = await runRealScenario({ scenario, provider: fakeProvider, repoCommit: "test" });
     assert.ok(res.counters.Context_reconstructed > 0, `Context_reconstructed (${res.counters.Context_reconstructed}) should be > 0`);
+  });
+
+  await t.test("D: S27 negative control -> no fabricated savings", async () => {
+    const scenario = getRealScenario("S27");
+    const res = await runRealScenario({ scenario, provider: fakeProvider, repoCommit: "test" });
+    assert.ok(
+      res.totals.baselineTokens <= res.totals.wamTokens,
+      `Expected no savings on S27, got baseline ${res.totals.baselineTokens} vs wam ${res.totals.wamTokens}`
+    );
+  });
+
+  await t.test("E: S7-S30 category invariants", async () => {
+    for (const scenario of REAL_SCENARIOS) {
+      const res = await runRealScenario({ scenario, provider: fakeProvider, repoCommit: "test" });
+      const { baselineTokens: b, wamTokens: w } = res.totals;
+      if (scenario.category === "negative") {
+        assert.ok(b <= w, `${scenario.id} [negative] expected no savings, got ${b} vs ${w}`);
+      } else {
+        assert.ok(b > w, `${scenario.id} [${scenario.category}] expected savings, got ${b} vs ${w}`);
+      }
+    }
   });
 });

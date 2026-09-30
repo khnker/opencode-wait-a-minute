@@ -4,7 +4,7 @@
 * [x] Implement OpenAI-compatible provider adapter.
 * [x] Implement `baseline-runner.mjs` (raw context via `buildRuntimeContextGraph`).
 * [x] Implement `wam-runner.mjs` + `real-session.mjs` (multi-turn, instrumentation).
-* [ ] Ground scenarios in real graph inputs so baseline > assembled (see §5) — REQUIRED before savings are meaningful.
+* [x] Ground scenarios in real graph inputs so baseline > assembled (see §5) — REQUIRED before savings are meaningful.
 
 ## 2. Instrumentation
 * [x] Instrument `assembly.js` seams (`admissionItems`, `reserve`, `spend`).
@@ -13,20 +13,20 @@
 * [x] Implement file sink for instrumentation counters.
 
 ## 3. Evaluation
-* [ ] Implement `benchmarks/evaluation/success.mjs`.
-* [ ] Implement `benchmarks/evaluation/equivalence.mjs`.
+* [x] Implement `benchmarks/evaluation/success.mjs`.
+* [x] Implement `benchmarks/evaluation/equivalence.mjs`.
 
 ## 4. Metrics/Report
-* [ ] Implement `benchmarks/evaluation/metrics.mjs`.
-* [ ] Generate `summary.json` with defined metrics.
+* [x] Implement `benchmarks/evaluation/metrics.mjs`.
+* [x] Generate `summary.json` with defined metrics.
 
 ## 5. Scenarios S7–S30
-* [ ] Define S7–S16 (Real-LLM local/contextual).
-* [ ] Define S17–S21 (Continuations).
-* [ ] Define S22–S26 (Dependency tasks).
-* [ ] Define S27–S30 (Negative controls).
+* [x] Define S7–S16 (Real-LLM local/contextual).
+* [x] Define S17–S21 (Continuations).
+* [x] Define S22–S26 (Dependency tasks).
+* [x] Define S27–S30 (Negative controls).
 
 ## 6. Tests + Validation
-* [ ] Add harness unit tests.
+* [x] Add harness unit tests.
 * [ ] Run S7–S30 and verify results.
 * [ ] Run complete benchmark suite and verify `summary.json`.
