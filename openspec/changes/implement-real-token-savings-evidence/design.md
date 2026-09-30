@@ -1,54 +1,52 @@
 # Design: Real Token Savings Evidence
 
-## Architecture
+## Pipeline
 
 ```text
-benchmark scenario
-       │
-       ▼
-     runner
-       │
-   ┌───┴────┐
-   │        │
-baseline    WAM
-   │        │
-   └───┬────┘
-       ▼
- execution trace
-       │
-       ▼
-    analyzer
-       │
-   ┌───┼────────────┐
-   │   │            │
-tokens progress provenance
-   │   │            │
-   └───┴────────────┘
-       │
-       ▼
- evidence bundle
-       │
-   ┌───┼───────┐
-   │   │       │
- raw summary report
-       │
-       ▼
-     charts
+Scenario
+   │
+   ▼
+Runner
+   ├── baseline
+   └── WAM
+         │
+         ▼
+    Execution Trace
+         │
+         ├── token usage
+         ├── context
+         ├── turns
+         ├── tool calls
+         └── verification
+         │
+         ▼
+      Analyzer
+         │
+         ├── token metrics
+         ├── savings
+         ├── progress
+         └── provenance
+         │
+         ▼
+    Evidence Bundle
+         │
+         ├── raw.json
+         ├── summary.json
+         ├── report.md
+         └── charts
 ```
 
-## Trace Model
+## Canonical Trace
 
-A trace must contain enough information to reconstruct the token and progress measurements.
-
-Conceptually:
+The trace schema should contain:
 
 ```js
 {
   schemaVersion,
   runId,
   scenarioId,
-  condition: "baseline" | "wam",
-  mode: "trace-replay" | "real-model",
+  condition,
+  mode,
 
   provenance: {
     gitSha,
@@ -84,9 +82,9 @@ Conceptually:
 }
 ```
 
-## Token Sources
+## Token Source
 
-The analyzer must support an explicit token source:
+Supported token sources:
 
 ```text
 provider
@@ -95,68 +93,55 @@ trace
 estimated
 ```
 
-`provider` has highest evidentiary authority.
+The source must be persisted with every measurement.
 
-`estimated` must remain visibly marked as estimated.
+## Baseline
 
-## Baseline vs WAM
+Baseline execution must be a legitimate execution without WAM-specific behavior.
 
-The baseline runner must represent execution without WAM-specific lifecycle behavior.
+The benchmark must not artificially increase baseline context, retries or turns.
 
-It must not receive:
+## Deterministic Replay
 
-* artificially larger prompts
-* artificial delays
-* artificial retries
-* artificial context expansion
+Trace replay must:
 
-The only intended difference is the presence or absence of WAM.
+1. load a fixed fixture;
+2. validate its schema;
+3. reproduce token measurements;
+4. calculate derived metrics;
+5. produce deterministic output.
 
-## Trace Replay
+The replay must not call external services.
 
-Trace replay provides deterministic CI evidence.
-
-A replay must:
-
-* consume a fixed trace fixture
-* produce deterministic measurements
-* preserve negative savings
-* validate analyzer correctness
-* validate schema compatibility
-
-Replay must not silently regenerate token counts from scenario constants.
-
-## Real Model Runner
+## Real Runner
 
 The real runner must:
 
-1. load a scenario
-2. establish a clean initial state
-3. execute baseline
-4. restore the same initial state
-5. execute WAM
-6. capture provider usage and execution events
-7. emit raw evidence
+1. prepare clean state;
+2. execute baseline;
+3. restore equivalent state;
+4. execute WAM;
+5. capture execution data;
+6. persist raw evidence;
+7. repeat when requested.
 
-The runner must support repeated paired runs.
+## Analyzer
 
-## Analysis
+The analyzer owns metric calculation.
 
-The analyzer calculates:
+It must calculate:
 
 ```text
 inputTokens
 outputTokens
 totalTokens
-
 inputSavingsPct
 totalSavingsPct
-
 verifiedProgress
 verifiedProgressPer1kInputTokens
 ```
 
-For repeated runs:
+For repeated runs it calculates:
 
 ```text
 min
@@ -168,71 +153,34 @@ max
 
 ## Charts
 
-The report must generate at least:
+The benchmark should produce:
 
-### Graph A — Token Consumption
+### A — Token Consumption
 
-Baseline vs WAM input and total tokens per scenario.
+Baseline vs WAM tokens by scenario.
 
-### Graph B — Context Consumption
+### B — Context Consumption
 
-Input/context tokens across execution iterations.
+Context/input tokens per iteration.
 
-This should expose repeated context rebuilding versus compact continuation.
+### C — Savings Distribution
 
-### Graph C — Savings Distribution
+Distribution of savings across repeated real-model executions.
 
-Distribution of savings across real-model runs.
-
-### Graph D — Verified Progress Efficiency
+### D — Verified Progress Efficiency
 
 Verified progress per 1K input tokens.
 
-## Evidence Bundle
+## Evidence Integrity
 
-Example:
+The analyzer must be able to reconstruct summary metrics from raw evidence.
 
-```text
-benchmarks/results/<timestamp>/
-├── raw.json
-├── summary.json
-├── report.md
-└── charts/
-    ├── token-consumption.svg
-    ├── context-consumption.svg
-    ├── savings-distribution.svg
-    └── verified-progress.svg
-```
+The summary must not contain values that cannot be traced back to raw measurements.
 
-## CI Policy
+## Failure Handling
 
-CI executes deterministic trace replay only.
+Infrastructure failures must be distinguishable from task failures.
 
-Real-model execution is explicitly opt-in.
+An excluded run must contain an explicit reason.
 
-CI must fail when:
-
-* evidence schema is invalid
-* analyzer output is inconsistent
-* provenance is missing
-* trace replay is nondeterministic
-* negative savings are incorrectly clamped
-* baseline/WAM pairing is invalid
-
-CI must not fail simply because WAM produces negative savings for a legitimate scenario.
-
-## Regression Policy
-
-Deterministic regression thresholds may be applied to controlled fixtures.
-
-Real-model results are evidence, not hardcoded pass/fail expectations.
-
-The test suite must not assert:
-
-```js
-wamSavings > 0
-```
-
-for every scenario.
-
-A scenario where WAM consumes more tokens is valid evidence.
+No silent filtering is permitted.
