@@ -28,5 +28,5 @@
 
 ## 6. Tests + Validation
 * [x] Add harness unit tests.
-* [ ] Run S7–S30 and verify results.
-* [ ] Run complete benchmark suite and verify `summary.json`.
+* [x] Run S7–S30 and verify results.
+* [x] Run complete benchmark suite and verify `summary.json`.
