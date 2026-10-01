@@ -1,7 +1,7 @@
 # Tasks: RC1 Empirical Evidence & Execution Plan
 
-- [ ] Block 01: Formalize evidence provenance tagging across benchmark metrics.
-- [ ] Block 02: Harden empirical execution infrastructure and provider adapters.
+- [x] Block 01: Formalize evidence provenance tagging across benchmark metrics.
+- [x] Block 02: Harden empirical execution infrastructure and provider adapters.
 - [ ] Block 03: Enforce baseline and WAM state equivalence (`logicalStateHash`).
 - [ ] Block 04: Integrate verification-based correctness into scenario evaluation.
 - [ ] Block 05: Harden snapshot lifecycle and persistence/restart regression tests.

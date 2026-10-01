@@ -17,6 +17,8 @@
  * @property {Object} verification
  */
 
+import { EMPIRICAL_EVIDENCE } from "../reporters/claims.mjs";
+
 export const RunResultFields = [
   "scenario", "run", "turn", "model", "provider", "inputTokens", "outputTokens",
   "totalTokens", "contextTokens", "wamOverheadTokens", "contextRebuilds",
@@ -165,7 +167,7 @@ export function compareRuns({ runs }) {
   };
 }
 
-export function buildRealReport({ sessionResults, model, provider }) {
+export function buildRealReport({ sessionResults, model, provider, evidence = EMPIRICAL_EVIDENCE }) {
   const runs = (sessionResults ?? []).flatMap((sessionResult) =>
     normalizeRuns(sessionResult, { model, provider })
   );
@@ -179,6 +181,7 @@ export function buildRealReport({ sessionResults, model, provider }) {
     perScenario: comparison.perScenario,
     totals: comparison.totals,
     netInputSavings: comparison.netInputSavings,
-    breakEvenTurn: comparison.breakEvenTurn
+    breakEvenTurn: comparison.breakEvenTurn,
+    evidence
   };
 }

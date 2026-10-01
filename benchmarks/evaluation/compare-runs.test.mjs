@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeRuns, compareRuns, buildRealReport, RunResultFields } from "./compare-runs.mjs";
+import { DETERMINISTIC_EVIDENCE } from "../reporters/claims.mjs";
 import { runRealSuite } from "../run-real.mjs";
 import { RC1_SCENARIOS } from "../scenarios/rc1.mjs";
 
@@ -102,4 +103,12 @@ test("dry-run suite normalizes into a non-empty real report", async () => {
       assert.ok(field in run, `field ${field} missing`);
     }
   }
+});
+
+test("buildRealReport defaults to empirical evidence and honors an override", () => {
+  const empirical = buildRealReport({ sessionResults: [], model: "m", provider: "p" });
+  assert.equal(empirical.evidence.tokens, "observed");
+  const simulated = buildRealReport({ sessionResults: [], model: "m", provider: "mock", evidence: DETERMINISTIC_EVIDENCE });
+  assert.equal(simulated.evidence.tokens, "simulated");
+  assert.equal(simulated.evidence.execution, "deterministic_simulation");
 });

@@ -24,6 +24,7 @@ import {
 import { CAUSAL_METRIC_KEYS, DERIVED_METRIC_KEYS } from "../evaluation/causal-metrics.mjs";
 import { WORKLOAD_FAMILIES, CONTINUATION_TURNS } from "../scenarios/workloads.mjs";
 import { SNAPSHOT_MATRIX } from "../validation/snapshot-state.mjs";
+import { DETERMINISTIC_EVIDENCE } from "./claims.mjs";
 
 const SNAPSHOT_STATUSES = ["VALID", "STALE", "INVALID"];
 
@@ -256,7 +257,7 @@ export function buildValidationReport({ causal, snapshot } = {}) {
 
   lines.push(`Causal metric keys tracked: ${CAUSAL_METRIC_KEYS.join(", ")}.`);
 
-  return { markdown: `${lines.join("\n")}\n`, charts, composition };
+  return { markdown: `${lines.join("\n")}\n`, charts, composition, evidence: DETERMINISTIC_EVIDENCE };
 }
 
 export { SNAPSHOT_STATUSES };

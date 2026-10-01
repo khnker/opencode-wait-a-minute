@@ -7,38 +7,9 @@ import { evaluateTask } from "./evaluation/success.mjs";
 import { computeMetrics } from "./evaluation/metrics.mjs";
 import { buildRealReport } from "./evaluation/compare-runs.mjs";
 import { RC1_SCENARIOS } from "./scenarios/rc1.mjs";
-
-const MockProvider = {
-  complete: async () => ({ text: "mock", usage: { inputTokens: 10, outputTokens: 5 } }),
-  model: "mock-model"
-};
-
-/**
- * Deterministic in-file mock provider used by `--dry-run`. Returns a
- * fixed response and token counts derived from the prompt length so the
- * full pipeline (runners → normalization → compareRuns → real-report.json)
- * runs with zero network.
- */
-function createMockProvider() {
-  const model = "mock/dry-run";
-  const estimateTokens = (text = "") => Math.ceil(String(text).length / 4);
-  return {
-    model,
-    isConfigured: () => true,
-    estimateTokens,
-    complete: async ({ messages }) => {
-      const promptText = messages.map((m) => m.content ?? "").join("");
-      const text = `[mock-response] ${promptText.length} chars`;
-      return {
-        text,
-        usage: {
-          inputTokens: estimateTokens(promptText),
-          outputTokens: estimateTokens(text)
-        }
-      };
-    }
-  };
-}
+import { createMockProvider } from "./providers/provider.mjs";
+import { resolveProvider } from "./providers/index.mjs";
+import { DETERMINISTIC_EVIDENCE } from "./reporters/claims.mjs";
 
 export async function runRealSuite({ provider, scenarios, root, timestamp }) {
   const allScenarios = scenarios || (await import("./scenarios/real.mjs")).REAL_SCENARIOS;
@@ -78,7 +49,8 @@ export async function runDryRun({ outDir } = {}) {
   const report = buildRealReport({
     sessionResults: suite.results,
     model: provider.model,
-    provider: "mock"
+    provider: "mock",
+    evidence: DETERMINISTIC_EVIDENCE
   });
   report.evaluations = suite.evaluations;
   report.metrics = suite.metrics;
@@ -103,17 +75,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(0);
   }
 
-  const { WAM_BENCH_BASE_URL, WAM_BENCH_API_KEY, WAM_BENCH_MODEL } = process.env;
-  if (!WAM_BENCH_BASE_URL) {
+  if (!process.env.WAM_BENCH_BASE_URL) {
     console.log("[run-real] skipped: set WAM_BENCH_BASE_URL/WAM_BENCH_API_KEY/WAM_BENCH_MODEL to run");
     process.exit(0);
   }
 
-  const provider = createProvider({
-    baseUrl: WAM_BENCH_BASE_URL,
-    apiKey: WAM_BENCH_API_KEY,
-    model: WAM_BENCH_MODEL
-  });
+  const provider = resolveProvider();
 
   const suite = await runRealSuite({ provider });
   const iso = new Date().toISOString().replace(/:/g, "-");
