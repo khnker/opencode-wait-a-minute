@@ -1,0 +1,8 @@
+{
+  "id": "real-continuation",
+  "type": "continuation",
+  "turns": [
+    { "input": { "taskId": "cont-1", "phase": "ACTIVE" }, "prompt": "Start task cont-1" },
+    { "input": { "taskId": "cont-1", "phase": "ACTIVE" }, "prompt": "Continue task cont-1 with same state" }
+  ]
+}

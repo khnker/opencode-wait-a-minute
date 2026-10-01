@@ -1,0 +1,7 @@
+{
+  "id": "real-negative",
+  "type": "negative",
+  "turns": [
+    { "input": { "taskId": "neg-1", "phase": "DONE" }, "prompt": "Try to modify a completed task" }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WAMRealExperimentConfig",
+  "type": "object",
+  "properties": {
+    "experimentId": { "type": "string" },
+    "model": { "type": "string" },
+    "provider": { "type": "string" },
+    "temperature": { "type": "number" },
+    "maxTokens": { "type": "integer" },
+    "trials": { "type": "integer" },
+    "scenarios": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "required": ["experimentId", "model", "provider", "scenarios"]
+}

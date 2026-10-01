@@ -46,9 +46,12 @@
     "LICENSE"
   ],
   "scripts": {
+    "gate": "node scripts/release-gate.mjs",
     "bench:validation": "node benchmarks/run-validation.mjs",
     "benchmark": "node benchmarks/run.mjs",
     "benchmark:real": "node benchmarks/run-real.mjs",
+    "benchmark:suite": "node benchmarks/cli.mjs",
+    "report:rc1": "node benchmarks/reports/generate-rc1.mjs",
     "pack:test": "node scripts/verify-package.mjs",
     "smoke": "node -e \"import('./index.js').then(m => console.log('WAM plugin loaded successfully'))\"",
     "test": "node scripts/run-tests.mjs",

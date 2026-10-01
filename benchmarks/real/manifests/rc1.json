@@ -1,0 +1,16 @@
+{
+  "manifestVersion": "1.0.0",
+  "protocolVersion": "rc1",
+  "experimentId": "rc1-real-benchmark",
+  "model": "PLACEHOLDER_MODEL",
+  "provider": "openai-compatible",
+  "temperature": 0,
+  "maxTokens": 512,
+  "trials": 1,
+  "scenarios": [
+    "scenarios/local.json",
+    "scenarios/contextual.json",
+    "scenarios/continuation.json",
+    "scenarios/negative.json"
+  ]
+}

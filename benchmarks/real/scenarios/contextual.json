@@ -1,0 +1,7 @@
+{
+  "id": "real-contextual",
+  "type": "contextual",
+  "turns": [
+    { "input": { "taskId": "ctx-1", "phase": "ACTIVE", "relevantFiles": ["index.js"] }, "prompt": "Analyze index.js and check dependencies." }
+  ]
+}

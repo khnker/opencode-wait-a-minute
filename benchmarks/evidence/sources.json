@@ -1,0 +1,81 @@
+{
+  "corpus": "wam-rc1-external-evidence",
+  "version": "1.0.0",
+  "generatedAt": "2026-10-01T00:00:00Z",
+  "taxonomy": ["provider", "academic", "open-source", "independent"],
+  "inclusionCriteria": [
+    "Public, citable source (paper, official docs, or open repository).",
+    "Reports a quantitative metric on a defined population (not a marketing claim).",
+    "Methodology is reproducible or described in enough detail to be critiqued.",
+    "Relevance to at least one of: prompt caching, context compression, agent multi-turn context cost, or reproducible context benchmarks."
+  ],
+  "warning": "Provider-side prompt-caching savings describe the cost reduction a provider applies when the same prefix is reused across requests. They are NOT a measurement of the WAM context reduction mechanism. Cached-token figures are reported separately and never merged with WAM internal metrics.",
+  "sources": [
+    {
+      "id": "openai-prompt-caching-2024",
+      "source": "OpenAI — Prompt Caching (official documentation, 2024)",
+      "type": "provider",
+      "date": "2024-08",
+      "methodology": "Provider-controlled automatic prefix cache applied to the first 1024+ tokens of a prompt. Cache hits are billed at a discounted rate (e.g. 50% of input price). Reported as a billing/throughput optimisation, not a reduction in user-authored context.",
+      "metric": "discount on cached prompt tokens",
+      "population": "all OpenAI API requests on supported models (gpt-4o, gpt-4o-mini, gpt-4-turbo)",
+      "relevance": "Provider-side caching is structurally unrelated to WAM context selection. It does not shrink the context the model attends to and does not measure what the application chooses to send. Listed here only to ensure the RC1 report acknowledges the existence of provider caching and explains why it is not part of WAM evidence.",
+      "limitations": "Provider caching reduces cost, not the amount of context processed. Cached tokens still count toward the model's effective context window. WAM's internal metrics (deterministic validation, empirical dry-run) measure selector behaviour, not cache hit rate. Conflating the two would invalidate any comparison."
+    },
+    {
+      "id": "anthropic-prompt-caching-2024",
+      "source": "Anthropic — Prompt Caching documentation (2024)",
+      "type": "provider",
+      "date": "2024-08",
+      "methodology": "Manual cache_control breakpoints instruct the provider to reuse a prefix. Cached portions are billed at a lower rate and may be served from a faster path.",
+      "metric": "cache_control breakpoint reuse rate; latency on cached prefixes",
+      "population": "Claude API users opting in to cache_control",
+      "relevance": "Same caveat as OpenAI caching: this is a billing/latency optimisation, not a mechanism for reducing the application's effective context. Useful as background context only.",
+      "limitations": "Even with cache_control, the model still attends to the full prompt up to the cache hit. WAM operates one layer above: it chooses what to send. The two are complementary, not substitutes."
+    },
+    {
+      "id": "llmlingua-context-compression-2023",
+      "source": "Li, Yan, et al. — 'LLMLingua: Compressing Prompts for Accelerated Inference of Large Language Models' (EMNLP 2023)",
+      "type": "academic",
+      "date": "2023-10",
+      "methodology": "Compresses prompts by removing semantically non-essential tokens using a small classifier (e.g. GPT-2-small + perplexity ranking). Reports up to 20x compression with limited perplexity increase on NaturalQuestions, MS MARCO and other QA datasets.",
+      "metric": "compression ratio vs. accuracy retention on QA benchmarks",
+      "population": "NaturalQuestions, MS MARCO, TriviaQA, meeting summarisation; multiple LLM backbones (LLaMA, GPT-3.5)",
+      "relevance": "Establishes that prompt compression is a viable mechanism for reducing LLM context cost. WAM uses selection (drop entire nodes/turns) rather than token-level compression, but the underlying motivation — that most context is not load-bearing — is the same.",
+      "limitations": "LLMLingua works at the token level and may degrade on tasks that require exact phrasing or identifiers. WAM's mechanism is coarser-grained but verifiable. The two are not directly comparable without a shared task suite."
+    },
+    {
+      "id": "recomp-extractive-compression-2023",
+      "source": "Xu, Shi, et al. — 'RECOMP: Retrieval-Augmented Language Models for Compressive Passage Retrieval' (2023)",
+      "type": "academic",
+      "date": "2023-05",
+      "methodology": "Dual-encoder retriever selects passages, then an extractive compressor summarises them. Reports latency and quality trade-offs on HotpotQA, FEVER, and similar multi-hop QA datasets.",
+      "metric": "QA accuracy vs. context length",
+      "population": "HotpotQA, FEVER, StrategyQA",
+      "relevance": "Another academic precedent for context compression, framed as a retrieval-plus-extraction pipeline. Useful for situating WAM's selection-only approach against the broader literature.",
+      "limitations": "Different evaluation surface (QA accuracy) from WAM's accounting metrics (rebuilds avoided, fast-path hits, deterministic equivalence). Not directly commensurable."
+    },
+    {
+      "id": "agentbench-multi-turn-2023",
+      "source": "Liu, Xiao, et al. — 'AgentBench: Evaluating LLMs as Agents' (2023)",
+      "type": "open-source",
+      "date": "2023-08",
+      "methodology": "Reproducible benchmark harness for evaluating LLM agents across 8 environments (web shopping, web browsing, knowledge graph reasoning, etc.). Reports per-task success rates and a token/cost column.",
+      "metric": "task success rate, total tokens consumed per task, cost per task",
+      "population": "8 environments, 27 LLM configurations, fixed prompt templates",
+      "relevance": "Establishes a reproducible pattern for measuring token cost of multi-turn agent runs. WAM's empirical dry-run uses a similar scenario-driven, paired-baseline structure to estimate token cost on agentic trajectories.",
+      "limitations": "AgentBench evaluates agents end-to-end, not context selectors. WAM's contribution is at the selector layer. The two layers can be combined but AgentBench's headline metric (success rate) is not the metric WAM reports."
+    },
+    {
+      "id": "locomo-multi-turn-context-2024",
+      "source": "Maharana et al. — 'LoCoMo: Long Conversation Memory Benchmark' (2024)",
+      "type": "open-source",
+      "date": "2024-04",
+      "methodology": "Synthetic long-conversation dataset (~30 turns) with QA probes. Compares full-context vs. memory-augmented vs. retrieval-augmented LLM behaviour.",
+      "metric": "QA accuracy on long-conversation probes under different context regimes",
+      "population": "LoCoMo synthetic conversations, multiple LLM backbones",
+      "relevance": "Directly relevant: a public, reproducible benchmark for measuring how much context a long-conversation agent actually needs to answer correctly. Provides external grounding for the claim that long context is not always load-bearing.",
+      "limitations": "LoCoMo focuses on conversational QA, not engineering tasks. WAM's empirical evidence is on engineering trajectories. The shared insight is that context selectivity does not destroy task performance, but the magnitudes are not directly comparable."
+    }
+  ]
+}

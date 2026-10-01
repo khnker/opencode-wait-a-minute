@@ -1,0 +1,7 @@
+{
+  "id": "real-local",
+  "type": "local",
+  "turns": [
+    { "input": { "taskId": "local-1", "phase": "ACTIVE" }, "prompt": "What is the status of task local-1?" }
+  ]
+}
