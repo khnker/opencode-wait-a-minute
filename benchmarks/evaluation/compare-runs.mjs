@@ -18,6 +18,7 @@
  */
 
 import { EMPIRICAL_EVIDENCE } from "../reporters/claims.mjs";
+import { stateEquivalent } from "./state-equivalence.mjs";
 
 export const RunResultFields = [
   "scenario", "run", "turn", "model", "provider", "inputTokens", "outputTokens",
@@ -96,7 +97,13 @@ export function normalizeRuns(sessionResult, { model, provider, verification } =
       baselineTotalTokens: baselineInputTokens + baselineOutputTokens,
       wamInputTokens: wamModelInput,
       wamOutputTokens: outputTokens,
-      wamTotalTokens: wamModelInput + outputTokens
+      wamTotalTokens: wamModelInput + outputTokens,
+      logicalStateHash: turn?.wam?.logicalStateHash ?? turn?.baseline?.logicalStateHash ?? null,
+      stateEquivalent: turn?.stateEquivalent ?? (
+        turn?.baseline?.logicalStateHash != null && turn?.wam?.logicalStateHash != null
+          ? stateEquivalent(turn.baseline.logicalStateHash, turn.wam.logicalStateHash)
+          : true
+      )
     };
   });
 }
@@ -117,12 +124,16 @@ export function compareRuns({ runs }) {
       acc.fastPathCount += r.fastPathCount;
       acc.partialRebuildCount += r.partialRebuildCount;
       acc.fullRebuildCount += r.fullRebuildCount;
+      if (r.stateEquivalent === false) {
+        acc.nonEquivalentTurns += 1;
+      }
       return acc;
     },
     {
       turns: 0, baselineInputTokens: 0, baselineOutputTokens: 0,
       wamInputTokens: 0, wamOverheadTokens: 0, wamOutputTokens: 0, contextTokens: 0,
-      contextRebuilds: 0, fastPathCount: 0, partialRebuildCount: 0, fullRebuildCount: 0
+      contextRebuilds: 0, fastPathCount: 0, partialRebuildCount: 0, fullRebuildCount: 0,
+      nonEquivalentTurns: 0
     }
   );
 
@@ -161,7 +172,12 @@ export function compareRuns({ runs }) {
   return {
     runs,
     perScenario,
-    totals: { ...totals, wamEffectiveInput: totals.wamInputTokens + totals.wamOverheadTokens, netInputSavings },
+    totals: {
+      ...totals,
+      wamEffectiveInput: totals.wamInputTokens + totals.wamOverheadTokens,
+      netInputSavings,
+      stateEquivalent: totals.nonEquivalentTurns === 0
+    },
     netInputSavings,
     breakEvenTurn
   };
@@ -182,6 +198,7 @@ export function buildRealReport({ sessionResults, model, provider, evidence = EM
     totals: comparison.totals,
     netInputSavings: comparison.netInputSavings,
     breakEvenTurn: comparison.breakEvenTurn,
+    benchmarkValid: comparison.totals.stateEquivalent,
     evidence
   };
 }

@@ -5,6 +5,7 @@ import { checkContinuation, rebuildScope, createSnapshot } from "../../context-s
 import { createCollector } from "../instrumentation/collector.mjs";
 import { runBaselineTurn } from "./baseline-runner.mjs";
 import { runWamTurn } from "./wam-runner.mjs";
+import { assertEquivalentState } from "../evaluation/state-equivalence.mjs";
 
 const sumTokens = (usage) => usage.inputTokens + usage.outputTokens;
 
@@ -36,7 +37,9 @@ export async function runRealScenario({ scenario, provider, repoCommit, root }) 
 
     createSnapshot(scenario.id, turn.input.taskState, rootDir);
 
-    turns.push({ turnIndex: i, baseline, wam });
+    assertEquivalentState({ baselineHash: baseline.logicalStateHash, wamHash: wam.logicalStateHash });
+
+    turns.push({ turnIndex: i, baseline, wam, stateEquivalent: true });
   }
 
   const totals = turns.reduce(
@@ -50,5 +53,14 @@ export async function runRealScenario({ scenario, provider, repoCommit, root }) 
     { baselineTokens: 0, wamTokens: 0, baselineOutput: 0, wamOutput: 0 }
   );
 
-  return { scenarioId: scenario.id, repoCommit, turns, totals, counters: collector.snapshot() };
+  const sessionEquivalent = turns.every(t => t.stateEquivalent === true);
+
+  return {
+    scenarioId: scenario.id,
+    repoCommit,
+    turns,
+    totals,
+    counters: collector.snapshot(),
+    stateEquivalent: sessionEquivalent
+  };
 }

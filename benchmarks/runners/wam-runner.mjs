@@ -1,5 +1,6 @@
 
 import { assembleContext } from "../../assembly.js";
+import { logicalStateHash } from "../evaluation/state-equivalence.mjs";
 
 export async function runWamTurn({ scenario, turn, turnIndex, provider, collector, repoCommit, root, budget }) {
   const assembly = assembleContext({
@@ -28,6 +29,7 @@ export async function runWamTurn({ scenario, turn, turnIndex, provider, collecto
     response: text,
     usage,
     counters: collector.snapshot(),
-    levels: assembly.levels
+    levels: assembly.levels,
+    logicalStateHash: logicalStateHash(turn.input)
   };
 }

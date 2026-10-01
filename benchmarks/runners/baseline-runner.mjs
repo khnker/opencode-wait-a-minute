@@ -1,6 +1,7 @@
 
 import { execSync } from "node:child_process";
 import { buildRuntimeContextGraph } from "../../runtime-context-graph.js";
+import { logicalStateHash } from "../evaluation/state-equivalence.mjs";
 
 export function getRepoCommit(cwd = process.cwd()) {
   try {
@@ -30,6 +31,7 @@ export async function runBaselineTurn({ scenario, turn, turnIndex, provider, rep
     model: provider.model ?? null,
     prompt,
     response: text,
-    usage
+    usage,
+    logicalStateHash: logicalStateHash(turn.input)
   };
 }
