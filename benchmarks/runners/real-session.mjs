@@ -9,14 +9,27 @@ import { assertEquivalentState } from "../evaluation/state-equivalence.mjs";
 
 const sumTokens = (usage) => usage.inputTokens + usage.outputTokens;
 
-export async function runRealScenario({ scenario, provider, repoCommit, root, trialId = 0 }) {
+export async function runRealScenario({ scenario, provider, repoCommit, root, trialId = 0, ablation = {}, ablationName = null }) {
   const rootDir = root || fs.mkdtempSync(path.join(os.tmpdir(), "wam-bench-"));
   const collector = createCollector();
   const turns = [];
 
   for (const [i, turn] of scenario.turns.entries()) {
-    const check = checkContinuation(scenario.id, turn.input.taskState, rootDir, collector);
-    const rebuild = check.status === "VALID" ? null : rebuildScope(check.changedSignals, collector);
+    let check;
+    if (ablation.snapshot === false) {
+      // Force STALE so the fast-path is never taken; rebuildScope still runs.
+      check = { status: "STALE", changedSignals: [] };
+    } else {
+      check = checkContinuation(scenario.id, turn.input.taskState, rootDir, collector);
+    }
+    let rebuild;
+    if (ablation.rebuild === false) {
+      rebuild = null;
+    } else if (check.status === "VALID") {
+      rebuild = null;
+    } else {
+      rebuild = rebuildScope(check.changedSignals, collector);
+    }
     if (check.status === "VALID") {
       collector.record("Context_fast_path");
     }
@@ -29,13 +42,14 @@ export async function runRealScenario({ scenario, provider, repoCommit, root, tr
       collector,
       repoCommit,
       root: rootDir,
-      budget: scenario.budget ?? turn.budget
+      budget: ablation.budgetUnlimited ? Infinity : (scenario.budget ?? turn.budget)
     });
 
-    wam.snapshotStatus = check.status;
+    wam.snapshotStatus = ablation.snapshot === false ? "ABLATED" : check.status;
     wam.changedSignals = check.changedSignals ?? [];
     wam.rebuildScope = rebuild ? (rebuild.scope ?? rebuild.level ?? rebuild.mode ?? null) : null;
     wam.fastPath = check.status === "VALID";
+    wam.verified = ablation.verification === false ? false : (wam.verified ?? true);
 
     const baseline = await runBaselineTurn({ scenario, turn, turnIndex: i, provider, repoCommit });
 
@@ -73,7 +87,8 @@ export async function runRealScenario({ scenario, provider, repoCommit, root, tr
   return {
     scenarioId: scenario.id,
     trialId,
-    pairId: `${scenario.id}#${trialId}`,
+    pairId: ablationName != null && ablationName !== "full" ? `${scenario.id}#${trialId}#${ablationName}` : `${scenario.id}#${trialId}`,
+    ablation: ablationName ?? "full",
     repoCommit,
     turns,
     totals,

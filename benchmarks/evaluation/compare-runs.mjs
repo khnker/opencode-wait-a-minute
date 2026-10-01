@@ -24,7 +24,8 @@ export const RunResultFields = [
   "scenario", "run", "turn", "trialId", "pairId", "model", "provider",
   "inputTokens", "outputTokens",
   "totalTokens", "contextTokens", "wamOverheadTokens", "contextRebuilds",
-  "fastPathCount", "partialRebuildCount", "fullRebuildCount", "verification"
+  "fastPathCount", "partialRebuildCount", "fullRebuildCount", "verification",
+  "ablation"
 ];
 
 const num = (value) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
@@ -112,7 +113,8 @@ export function normalizeRuns(sessionResult, { model, provider, verification } =
         turn?.baseline?.logicalStateHash != null && turn?.wam?.logicalStateHash != null
           ? stateEquivalent(turn.baseline.logicalStateHash, turn.wam.logicalStateHash)
           : true
-      )
+      ),
+      ablation: sessionResult.ablation ?? "full"
     };
   });
 }

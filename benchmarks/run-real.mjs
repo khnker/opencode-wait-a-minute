@@ -5,25 +5,30 @@ import { pathToFileURL } from "node:url";
 import { runRealScenario } from "./runners/real-session.mjs";
 import { evaluateTask } from "./evaluation/success.mjs";
 import { computeMetrics } from "./evaluation/metrics.mjs";
-import { buildRealReport } from "./evaluation/compare-runs.mjs";
+import { buildRealReport, normalizeRuns } from "./evaluation/compare-runs.mjs";
 import { RC1_SCENARIOS } from "./scenarios/rc1.mjs";
 import { createMockProvider } from "./providers/provider.mjs";
 import { resolveProvider } from "./providers/index.mjs";
 import { DETERMINISTIC_EVIDENCE } from "./reporters/claims.mjs";
+import { listAblations, summarizeAblation } from "./evaluation/ablation.mjs";
+import { pairedDelta, summarize } from "./evaluation/statistics.mjs";
 
-export async function runRealSuite({ provider, scenarios, root, timestamp, trials = 1 }) {
+export async function runRealSuite({ provider, scenarios, root, timestamp, trials = 1, ablated = false }) {
   const allScenarios = scenarios || (await import("./scenarios/real.mjs")).REAL_SCENARIOS;
   const trialCount = Number.isFinite(trials) && trials >= 1 ? Math.floor(trials) : 1;
+  const ablations = ablated ? listAblations() : [{ name: "full", config: {} }];
   const results = [];
   const evaluations = [];
 
   for (const scenario of allScenarios) {
     for (let trialId = 0; trialId < trialCount; trialId++) {
-      const res = await runRealScenario({ scenario, provider, root, trialId });
-      results.push(res);
-      for (const turn of res.turns) {
-        const evaluation = evaluateTask({ baseline: turn.baseline, wam: turn.wam });
-        evaluations.push({ scenarioId: scenario.id, trialId, ...evaluation });
+      for (const { name, config } of ablations) {
+        const res = await runRealScenario({ scenario, provider, root, trialId, ablation: config, ablationName: name });
+        results.push(res);
+        for (const turn of res.turns) {
+          const evaluation = evaluateTask({ baseline: turn.baseline, wam: turn.wam });
+          evaluations.push({ scenarioId: scenario.id, trialId, ablation: name, ...evaluation });
+        }
       }
     }
   }
@@ -40,14 +45,57 @@ export async function runRealSuite({ provider, scenarios, root, timestamp, trial
 }
 
 /**
+ * Build the per-metric paired statistics block: pairs the baseline input
+ * token sum with the WAM input token sum per `pairId` (default behavior when
+ * not ablated yields one pair per scenario × trial; ablated yields one per
+ * scenario × trial × ablation). Returns paired deltas plus a `summarize`
+ * of aggregate metrics.
+ */
+function buildStatistics(suite, model, provider) {
+  const runs = suite.results.flatMap((sessionResult) =>
+    normalizeRuns(sessionResult, { model, provider })
+  );
+  const pairMap = new Map();
+  for (const r of runs) {
+    const key = r.pairId || `${r.scenario}#${r.trialId ?? 0}`;
+    const p = pairMap.get(key) ?? { pairId: key, scenario: r.scenario, baseline: 0, wam: 0 };
+    p.baseline += r.baselineInputTokens;
+    p.wam += r.inputTokens + r.wamOverheadTokens;
+    pairMap.set(key, p);
+  }
+  const pairs = Array.from(pairMap.values());
+  const baselineArr = pairs.map((p) => p.baseline);
+  const wamArr = pairs.map((p) => p.wam);
+
+  const metrics = suite.metrics ?? {};
+  const metricSummary = {};
+  for (const [k, v] of Object.entries(metrics)) {
+    if (typeof v === "number" && Number.isFinite(v)) {
+      metricSummary[k] = summarize([v]);
+    } else if (v && typeof v === "object") {
+      // Nested metrics (e.g. { mean, stddev, n }) → summarize as scalar mean
+      const scalar = Number(v.mean);
+      if (Number.isFinite(scalar)) metricSummary[k] = summarize([scalar]);
+    }
+  }
+
+  return {
+    baselineInputTokens: summarize(baselineArr),
+    wamInputTokens: summarize(wamArr),
+    paired: pairedDelta(baselineArr, wamArr),
+    metrics: metricSummary
+  };
+}
+
+/**
  * Dry-run entry point: uses the in-file mock provider and RC1 scenarios
  * to exercise the full harness without network access. Writes
  * `real-report.json` into `outDir`.
  */
-export async function runDryRun({ outDir } = {}) {
+export async function runDryRun({ outDir, ablated = false } = {}) {
   const provider = createMockProvider();
   const scenarios = RC1_SCENARIOS;
-  const suite = await runRealSuite({ provider, scenarios });
+  const suite = await runRealSuite({ provider, scenarios, ablated });
 
   const report = buildRealReport({
     sessionResults: suite.results,
@@ -57,6 +105,12 @@ export async function runDryRun({ outDir } = {}) {
   });
   report.evaluations = suite.evaluations;
   report.metrics = suite.metrics;
+  report.statistics = buildStatistics(suite, provider.model, "mock");
+
+  if (ablated) {
+    const allRuns = suite.results.flatMap(sr => normalizeRuns(sr, { model: provider.model, provider: "mock" }));
+    report.ablation = listAblations().map(a => summarizeAblation(a.name, allRuns.filter(r => r.ablation === a.name)));
+  }
 
   const dir = outDir || path.join("benchmarks", "results", `dry-run-${Date.now()}`);
   fs.mkdirSync(dir, { recursive: true });
@@ -68,13 +122,17 @@ export async function runDryRun({ outDir } = {}) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
   const dryRunFlag = argv.includes("--dry-run") || process.env.WAM_BENCH_DRY_RUN === "1";
+  const ablationFlag = argv.includes("--ablation");
   const outIdx = argv.indexOf("--out");
   const outDir = outIdx >= 0 ? argv[outIdx + 1] : undefined;
 
   if (dryRunFlag) {
-    const { dir, report } = await runDryRun({ outDir });
+    const { dir, report } = await runDryRun({ outDir, ablated: ablationFlag });
     console.log(`[run-real] dry-run complete → ${dir}`);
     console.log("netInputSavings:", report.netInputSavings, "breakEvenTurn:", report.breakEvenTurn);
+    if (ablationFlag) {
+      console.log("ablation:", report.ablation.map((a) => a.name).join(","));
+    }
     process.exit(0);
   }
 
