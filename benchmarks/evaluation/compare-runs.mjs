@@ -21,7 +21,8 @@ import { EMPIRICAL_EVIDENCE } from "../reporters/claims.mjs";
 import { stateEquivalent } from "./state-equivalence.mjs";
 
 export const RunResultFields = [
-  "scenario", "run", "turn", "model", "provider", "inputTokens", "outputTokens",
+  "scenario", "run", "turn", "trialId", "pairId", "model", "provider",
+  "inputTokens", "outputTokens",
   "totalTokens", "contextTokens", "wamOverheadTokens", "contextRebuilds",
   "fastPathCount", "partialRebuildCount", "fullRebuildCount", "verification"
 ];
@@ -62,6 +63,8 @@ function deriveRebuilds(turn) {
  */
 export function normalizeRuns(sessionResult, { model, provider, verification } = {}) {
   const turns = sessionResult?.turns ?? [];
+  const trialId = num(sessionResult?.trialId ?? 0);
+  const pairId = sessionResult?.pairId || `${sessionResult?.scenarioId ?? ""}#${trialId}`;
   return turns.map((turn, index) => {
     const baselineUsage = turn?.baseline?.usage ?? {};
     const wamUsage = turn?.wam?.usage ?? {};
@@ -79,6 +82,8 @@ export function normalizeRuns(sessionResult, { model, provider, verification } =
     return {
       scenario: sessionResult.scenarioId,
       run: num(sessionResult.run),
+      trialId,
+      pairId,
       turn: typeof turn.turnIndex === "number" ? turn.turnIndex : index,
       model: model ?? turn?.wam?.model ?? "unknown",
       provider: provider ?? "unknown",
@@ -160,6 +165,26 @@ export function compareRuns({ runs }) {
     s.netInputSavings = s.baselineInputTokens - (s.wamInputTokens + s.wamOverheadTokens);
   }
 
+  const pairs = {};
+  for (const r of runs) {
+    const key = r.pairId || `${r.scenario}#${r.trialId ?? 0}`;
+    const p = (pairs[key] ??= {
+      pairId: key,
+      scenario: r.scenario,
+      trialId: num(r.trialId ?? 0),
+      turns: 0,
+      baselineInputTokens: 0,
+      wamInputTokens: 0,
+      wamOverheadTokens: 0,
+      netInputSavings: 0
+    });
+    p.turns += 1;
+    p.baselineInputTokens += r.baselineInputTokens;
+    p.wamInputTokens += r.inputTokens;
+    p.wamOverheadTokens += r.wamOverheadTokens;
+    p.netInputSavings = p.baselineInputTokens - (p.wamInputTokens + p.wamOverheadTokens);
+  }
+
   const continuation = runs
     .filter((r) => r.scenario.startsWith("continuation"))
     .sort((a, b) => a.turn - b.turn);
@@ -176,11 +201,13 @@ export function compareRuns({ runs }) {
   return {
     runs,
     perScenario,
+    pairs,
     totals: {
       ...totals,
       wamEffectiveInput: totals.wamInputTokens + totals.wamOverheadTokens,
       netInputSavings,
-      stateEquivalent: totals.nonEquivalentTurns === 0
+      stateEquivalent: totals.nonEquivalentTurns === 0,
+      trials: Object.keys(pairs).length
     },
     netInputSavings,
     breakEvenTurn
@@ -199,6 +226,7 @@ export function buildRealReport({ sessionResults, model, provider, evidence = EM
     provider,
     runs: comparison.runs,
     perScenario: comparison.perScenario,
+    pairs: comparison.pairs,
     totals: comparison.totals,
     netInputSavings: comparison.netInputSavings,
     breakEvenTurn: comparison.breakEvenTurn,

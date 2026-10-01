@@ -9,7 +9,7 @@ import { assertEquivalentState } from "../evaluation/state-equivalence.mjs";
 
 const sumTokens = (usage) => usage.inputTokens + usage.outputTokens;
 
-export async function runRealScenario({ scenario, provider, repoCommit, root }) {
+export async function runRealScenario({ scenario, provider, repoCommit, root, trialId = 0 }) {
   const rootDir = root || fs.mkdtempSync(path.join(os.tmpdir(), "wam-bench-"));
   const collector = createCollector();
   const turns = [];
@@ -72,6 +72,8 @@ export async function runRealScenario({ scenario, provider, repoCommit, root }) 
 
   return {
     scenarioId: scenario.id,
+    trialId,
+    pairId: `${scenario.id}#${trialId}`,
     repoCommit,
     turns,
     totals,

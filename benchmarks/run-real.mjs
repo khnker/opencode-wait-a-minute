@@ -11,17 +11,20 @@ import { createMockProvider } from "./providers/provider.mjs";
 import { resolveProvider } from "./providers/index.mjs";
 import { DETERMINISTIC_EVIDENCE } from "./reporters/claims.mjs";
 
-export async function runRealSuite({ provider, scenarios, root, timestamp }) {
+export async function runRealSuite({ provider, scenarios, root, timestamp, trials = 1 }) {
   const allScenarios = scenarios || (await import("./scenarios/real.mjs")).REAL_SCENARIOS;
+  const trialCount = Number.isFinite(trials) && trials >= 1 ? Math.floor(trials) : 1;
   const results = [];
   const evaluations = [];
 
   for (const scenario of allScenarios) {
-    const res = await runRealScenario({ scenario, provider, root });
-    results.push(res);
-    for (const turn of res.turns) {
-      const evaluation = evaluateTask({ baseline: turn.baseline, wam: turn.wam });
-      evaluations.push({ scenarioId: scenario.id, ...evaluation });
+    for (let trialId = 0; trialId < trialCount; trialId++) {
+      const res = await runRealScenario({ scenario, provider, root, trialId });
+      results.push(res);
+      for (const turn of res.turns) {
+        const evaluation = evaluateTask({ baseline: turn.baseline, wam: turn.wam });
+        evaluations.push({ scenarioId: scenario.id, trialId, ...evaluation });
+      }
     }
   }
 
