@@ -120,9 +120,9 @@ test("baseline output is NEVER injected into WAM arm (no cross-contamination)", 
 
   // One turn => exactly two provider calls (baseline arm, then WAM arm).
   assert.equal(provider.calls.length, 2);
-  // Both arms received the exact same base prompt from scenario state.
-  assert.equal(provider.calls[0].prompt, "BASE PROMPT");
-  assert.equal(provider.calls[1].prompt, "BASE PROMPT");
+  // Both arms received requests generated from scenario state (baseline builds full context graph, WAM builds assembled context).
+  assert.equal(provider.calls[0].prompt.includes("BASE PROMPT"), true);
+  assert.equal(provider.calls[1].prompt.includes("BASE PROMPT"), true);
   // The WAM arm request contains no trace of the baseline arm's output.
   const wamRequest = JSON.stringify(provider.calls[1].messages);
   assert.equal(wamRequest.includes("SECRET-BASELINE"), false);

@@ -14,10 +14,32 @@ import { extractUsage, wamInputReduction } from "../telemetry/token-usage.mjs";
 import { latencyDelta } from "../telemetry/latency.mjs";
 import { outcomeMatches, classifyComparison, VALID, INVALID_COMPARISON } from "../telemetry/outcome.mjs";
 
-/** Build the provider request for one turn. Pure: no arm state can leak in. */
-function buildRequest(turn) {
+import { assembleContext } from "../../../assembly.js";
+import { buildRuntimeContextGraph } from "../../../runtime-context-graph.js";
+
+/** Build the baseline request: raw full context graph. */
+function buildBaselineRequest(turn) {
+  const graph = buildRuntimeContextGraph(turn.input);
+  const nodes = Array.from(graph.getNodes().values()).sort((a, b) => a.createdAt - b.createdAt);
+  const rawContext = nodes.map(n => `[Type: ${n.type}]\n${n.content}\n---`).join("\n");
+  const prompt = `${rawContext}\n\n[Task]\n${turn.prompt}`;
   return {
-    messages: [{ role: "user", content: String(turn?.prompt ?? "") }],
+    messages: [{ role: "user", content: prompt }],
+    maxTokens: turn?.maxTokens
+  };
+}
+
+/** Build the WAM request: optimized minimal context assembled via WAM engine. */
+function buildWamRequest(scenario, turn) {
+  const assembly = assembleContext({
+    prompt: turn.prompt,
+    taskId: scenario.id,
+    ...turn.input,
+    budget: turn.budget ?? 4000
+  });
+  const prompt = assembly.lines.join("\n");
+  return {
+    messages: [{ role: "user", content: prompt }],
     maxTokens: turn?.maxTokens
   };
 }
@@ -45,8 +67,8 @@ export async function runPairedScenario({ scenario, provider }) {
   for (const [turnIndex, turn] of turns.entries()) {
     // Rule 1 + 2: the request is rebuilt from scenario state for BOTH arms.
     // Nothing produced by the baseline arm is ever reachable from here.
-    const baseline = await provider.complete(buildRequest(turn));
-    const wam = await provider.complete(buildRequest(turn));
+    const baseline = await provider.complete(buildBaselineRequest(turn));
+    const wam = await provider.complete(buildWamRequest(scenario, turn));
 
     const match = outcomeMatches(baseline?.text, wam?.text);
     results.push({ turnIndex, baseline, wam, outcomeMatch: match });
