@@ -16,10 +16,9 @@ export async function runRealScenario({ scenario, provider, repoCommit, root }) 
 
   for (const [i, turn] of scenario.turns.entries()) {
     const check = checkContinuation(scenario.id, turn.input.taskState, rootDir, collector);
+    const rebuild = check.status === "VALID" ? null : rebuildScope(check.changedSignals, collector);
     if (check.status === "VALID") {
       collector.record("Context_fast_path");
-    } else {
-      rebuildScope(check.changedSignals, collector);
     }
 
     const wam = await runWamTurn({
@@ -33,13 +32,29 @@ export async function runRealScenario({ scenario, provider, repoCommit, root }) 
       budget: scenario.budget ?? turn.budget
     });
 
+    wam.snapshotStatus = check.status;
+    wam.changedSignals = check.changedSignals ?? [];
+    wam.rebuildScope = rebuild ? (rebuild.scope ?? rebuild.level ?? rebuild.mode ?? null) : null;
+    wam.fastPath = check.status === "VALID";
+
     const baseline = await runBaselineTurn({ scenario, turn, turnIndex: i, provider, repoCommit });
 
     createSnapshot(scenario.id, turn.input.taskState, rootDir);
 
     assertEquivalentState({ baselineHash: baseline.logicalStateHash, wamHash: wam.logicalStateHash });
 
-    turns.push({ turnIndex: i, baseline, wam, stateEquivalent: true });
+    turns.push({
+      turnIndex: i,
+      baseline,
+      wam,
+      stateEquivalent: true,
+      mechanism: {
+        snapshotStatus: wam.snapshotStatus,
+        changedSignals: wam.changedSignals,
+        rebuildScope: wam.rebuildScope,
+        fastPath: wam.fastPath
+      }
+    });
   }
 
   const totals = turns.reduce(

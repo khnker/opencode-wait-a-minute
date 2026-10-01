@@ -5,6 +5,8 @@
 import { createState, normalizeState, validateState } from "./task-state.js";
 import { loadTask, saveTask, taskExists, deleteTask } from "./task-store.js";
 
+const TERMINAL_PHASES = new Set(["DONE"]);
+
 export function create(taskId, root) {
   if (taskExists(taskId, root)) {
     throw new Error(`Task ${taskId} already exists`);
@@ -25,7 +27,11 @@ export function resume(taskId, root) {
 export function switchTo(taskId, newPhase, root) {
   const state = loadTask(taskId, root);
   if (!state) throw new Error(`Task ${taskId} not found`);
-  
+
+  if (TERMINAL_PHASES.has(state.phase) && newPhase !== state.phase) {
+    throw new Error(`cannot transition from terminal phase ${state.phase}`);
+  }
+
   state.phase = newPhase;
   state.updatedAt = Date.now();
   saveTask(taskId, state, root);
