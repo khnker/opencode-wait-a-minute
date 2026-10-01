@@ -20,7 +20,7 @@ test("Provider Adapter", async (t) => {
     const provider = createProvider({ fetchImpl: mockFetch, baseUrl: "http://a", apiKey: "b", model: "c" });
     const res = await provider.complete({ messages: [{ content: "test" }] });
     assert.strictEqual(res.text, "hi");
-    assert.deepStrictEqual(res.usage, { inputTokens: 5, outputTokens: 2 });
+    assert.deepStrictEqual(res.usage, { inputTokens: 5, outputTokens: 2, totalTokens: 7 });
   });
 
   await t.test("non-OK response throws", async () => {
