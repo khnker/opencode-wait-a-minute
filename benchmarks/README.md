@@ -1,122 +1,159 @@
 # Benchmarks
 
-Development-only measurement tooling. Not part of the published npm package.
+RC1 benchmark suite for the **wait-a-minute-plugin** (WAM). It compares a
+baseline LLM context (full transcript re-injection) against the WAM runtime
+context graph and reports token savings, latency, and correctness parity.
 
-## Layout
+## What RC1 measures
 
-```text
-benchmarks/
-├── scenarios/   scenario definitions (objective, expected work, verification)
-├── fixtures/    deterministic recorded execution traces
-├── runners/      execution engines (trace-replay, real-model)
-├── analyzers/    measurement + statistics
-├── reporters/    JSON/Markdown report generation
-├── charts/       SVG chart generation
-└── results/      generated evidence (gitignored)
-```
+The RC1 scenario set exercises six end-to-end shapes:
 
-## Run
+| scenario | purpose |
+|---|---|
+| `local` | single-turn, no upstream context |
+| `contextual` | mid-sized requirement set, baseline-friendly |
+| `continuation` | 20-turn session to surface cumulative token savings |
+| `mutation` | requirement revisions mid-session (control over fast path) |
+| `decision-intake` | downstream decision surfacing |
+| `negative-control` | overhead probe with no shared context |
+
+Each turn is run on two arms:
+
+- **baseline** — full transcript plus task prompt, no WAM intervention.
+- **wam** — runtime context graph plus task prompt, with the standard
+  `assembly.js` / `context-snapshot.js` flow.
+
+Per-turn metrics: prompt tokens (baseline vs. wam), WAM overhead tokens,
+fast-path hit, model output tokens, wall time. Per-pair metrics: paired delta
+of `baseline.input − wam.effectiveInput` aggregated across scenarios.
+
+## Reproduce
+
+### Dry-run (no API required)
+
+The dry-run mode uses an in-process mock provider so the full harness can be
+exercised without network access. It is what CI runs.
 
 ```bash
-npm run benchmark        # deterministic trace replay -> benchmarks/results/<timestamp>/
-node --test benchmarks/token-savings-benchmark.test.mjs
+node benchmarks/run-real.mjs --dry-run --out <dir>
 ```
 
-Each run writes `raw.json`, `summary.json`, `report.md` and `charts/*.svg`.
+Optional flags actually implemented by `run-real.mjs`:
 
-## Methodology
+- `--ablation` — sweeps every ablation variant defined in
+  `benchmarks/evaluation/ablation.mjs`. Each ablation result is written into
+  `report.ablation[]` and the manifest `ablations[]` block.
+- `--out <dir>` — overrides the default `benchmarks/results/dry-run-<ts>`.
 
-Token counts are derived from **recorded per-turn execution traces**, never from
-scenario constants. Baseline and WAM traces represent equivalent tasks; the only
-intended difference is the presence or absence of WAM. Negative savings are valid
-evidence and are never clamped to zero.
+`WAM_BENCH_DRY_RUN=1` is equivalent to `--dry-run`.
 
-## Deterministic validation evidence
-The validation suite is the CI-facing evidence layer. It exercises the causal metrics
-(`simulateWorkloadMatrix` → `computeCausalMetrics`) and the snapshot-state matrix
-(`runSnapshotStateValidation`), then renders a report plus four charts. It makes **no
-network calls** — every input is a local, hard-coded model, so a run is reproducible on any
-machine and safe to diff in CI.
+Outputs written into `<dir>`:
 
-### Running it
+- `summary.json` — raw `runRealSuite` payload (results, evaluations, metrics).
+- `real-report.json` — `buildRealReport` output (`runs`, `pairs`,
+  `totals`, `statistics`, optional `ablation`).
+- `manifest.json` — `rc1-evidence-manifest@1` evidence manifest with sha256
+  of `real-report.json` (built by `benchmarks/reporters/manifest.mjs`).
+
+### Real provider run (not run by CI)
+
 ```bash
-npm run bench:validation                  # writes benchmarks/results/<timestamp>/
-npm run bench:validation -- --out /tmp/wam-val   # explicit output dir
-npm run test:validation                   # node --test benchmarks/validation/*.test.mjs
-```
-Each run writes into its own directory:
-```
-<outDir>/
-  raw.json                                     # machine-readable causal + snapshot evidence
-  report.md                                    # composition, derived metrics, per-scenario table
-  charts/rebuild-vs-token.svg                  # rebuild count vs total tokens, per scenario
-  charts/savings-by-scenario.svg               # per-scenario reduction % (negatives included)
-  charts/continuation-scaling.svg              # turns 1/3/5/10/20, baseline vs WAM tokens
-  charts/snapshot-state.svg                    # VALID / STALE / INVALID counts
+export WAM_BENCH_BASE_URL=<openai-compatible endpoint>
+export WAM_BENCH_API_KEY=<key>
+export WAM_BENCH_MODEL=<model-id>
+node benchmarks/run-real.mjs --out <dir>
 ```
 
-### Workload composition
-Four families cover the efficiency envelope:
-| Family | Role |
-| --- | --- |
-| `local` | single-turn, small scope — the baseline efficiency case |
-| `contextual` | project-level context that must be re-read when it changes |
-| `continuation` | 1/3/5/10/20-turn sessions, where avoided rebuilds compound |
-| `negative` | negative control that **must** cost more (see below) |
+If `WAM_BENCH_BASE_URL` is not set, `run-real.mjs` exits early with a hint
+message and writes nothing. Real-mode invocation uses
+`resolveProvider()` from `benchmarks/providers/index.mjs`.
 
-### How to interpret the evidence
-**Snapshot classifications.** The snapshot-state matrix seeds an isolated project root per
-case, creates a baseline snapshot, applies exactly one mutation, and asserts the
-classification, the changed signals and the resulting rebuild scope.
-- `VALID` — the snapshot still matches git, project context and task state. The turn runs on
-  the **fast path**: no reconstruction at all, so `rebuildInvoked` is `false`.
-- `STALE` — something *outside* the task state moved (git revision, relevant files). Context
-  is still usable, so a **partial** rebuild is sufficient.
-- `INVALID` — the task state itself moved (phase/contract change), or the snapshot is
-  malformed / schema-incompatible. A **full** rebuild is mandatory; the fast path must never
-  be reachable here.
+## Reading `real-report.json`
 
-**Fast path vs partial vs full.** These are the three rebuild scopes, and they are the
-mechanism behind every token delta: `fastPathCount` is avoided work, `partialRebuildCount` is
-bounded rework, `fullRebuildCount` is the fallback. The continuation family is where the effect
-compounds — the baseline pays one full reconstruction per turn while WAM keeps taking the fast
-path, so `continuation-scaling.svg` shows the gap widening with turn count.
+Top-level shape:
 
-**The negative control.** `negative-1` is expected to **increase** cost, and it reports a
-negative savings value as a result. That negative number is the point: it proves the
-measurement is sensitive in both directions. A harness that clamped savings to `>= 0` would
-render the negative control indistinguishable from a neutral scenario and would go blind to
-real regressions. Negative results are therefore preserved everywhere — per-scenario table,
-derived totals and chart dataset — and `savingsByScenarioSvg` fits its axis to `[min, max]`
-so negative bars get their own downward extent instead of being flattened onto the zero line.
-Each chart also carries a `data-series` attribute with the exact plotted (signed) values so the
-assertion is a data check, not a pixel check.
+```
+{
+  version, model, provider, mode, timestamp,
+  runs: [...],          // per-turn normalized entries
+  pairs: { <pairId>: { baseline, wam } },
+  totals: { wamInputTokens, baselineInputTokens, trials, ... },
+  statistics: { baselineInputTokens, wamEffectiveInput, ... },
+  evaluations: [...],   // success criteria per turn
+  metrics: { ... },     // aggregate metrics
+  ablation?: [...],     // only present when --ablation
+  evidence: { execution, tokens, correctness, mechanism }
+}
+```
 
-**Determinism and no-network guarantees.** The workload matrices contain no timestamps, no RNG
-draws and no provider calls. The timestamp in the default output directory name is the only
-wall-clock use, and it never reaches `raw.json`, `report.md` or the SVGs — two runs produce
-byte-identical artifacts. Snapshot validation runs in a temp root created and removed by the
-runner, and `assertNoFalseValid` fails the run if any mutated case is classified `VALID`.
+Key fields:
 
-## Claims policy
+- `runs[]` — every per-turn pair. Each entry has `arm`, `scenario`, `turn`,
+  `baselineInputTokens`, `inputTokens`, `wamOverheadTokens`,
+  `fastPathHit`, `latencyMs`, etc.
+- `pairs` — pairId → `{ baseline, wam }` token totals.
+- `totals.trials` — number of distinct pairIds (matches `pairs` length).
+- `statistics` — `pairedDelta`/`summarize` output: mean / stddev / n for
+  every aggregate metric.
+- `evidence` — evidence category. See `DETERMINISTIC_EVIDENCE` vs
+  `EMPIRICAL_EVIDENCE` in `benchmarks/reporters/claims.mjs`.
 
-Every measurement is classified as one of:
+Evidence categories:
 
-- `observed` — reported directly by the provider or execution trace
-- `measured` — calculated from captured execution data
-- `derived` — calculated from measured values
-- `estimated` — inferred using a declared estimator
+- **DETERMINISTIC_EVIDENCE** — dry-run path. `execution: deterministic_simulation`,
+  `tokens: simulated`, `correctness: fixture_defined`, `mechanism: measured`.
+- **EMPIRICAL_EVIDENCE** — real provider path. `execution: provider_execution`,
+  `tokens: observed`, `correctness: verified`, `mechanism: measured`.
 
-Estimated values are never presented as observed.
+## Reading `manifest.json`
 
-## Real-model execution
+The manifest pins the run to a specific commit and a specific report
+artifact:
 
-Opt-in only (`WAM_BENCH_REAL_MODEL=1`). No provider adapter is wired yet; the
-deterministic trace replay is what CI executes.
+```
+{
+  schema: "rc1-evidence-manifest@1",
+  generatedAt, repoCommit, mode, provider, model,
+  evidenceCategory,
+  counts: { runs, trials, pairs },
+  ablations: [...],     // only when --ablation
+  statistics, claims,
+  artifacts: [{ path, bytes, sha256 }],
+  limitations: [...]
+}
+```
 
-## Out of scope
+`artifacts[].sha256` lets a downstream verifier detect any tampering with
+`real-report.json` between emission and archival.
 
-The context-selection benchmark (`context-benchmark.mjs`,
-`context-benchmark-router.mjs` and their tests) is a separate evaluation harness.
-It is pinned by `scripts/production-gate.mjs` and is intentionally **not** migrated
-in this change to avoid a blind mass migration.
+## Running the RC1 test set
+
+```bash
+node --test benchmarks/reporters/manifest.test.mjs
+node --test benchmarks/reporters/claims.test.mjs
+node --test benchmarks/evaluation/statistics.test.mjs
+node --test benchmarks/evaluation/ablation.test.mjs
+node --test benchmarks/runners/paired-session.test.mjs
+node --test benchmarks/providers/providers.test.mjs
+```
+
+Individual benchmark files (e.g. `ablation.test.mjs`,
+`paired-session.test.mjs`) cover the per-module invariants of RC1.
+
+## Limitations
+
+- Dry-run results are deterministic simulations, not real model executions.
+  Use them to validate the harness, not to claim token savings against a
+  production LLM.
+- Real provider runs require API credentials and are **not** reproduced by
+  CI. The CI pipeline emits deterministic manifests; manual re-runs with
+  provider credentials produce `EMPIRICAL_EVIDENCE`-tagged reports.
+- Statistical significance assumes independent paired trials. The default
+  RC1 sweep uses one trial per scenario; rerun with multiple trials for
+  any statistical claim beyond a smoke test.
+- `netInputSavings` and `breakEvenTurn` are computed from the input-token
+  side only; they do not account for differences in output tokens or
+  provider-side billing.
+- Evidence manifests only cover artifacts emitted by `run-real.mjs`. Other
+  benchmark outputs (e.g. the legacy `benchmarks/run.mjs` HTML reports) are
+  not yet pinned by a manifest.

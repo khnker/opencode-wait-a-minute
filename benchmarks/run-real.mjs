@@ -10,8 +10,10 @@ import { RC1_SCENARIOS } from "./scenarios/rc1.mjs";
 import { createMockProvider } from "./providers/provider.mjs";
 import { resolveProvider } from "./providers/index.mjs";
 import { DETERMINISTIC_EVIDENCE } from "./reporters/claims.mjs";
+import { buildEvidenceManifest } from "./reporters/manifest.mjs";
 import { listAblations, summarizeAblation } from "./evaluation/ablation.mjs";
 import { pairedDelta, summarize } from "./evaluation/statistics.mjs";
+import { getRepoCommit } from "./runners/baseline-runner.mjs";
 
 export async function runRealSuite({ provider, scenarios, root, timestamp, trials = 1, ablated = false }) {
   const allScenarios = scenarios || (await import("./scenarios/real.mjs")).REAL_SCENARIOS;
@@ -115,8 +117,17 @@ export async function runDryRun({ outDir, ablated = false } = {}) {
   const dir = outDir || path.join("benchmarks", "results", `dry-run-${Date.now()}`);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "summary.json"), JSON.stringify(suite, null, 2));
-  fs.writeFileSync(path.join(dir, "real-report.json"), JSON.stringify(report, null, 2));
-  return { dir, report, suite };
+  const reportPath = path.join(dir, "real-report.json");
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  const manifest = buildEvidenceManifest({
+    report,
+    suite,
+    reportPath,
+    repoCommit: getRepoCommit(),
+    generatedAt: report.timestamp
+  });
+  fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2));
+  return { dir, report, suite, manifest };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -127,9 +138,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const outDir = outIdx >= 0 ? argv[outIdx + 1] : undefined;
 
   if (dryRunFlag) {
-    const { dir, report } = await runDryRun({ outDir, ablated: ablationFlag });
+    const { dir, report, manifest } =
+      await runDryRun({ outDir, ablated: ablationFlag });
     console.log(`[run-real] dry-run complete → ${dir}`);
     console.log("netInputSavings:", report.netInputSavings, "breakEvenTurn:", report.breakEvenTurn);
+    console.log("manifest:", manifest.schema, "runs:", manifest.counts.runs, "trials:", manifest.counts.trials);
     if (ablationFlag) {
       console.log("ablation:", report.ablation.map((a) => a.name).join(","));
     }
