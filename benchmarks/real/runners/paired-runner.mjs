@@ -29,7 +29,7 @@ function buildBaselineRequest(turn) {
   };
 }
 
-/** Build the WAM request: optimized minimal context assembled via WAM engine. */
+/** Build the WAM request: optimized minimal context assembled via WAM engine + user prompt. */
 function buildWamRequest(scenario, turn) {
   const assembly = assembleContext({
     prompt: turn.prompt,
@@ -37,7 +37,8 @@ function buildWamRequest(scenario, turn) {
     ...turn.input,
     budget: turn.budget ?? 4000
   });
-  const prompt = assembly.lines.join("\n");
+  const lines = [...assembly.lines, `[Task]\n${turn.prompt}`];
+  const prompt = lines.join("\n");
   return {
     messages: [{ role: "user", content: prompt }],
     maxTokens: turn?.maxTokens
