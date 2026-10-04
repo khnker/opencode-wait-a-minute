@@ -498,6 +498,48 @@ No-task assumption: for resume intents without an active task ("¿en qué estáb
 
 ---
 
+## Release Contract (RC1)
+
+### Verification
+Run the release gate to confirm RC1 readiness:
+
+```bash
+npm run gate
+```
+
+This executes:
+- Unit & integration tests (`npm test`)
+- Validation benchmarks
+- Package integrity check (`npm run pack:test`)
+- Smoke test (plugin loads without exception)
+
+### Package Integrity
+To verify the published artifact:
+
+```bash
+npm pack
+npm run verify:package
+```
+
+This ensures:
+- The tarball installs cleanly in a temporary directory
+- Runtime files are present (`index.js`, `preflight/request-classifier.js`, `skills/registry.json`)
+- The bundled skill registry contains >500 skills with content
+
+### OpenCode Compatibility
+WAM targets OpenCode **≥1.18.0**, tested with **1.18.33**.
+
+See `docs/OPENCODE_COMPATIBILITY.md` for:
+- Exact plugin hook surface (`chat.message`, `tool.execute.before/after`, `permission.ask`, `event`)
+- File system contract (`.wam/` layout)
+- Node.js version requirement
+
+### Known Limitations
+- Real E2E against live OpenCode runtime is currently manual (no CI harness in RC1)
+- Performance baseline to be captured in a post-RC1 release
+
+---
+
 ## Architecture
 
 WAM is intentionally an OpenCode plugin.

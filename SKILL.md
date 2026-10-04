@@ -7,7 +7,7 @@ triggers:
   - any user prompt entering OpenCode
   - antes de resolución de skills y ejecución de agente
 metadata:
-  version: 1.0.0
+    version: 1.1.0
   prompt_hook: true
 ---
 
