@@ -96,22 +96,26 @@ describe("Runtime Guard - Boundary & Hostile", () => {
     assert.equal(cmd, "'; rm -rf /'");
   });
   test("L2 Loop detection (simulated)", async () => {
-    // Basic loop protection by limiting duration
+    // Basic loop protection by limiting duration.
+    // The loop is cooperative: it runs until the guard aborts it, then exits so
+    // the event loop can drain (an unkillable timer loop keeps node --test alive).
     const guard = new ResourceGuard({ maxDuration: 10 });
-    await assert.rejects(async () => {
-      await guard.runWithTimeout(async () => {
-        while(true) { await new Promise(r => setTimeout(r, 1)); }
-      });
-    });
+    await assert.rejects(
+      guard.runWithTimeout(async (signal) => {
+        while (!signal.aborted) {
+          await new Promise(r => setTimeout(r, 1));
+        }
+      }),
+      /AbortError/,
+    );
   });
   test("L3 Invariant: Locked state", () => {
     const state = { locked: true };
     assert.throws(() => checkStateInvariant(state, (s) => !s.locked));
   });
-  test("L4 Sandbox: Prototype pollution attempt", () => {
-    assert.throws(() => runInSandbox("Object.prototype.polluted = true; ({})['polluted']"));
-    // Actually this might not throw depending on how sandbox is set up, let me re-check
-    // Wait, the sandbox DOES share Object prototype. This test might be weak.
-    // For now, it's just checking basic sandbox behavior.
+  test("L4 Sandbox: Prototype pollution does not leak to host", () => {
+    const result = runInSandbox("Object.prototype.polluted = true; ({})['polluted']");
+    assert.equal(result, true); // mutation is visible inside the sandbox realm
+    assert.equal({}.polluted, undefined); // ...but never escapes to the host realm
   });
 });

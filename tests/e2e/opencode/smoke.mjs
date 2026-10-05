@@ -89,18 +89,10 @@ mkdirSync(join(tmpBase, ".local", "state"), { recursive: true });
 log("setup", `isolated HOME=${tmpBase}`);
 log("setup", `WAM_HOME=${wamHome}`);
 
-// If the `opencode` binary is not installed (e.g. minimal CI), skip gracefully
-// instead of failing the gate. The plugin-load contract is still covered by the
-// package smoke (`npm run smoke`) and the OpenCode compatibility doc.
-if (process.env.WAM_SKIP_OPENCODE_E2E === "1") {
-  log("skip", "WAM_SKIP_OPENCODE_E2E=1 → skipping real OpenCode E2E");
-  process.exit(0);
-}
 try {
   execFileSync("opencode", ["--version"], { stdio: "ignore" });
 } catch (_) {
-  log("skip", "`opencode` binary not found in PATH → skipping real OpenCode E2E");
-  process.exit(0);
+  fail("opencode", "`opencode` binary not found in PATH; OpenCode E2E is required");
 }
 
 let opencodeProc = null;

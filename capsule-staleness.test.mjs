@@ -16,11 +16,12 @@ import {
 
 describe("freshness", () => {
   it("returns 1.0 for just-updated capsule", () => {
+    const ts = new Date().toISOString();
     const capsule = {
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: ts,
+      updated_at: ts,
     };
-    assert.equal(freshness(capsule), 1.0);
+    assert.equal(freshness(capsule, new Date(ts).getTime()), 1.0);
   });
 
   it("decays linearly over 30 days", () => {

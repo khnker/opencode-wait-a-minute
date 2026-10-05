@@ -185,7 +185,10 @@ test("transitionAfterOutcome: INCONCLUSIVE — no replan", () => {
 
 test("HYPOTHESIS_STATUS and EXPERIMENT_STATUS re-exported from state-machine", () => {
   assert.equal(typeof HYPOTHESIS_STATUS, "object");
-  assert.equal(HYPOTHESIS_STATUS.PROPOSED, "PROPOSED");
+  // Canonical values are lowercase (cognition-store.js, commit fe51635;
+  // cognition-store.test.mjs asserts "proposed"/"failed"). This re-export
+  // test was not updated when the constants were normalized.
+  assert.equal(HYPOTHESIS_STATUS.PROPOSED, "proposed");
   assert.equal(typeof EXPERIMENT_STATUS, "object");
-  assert.equal(EXPERIMENT_STATUS.FAILED, "FAILED");
+  assert.equal(EXPERIMENT_STATUS.FAILED, "failed");
 });

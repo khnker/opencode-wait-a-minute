@@ -465,6 +465,17 @@ function classifyActionAgainstStrategy(action, tool, args, approvedStrategy) {
   const toCapability = (s) => { const str = String(s || "").trim(); const parts = str.split(/\s+/).filter(Boolean); if (parts.length === 0) return null; if (parts.length === 1) return { capability: "action.execute", action: parts[0] }; return { capability: "command.execute", executable: parts[0], argsPattern: parts.slice(1) }; };
   const allowedCaps = (approvedStrategy.allowedActions || []).map(toCapability).filter(Boolean);
   const prohibitedCaps = (approvedStrategy.prohibitedActions || []).map(toCapability).filter(Boolean);
+  // Canonical structured classifier (./policy/strategy-capabilities.js). In normal
+  // module scope these are imported; when this function is extracted via `new Function`
+  // (autonomy-behavior-suite.test.mjs) they are absent, so the `typeof` guards fall
+  // through to the equivalent inline matcher below (kept self-contained on purpose).
+  if (typeof classifyByCapabilities === "function" && typeof buildCandidate === "function") {
+    const builtCandidate = buildCandidate({ action: actionStr, tool: toolStr, args: args || {} });
+    const verdict = classifyByCapabilities(builtCandidate, { allowed: allowedCaps, prohibited: prohibitedCaps });
+    if (verdict && verdict.allowed === true) return { covered: true, reason: "Acción cubierta por strategy activa" };
+    if (allowedCaps.length === 0) return { covered: false, reason: "Acción no cubierta por capabilities estructuradas de la strategy" };
+    return { covered: false, reason: (verdict && verdict.reason) || "Acción no cubierta por strategy activa" };
+  }
   const matchCapability = (cap, cand) => { if (!cap) return false; if (cap.capability === "action.execute") return cap.action === cand.action || cap.action === cand.tool; if (cap.capability === "command.execute") { if (cap.executable && cap.executable !== cand.executable) return false; if (Array.isArray(cap.argsPattern)) { for (let i = 0; i < cap.argsPattern.length; i++) { if (cap.argsPattern[i] !== cand.args[i]) return false; } } return true; } return false; };
   const isProhibited = prohibitedCaps.some((cap) => matchCapability(cap, candidate));
   const isAllowed = allowedCaps.some((cap) => matchCapability(cap, candidate));

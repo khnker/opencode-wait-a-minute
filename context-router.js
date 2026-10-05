@@ -55,7 +55,11 @@ export const ADMISSION = {
  * @property {OmittedNode[]} omitted
  * @property {boolean} complete
  * @property {boolean} sufficient
+ * @property {"COMPLETE" | "PARTIAL" | "INSUFFICIENT" | "CONFLICTED"} status
  * @property {number} tokenEstimate
+ * @property {boolean} budgetOverflow
+ * @property {number} mandatoryOmitted
+ * @property {{required: number, selected: number, omitted: number, missing: number, contradictions: number}} summary
  */
 
 // -- Token estimation --
@@ -188,17 +192,39 @@ export function resolveContext(graph, options) {
       nodes: [],
       edges: [],
       missing: [{ requiredBy: taskId, type: "task", description: `Task ${taskId} not found` }],
+      omitted: [],
       complete: false,
+      sufficient: false,
+      status: "INSUFFICIENT",
+      budgetOverflow: false,
+      mandatoryOmitted: 0,
       tokenEstimate: 0,
+      summary: {
+        required: 1,
+        selected: 0,
+        omitted: 0,
+        missing: 1,
+        contradictions: 0,
+      },
     };
   }
 
   // Phase 1: Collect directly required nodes
   const required = new Set();
   const missing = [];
-
+  // The active task is always part of its own required closure: it is the
+  // anchor the rest of the context hangs from, and consumers (evaluation,
+  // assembly) must be able to see it in `nodes`.
+  required.add(taskId);
   // Also include any node with admission: "MANDATORY" explicitly
-  for (const node of graph.nodes.values()) {
+  // Prefer the public getNodes() accessor; fall back to the internal Map.
+  const allNodes =
+    typeof graph.getNodes === "function"
+      ? graph.getNodes()
+      : graph.nodes instanceof Map
+        ? [...graph.nodes.values()]
+        : [];
+  for (const node of allNodes) {
     if (node.metadata?.admission === "MANDATORY") {
       required.add(node.id);
     }

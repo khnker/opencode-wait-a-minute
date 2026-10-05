@@ -5,7 +5,7 @@ import path from "node:path";
 import os from "node:os";
 import { startExperiment, noteSuccess, noteFailure } from "../execution-engine.js";
 import { getTaskState } from "../engine.js";
-import { listHypotheses } from "../cognition-store.js";
+import { listHypotheses, HYPOTHESIS_STATUS } from "../cognition-store.js";
 
 test("E2E: Hipótesis incorrecta rechazada → H2 nueva generada", async () => {
   const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-hypo-fail-"));
@@ -34,7 +34,10 @@ test("E2E: Hipótesis incorrecta rechazada → H2 nueva generada", async () => {
     // Verificar que la hipótesis quedó rechazada en el store
     const hyps = listHypotheses(TMP, taskId);
     const h1 = hyps.find(h => h.id === hypothesis.id);
-    assert.ok(h1.status === "REJECTED" || h1.status === "ARCHIVED", "H1 debe estar rechazada/archivada");
+    assert.ok(
+      h1.status === HYPOTHESIS_STATUS.REJECTED || h1.status === HYPOTHESIS_STATUS.ARCHIVED,
+      `H1 debe estar rechazada/archivada (got ${h1.status})`
+    );
 
     // Crear H2
     const { hypothesis: h2 } = await startExperiment(TMP, taskId, {
@@ -43,7 +46,7 @@ test("E2E: Hipótesis incorrecta rechazada → H2 nueva generada", async () => {
       args: { command: "apt-get install -y chromium-browser" },
       expectedObservation: { status: "installed" }
     });
-    assert.equal(h2.status, "PROPOSED", "H2 debe estar propuesta");
+    assert.equal(h2.status, HYPOTHESIS_STATUS.PROPOSED, "H2 debe estar propuesta");
   } finally {
     fs.rmSync(TMP, { recursive: true, force: true });
   }

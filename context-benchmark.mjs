@@ -99,7 +99,19 @@ export function runScenario(scenario, select) {
    const routerErrors = routerError ? 1 : 0;
    const pageFaults = routerError ? 0 : Number(out?.pageFaults ?? 0);
    const reacquiredTokens = Number(out?.reacquiredTokens ?? 0);
-   const usedIds = out?.usedIds !== undefined ? out.usedIds : (Array.isArray(scenario?.usedIds) ? scenario.usedIds : []);
+    const scenarioUsedIds = Array.isArray(scenario?.usedIds) ? scenario.usedIds : [];
+    // TASK-08: the task anchor is consumed by definition; counting it as unused
+    // context would report CWR > 0 even when the mandatory output (the only real
+    // context) was preserved. Union the anchor into the fallback used set when the
+    // selector does not report usedIds (Change 05) but the scenario declares usage.
+    const taskAnchorUsed =
+      scenario?.taskId &&
+      scenarioUsedIds.length > 0 &&
+      !scenarioUsedIds.includes(scenario.taskId) &&
+      selectedIds.includes(scenario.taskId);
+    const usedIds = out?.usedIds !== undefined
+      ? out.usedIds
+      : (taskAnchorUsed ? [...scenarioUsedIds, scenario.taskId] : scenarioUsedIds);
 
   // -- Independent ground-truth oracle integration (P1) --
   //

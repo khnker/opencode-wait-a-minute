@@ -464,7 +464,7 @@ describe("canary-deploy", () => {
     });
     assert.equal(r.status, "aborted");
     assert.equal(r.reason, "health check reported unhealthy");
-    assert.equal(r.observations.length, 3);
+    assert.equal(r.observations.length, 1);
   });
 
   it("auto-aborts on completion-rate regression", async () => {

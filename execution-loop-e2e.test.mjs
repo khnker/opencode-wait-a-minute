@@ -102,7 +102,7 @@ test("E2E INCONCLUSIVE: tool returns OK but expected field missing", async () =>
     const { hypothesis, experiment } = await startExperiment(TMP, taskId, {
       statement: "R1: r1",
       tool: "read",
-      args: { path: "/foo.js" },
+      args: { path: "foo.js" },
       expectedObservation: null,
     });
 

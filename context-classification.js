@@ -23,7 +23,7 @@ const CATEGORY_SIGNALS = {
   OBSERVATION: ["observed", "noticed", "detected", "saw", "watched", "monitor", "check", "scan", "logged", "found"],
   CLAIM: ["claim", "assert", "state", "alleged", "purported", "reported"],
   ASSUMPTION: ["assume", "presume", "hypothesis", "suppose", "likely", "probably", "might", "may", "could"],
-  DECISION: ["decide", "decision", "chose", "choose", "selected", "approved", "rejected", "resolve", "concluded"],
+  DECISION: ["decide", "decided", "decision", "chose", "choose", "selected", "approved", "rejected", "resolve", "concluded"],
   REQUIREMENT: ["must", "should", "required", "requirement", "need to", "necessary", "mandatory", "shall", "must not"],
   EVIDENCE: ["evidence", "proof", "data", "result", "test", "benchmark", "measure", "metric", "sample"],
   ERROR: ["error", "fail", "exception", "throw", "crash", "fault", "exception", "bug", "broken", "stack"],
@@ -137,8 +137,15 @@ export function classifyContextItem(item) {
     scores[category] = scoreCategory(text, category);
   }
 
-  // ERROR gets forced priority when signals present
-  if (scores.ERROR >= 1) {
+  // ERROR gets forced priority only when no other category has a strictly stronger signal count.
+  // A single weak error keyword (e.g. "fail" inside "should fail gracefully") must not preempt
+  // a multi-signal requirement like "must ... should ...".
+  const maxOtherScore = Math.max(
+    ...Object.entries(scores)
+      .filter(([c]) => c !== "ERROR")
+      .map(([, s]) => s),
+  );
+  if (scores.ERROR >= 1 && scores.ERROR >= maxOtherScore) {
     return { category: "ERROR", confidence: 0.9, signals: ["error_signal"] };
   }
 

@@ -40,7 +40,12 @@ test("E2E Happy Path: tool succeeds → SUPPORTED → verified → DONE", async 
     await noteSuccess(TMP, taskId, {
       hypothesisId: hypothesis.id,
       experimentId: experiment.id,
+      requirementId: "req-1",
       result: "Command output: task done",
+      // The scenario is "tool succeeds + matching observation"; pass the actual
+      // observation so the assessment matches expectedObservation instead of
+      // being contradicted by a missing actual (stale test data).
+      actual: { status: "completed" },
       provenance: "tool-execution"
     });
     const state = getTaskState(taskId, TMP);

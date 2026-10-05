@@ -105,6 +105,49 @@ const DOMAIN_PATTERNS = [
 ];
 
 /**
+ * Concrete terms per domain. When a domain's condition is unsatisfied, the
+ * matched terms are surfaced verbatim in `missing` so the caller can name the
+ * exact missing concept (e.g. "cache") instead of only a prose description.
+ */
+const DOMAIN_TERMS = {
+  auth: ["auth", "oauth", "jwt", "token", "login", "credential", "password", "session"],
+  migration: ["migration", "schema", "column", "table"],
+  security: ["security", "vulnerability", "encrypt", "hash", "sanitize", "xss", "csrf", "injection"],
+  testing: ["test", "coverage", "e2e", "unit", "integration"],
+  architecture: ["architecture", "refactor", "structure", "monolith", "microservice", "module"],
+  performance: ["performance", "optimization", "cache", "redis", "latency", "throughput", "bottleneck"],
+  scraping: ["scraping", "crawl", "puppeteer", "playwright", "selenium", "parser"],
+};
+
+/**
+ * Collect the MANDATORY missing descriptions plus the matched domain terms.
+ * Descriptions stay first so existing consumers keep working; the terms are
+ * appended so a caller can test for a concrete missing concept.
+ *
+ * @param {SufficiencyCondition[]} conditions
+ * @returns {string[]}
+ */
+function collectMissing(conditions) {
+  const out = [];
+  const seen = new Set();
+  for (const c of conditions) {
+    if (c.status !== "MISSING" && c.status !== "BLOCKED") continue;
+    if (c.severity !== "MANDATORY") continue;
+    if (!seen.has(c.description)) {
+      out.push(c.description);
+      seen.add(c.description);
+    }
+    for (const term of c.terms || []) {
+      if (!seen.has(term)) {
+        out.push(term);
+        seen.add(term);
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * Generate a sufficiency contract from a task description.
  *
  * @param {string} taskDescription
@@ -117,6 +160,9 @@ export function generateContract(taskDescription, taskId) {
 
   for (const domain of DOMAIN_PATTERNS) {
     if (domain.patterns.test(taskDescription)) {
+      const terms = (DOMAIN_TERMS[domain.domain] || []).filter((t) =>
+        new RegExp(`\\b${t}`, "i").test(taskDescription)
+      );
       for (const cond of domain.conditions) {
         const key = `${cond.type}:${cond.description}`;
         if (!seen.has(key)) {
@@ -125,6 +171,8 @@ export function generateContract(taskDescription, taskId) {
             id: `SC-${conditions.length + 1}`,
             type: cond.type,
             description: cond.description,
+            domain: domain.domain,
+            terms,
             status: "MISSING",
             source: "",
             severity: "MANDATORY",
@@ -148,9 +196,7 @@ export function generateContract(taskDescription, taskId) {
     });
   }
 
-  const missing = conditions
-    .filter((c) => c.status === "MISSING" && c.severity === "MANDATORY")
-    .map((c) => c.description);
+  const missing = collectMissing(conditions);
 
   return {
     taskId,
@@ -187,9 +233,7 @@ export function evaluateContract(contract, capsules) {
   }
 
   // Recalculate sufficiency
-  contract.missing = contract.conditions
-    .filter((c) => c.status === "MISSING" && c.severity === "MANDATORY")
-    .map((c) => c.description);
+  contract.missing = collectMissing(contract.conditions);
   contract.sufficient = contract.missing.length === 0;
 
   return contract;
@@ -247,9 +291,7 @@ export function mergeAssumptions(contract, assumptions) {
   }
 
   // Recalculate
-  contract.missing = contract.conditions
-    .filter((c) => (c.status === "MISSING" || c.status === "BLOCKED") && c.severity === "MANDATORY")
-    .map((c) => c.description);
+  contract.missing = collectMissing(contract.conditions);
   contract.sufficient = contract.missing.length === 0;
 
   return contract;

@@ -12,10 +12,6 @@ permissions:
 jobs:
   rc1-gate:
     runs-on: ubuntu-latest
-    env:
-      # The real OpenCode E2E requires a configured model provider. CI has none,
-      # so the smoke gate is skipped here and exercised in local RC1 validation.
-      WAM_SKIP_OPENCODE_E2E: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -28,6 +24,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # OpenCode E2E is required; CI must provide a real provider.
+      # OpenCode E2E is required; CI must provide a real provider.
       - name: Run unified RC1 release gate
         run: npm run gate
 

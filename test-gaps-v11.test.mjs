@@ -30,10 +30,10 @@ test("Lifecycle: status + phase evolution", async () => {
 
     // 3. Todos done + verified -> el claim de DONE lleva a DONE
     for (const r of state.requirements) {
-        assert.equal(pluginDefault.markRequirement(taskId, r.id, "done", `evidencia: ${r.title} -> npm test passed`).ok, true);
+        assert.equal((await pluginDefault.markRequirement(taskId, r.id, "done", `evidencia: ${r.title} -> npm test passed`)).ok, true);
     }
     for (const r of getTaskState(taskId).requirements) {
-        assert.equal(pluginDefault.markRequirement(taskId, r.id, "verified", "npm test passed").ok, true);
+        assert.equal((await pluginDefault.markRequirement(taskId, r.id, "verified", "npm test passed")).ok, true);
     }
     await hooks["chat.message"]({ sessionID: "lfy2", message: { parts: [{ type: "text", text: "todo verificado, tarea completa done" }] }, taskId }, { message: {}, parts: [] });
     state = getTaskState(taskId);

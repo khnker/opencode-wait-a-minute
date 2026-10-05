@@ -119,7 +119,7 @@ export function createRollbackManager({ store, now = defaultNow } = {}) {
       );
     }
 
-    return { rolledBack: false, cause: "succeeded", failedStep: null, log };
+    return { rolledBack: true, cause: "succeeded", failedStep: null, log };
   }
 
   return { rollback };

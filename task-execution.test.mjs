@@ -19,6 +19,7 @@ import {
   needsNewExecution,
 } from "./task-execution.js";
 import { persistTaskState } from "./engine.js";
+import { getRuns } from "./task-runs.js";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-exec-test-"));
 let taskCounter = 0;
@@ -36,7 +37,6 @@ function makeTaskState(overrides = {}) {
       { id: "req-1", title: "Req 1", status: "pending", evidence: [] },
       { id: "req-2", title: "Req 2", status: "done", evidence: ["done"] },
     ],
-    executions: [],
     ...overrides,
   };
 }
@@ -291,13 +291,26 @@ describe("cross-session persistence", () => {
     addObservation(taskId, e1.id, "First session", TMP);
     closeExecution(taskId, e1.id, "completed", "Session 1 done", TMP);
 
-    // Simulate new session: re-read from disk
+    // Simulate new session: re-read from the canonical run store on disk
+    const runs = getRuns(taskId, TMP);
+    assert.equal(runs.length, 1);
+    assert.equal(runs[0].id, e1.id);
+    assert.equal(runs[0].status, "completed");
+    assert.equal(runs[0].outcome, "Session 1 done");
+    assert.equal(runs[0].observations[0].text, "First session");
+
+    // Compatibility accessor resolves through the same canonical store
+    const executions = getExecutions(taskId, TMP);
+    assert.equal(executions.length, 1);
+    assert.equal(executions[0].observations[0], "First session");
+    assert.equal(executions[0].status, "completed");
+
+    // Legacy state.yaml is single source of truth for task state only:
+    // it must not carry executions[]
     const state = JSON.parse(
       fs.readFileSync(path.join(TMP, ".wam", "tasks", taskId, "state.yaml"), "utf-8")
     );
-    assert.equal(state.executions.length, 1);
-    assert.equal(state.executions[0].observations[0], "First session");
-    assert.equal(state.executions[0].status, "completed");
+    assert.equal(state.executions, undefined);
   });
 
   it("historical executions not injected into current state", () => {
@@ -309,13 +322,20 @@ describe("cross-session persistence", () => {
     addObservation(taskId, e1.id, "Historical obs", TMP);
     closeExecution(taskId, e1.id, "completed", null, TMP);
 
-    // Current state should have executions array but the task's
-    // own fields (requirements, lastAction) are untouched
+    // Canonical run store retains the historical execution + observation
+    const runs = getRuns(taskId, TMP);
+    assert.equal(runs.length, 1);
+    assert.equal(runs[0].id, e1.id);
+    assert.equal(runs[0].observations[0].text, "Historical obs");
+
+    // Current state should keep the task's own fields untouched and must
+    // not promote historical executions/observations into the live state
     const current = JSON.parse(
       fs.readFileSync(path.join(TMP, ".wam", "tasks", taskId, "state.yaml"), "utf-8")
     );
     assert.equal(current.lastAction, "Test task");
     assert.equal(current.requirements.length, 2);
+    assert.equal(current.executions, undefined);
     // Historical observations are only in executions, not promoted
     assert.equal(current.observations, undefined);
   });

@@ -152,8 +152,19 @@ export function routeAndAdapt(graph, options) {
     const adapted = adaptRouterResult(routerResult, { budget });
     // C02: mark source as legacy only when caller explicitly opted in
     // AND router returned empty/insufficient — never silent.
-    if (legacySelectorAllowed && (!adapted.capsules || adapted.capsules.length === 0)) {
+    // Equivalent to the previous `adapted.capsules.length === 0` check, but
+    // evaluated before N2 injection so the opt-in path is unchanged.
+    const routerSelectedNothing = !routerResult.nodes || routerResult.nodes.length === 0;
+    if (legacySelectorAllowed && routerSelectedNothing) {
       return { ...adapted, source: "legacy-allowed" };
+    }
+
+    // N2 obligation: the current task node is always assembled. The router
+    // selects supporting context (N3) only and never emits the task node
+    // itself, so the adapter injects it here (nodeToCapsule maps task -> N2).
+    const taskNode = typeof graph.getNode === "function" ? graph.getNode(taskId) : null;
+    if (taskNode && !adapted.capsules.some((c) => c.context_id === taskNode.id)) {
+      adapted.capsules = [nodeToCapsule(taskNode), ...adapted.capsules];
     }
     return adapted;
   } catch (error) {

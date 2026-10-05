@@ -11,6 +11,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { collectTests } from "../scripts/run-tests.mjs";
+import { saveState } from "../scripts/autonomous-task-runner.mjs";
 
 const ROOT = process.cwd();
 const STATE_PATH = path.join(ROOT, ".wam", "task-state.json");
@@ -77,9 +78,6 @@ test("autonomous-task-runner maintains JSON format when saving state", () => {
     };
 
     // Save the state using the runner's function
-    const { saveState } = require(path.join(ROOT, "scripts",
-      "autonomous-task-runner.mjs"));
-
     saveState(updatedState);
 
     // Verify state file is still valid JSON
@@ -107,11 +105,9 @@ test("autonomous-task-runner does not overwrite state on corrupted write", () =>
     // Create a backup of the state file
     const tempStatePath = STATE_PATH + ".temp";
     fs.copyFileSync(STATE_PATH, tempStatePath);
-
+    const stateDir = path.dirname(STATE_PATH);
     try {
       // Make the .wam directory read-only to simulate write failure
-      const stateDir = path.dirname(STATE_PATH);
-      const stateDirStats = fs.statSync(stateDir);
 
       // Create a temporary state file to work with
       fs.copyFileSync(tempStatePath, STATE_PATH);
@@ -135,14 +131,18 @@ test("autonomous-task-runner does not overwrite state on corrupted write", () =>
         "State should not be overwritten on write failure");
 
     } finally {
-      // Restore permissions
-      fs.chmodSync(stateDir, stateDirStats.mode);
+      // Always restore a guaranteed-writable mode. Reusing a captured mode
+      // would perpetuate 0o555 if a previous run already leaked it, and then
+      // the outer restore() rename below would throw EACCES.
+      fs.chmodSync(stateDir, 0o755);
       // Restore state from backup
       fs.copyFileSync(tempStatePath, STATE_PATH);
       fs.unlinkSync(tempStatePath);
     }
 
   } finally {
+    // Guarantee .wam is writable before the outer restore() renames into it.
+    fs.chmodSync(path.dirname(STATE_PATH), 0o755);
     restore();
   }
 });

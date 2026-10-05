@@ -52,8 +52,8 @@ describe("ContextManager", () => {
 
     it("returns registered source by id", () => {
       const source = makeSource("alpha");
-      manager.register(source);
-      assert.equal(manager.getSource("alpha"), source);
+      const registered = manager.register(source);
+      assert.equal(manager.getSource("alpha"), registered);
     });
 
     it("has checks if source is registered", () => {
@@ -72,12 +72,12 @@ describe("ContextManager", () => {
     it("returns all registered sources", () => {
       const s1 = makeSource("s1");
       const s2 = makeSource("s2");
-      manager.register(s1);
-      manager.register(s2);
+      const registered1 = manager.register(s1);
+      const registered2 = manager.register(s2);
       const listed = manager.listSources();
       assert.equal(listed.length, 2);
-      assert.ok(listed.includes(s1));
-      assert.ok(listed.includes(s2));
+      assert.ok(listed.includes(registered1));
+      assert.ok(listed.includes(registered2));
     });
   });
 
@@ -153,8 +153,8 @@ describe("ContextManager", () => {
       const registry = new ContextSourceRegistry();
       const customManager = new ContextManager({ registry });
       const source = makeSource("shared");
-      customManager.register(source);
-      assert.equal(registry.get("shared"), source);
+      const registered = customManager.register(source);
+      assert.equal(registry.get("shared"), registered);
       assert.equal(manager.size, 0); // separate instance
     });
   });

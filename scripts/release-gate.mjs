@@ -6,9 +6,11 @@
  *   - PASS: Gate completed successfully
  *   - FAIL: Gate execution failed or assertion failed
  *   - SKIP: Gate skipped (only valid for optional gates)
- *   - NOT_CONFIGURED: Required credentials/runtime missing (treated as BLOCKED/FAIL for mandatory checks)
  *
- * Exits 0 only if all required gates PASS. Exits 1 otherwise.
+ * Contract:
+ *   0: All required gates PASS.
+ *   2: Required gates PASS, but one or more optional gates were UNAVAILABLE.
+ *   1: One or more required gates FAILED.
  */
 
 import { execSync } from "node:child_process";
@@ -18,38 +20,17 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
+const UNAVAILABLE_EXIT_CODE = 2;
 
 const GATES = [
-  {
-    name: "Version Parity",
-    cmd: "node scripts/verify-version-parity.mjs",
-    required: true,
-  },
-  {
-    name: "Package Integrity",
-    cmd: "node scripts/verify-package.mjs",
-    required: true,
-  },
-  {
-    name: "Security Audit",
-    cmd: "node scripts/verify-security.mjs",
-    required: true,
-  },
-  {
-    name: "Migration & Isolation E2E",
-    cmd: "node tests/e2e/migration/run.mjs && node tests/isolation/run.mjs",
-    required: true,
-  },
-  {
-    name: "OpenCode Smoke E2E",
-    cmd: "node tests/e2e/opencode/smoke.mjs",
-    required: true,
-  },
-  {
-    name: "Performance Sanity",
-    cmd: "node scripts/performance-sanity.mjs",
-    required: false,
-  },
+  { name: "Version Parity", cmd: "node scripts/verify-version-parity.mjs", required: true },
+  { name: "Test Suite", cmd: "npm test", required: true, timeout: 180000 },
+  { name: "Package Integrity", cmd: "node scripts/verify-package.mjs", required: true },
+  { name: "Security Audit", cmd: "node scripts/verify-security.mjs", required: true },
+  { name: "Migration E2E", cmd: "node tests/e2e/migration/run.mjs", required: true },
+  { name: "Isolation E2E", cmd: "node tests/isolation/run.mjs", required: true },
+  { name: "OpenCode Smoke E2E", cmd: "node tests/e2e/opencode/smoke.mjs", required: true },
+  { name: "Performance Sanity", cmd: "node scripts/performance-sanity.mjs", required: false },
 ];
 
 console.log("==================================================");
@@ -57,38 +38,50 @@ console.log("WAM RC1 UNIFIED RELEASE GATE");
 console.log("==================================================");
 
 let failedCount = 0;
+let skippedCount = 0;
 const results = [];
 const startTime = Date.now();
 
 for (const gate of GATES) {
   const gateStart = Date.now();
-  process.stdout.write(`[${gate.name}] ... `);
+  process.stdout.write(`  [${gate.name}] ... `);
+  
+  let status = "PASS";
   try {
     execSync(gate.cmd, {
       cwd: REPO_ROOT,
       stdio: "inherit",
       encoding: "utf8",
-      timeout: 120000,
+      timeout: gate.timeout ?? 120000,
     });
-    const duration = Date.now() - gateStart;
-    console.log(`PASS (${duration}ms)`);
-    results.push({ name: gate.name, status: "PASS", duration });
   } catch (e) {
-    const duration = Date.now() - gateStart;
-    console.log(`FAIL (${duration}ms)`);
+    const code = typeof e?.status === "number" ? e.status : null;
     if (gate.required) {
-      failedCount++;
+      status = "FAIL";
+    } else if (code === UNAVAILABLE_EXIT_CODE) {
+      status = "SKIP";
+    } else {
+      status = "FAIL";
     }
-    results.push({ name: gate.name, status: gate.required ? "FAIL" : "WARN", duration, error: e.message });
   }
+
+  const duration = Date.now() - gateStart;
+  console.log(`${status} (${duration}ms)`);
+  
+  if (status === "FAIL") failedCount++;
+  if (status === "SKIP") skippedCount++;
+  results.push({ name: gate.name, status, duration });
 }
 
 const totalDuration = Date.now() - startTime;
 console.log("==================================================");
+results.forEach(r => console.log(`  ${r.status.padEnd(4)} ${r.name}`));
+console.log("==================================================");
+
 if (failedCount === 0) {
-  console.log(`RC1 READY (${totalDuration}ms)`);
-  process.exit(0);
+  console.log(`RC1 READY (${totalDuration}ms, ${skippedCount} skipped)`);
+  process.exit(skippedCount > 0 ? UNAVAILABLE_EXIT_CODE : 0);
 } else {
-  console.log(`RC1 BLOCKED — ${failedCount} required gate(s) failed (${totalDuration}ms)`);
+  console.log(`RC1 BLOCKED — ${failedCount} gate(s) failed (${totalDuration}ms)`);
   process.exit(1);
 }

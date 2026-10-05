@@ -25,6 +25,10 @@ import { guardAction } from "./runtime-guards.js";
 import { rejectHypothesis } from "./cognitive-state.js";
 import { assessObservation, AssessmentResult } from "./assessment-engine.js";
 import { noteContradiction } from "./hypothesis-manager.js";
+import { getTaskState, persistTaskState } from "./engine.js";
+
+// Re-exported as public API surface of the execution entry point.
+export { assessObservation };
 
 import {
   recordRawObservation,
@@ -43,6 +47,45 @@ import {
 function describe(tool, args = {}) {
   const { hypothesisId: _h, ...rest } = args;
   return `${tool}:${JSON.stringify(rest)}`;
+}
+
+/**
+ * Resolve the requirement an execution outcome belongs to. Prefers the
+ * explicit id supplied by the runtime bridge; falls back to the task's
+ * active requirement (first not done/verified) so a success observation
+ * still propagates to the lifecycle state it satisfies.
+ */
+function resolveRequirementId(taskRoot, taskId, requirementId) {
+  if (requirementId) return requirementId;
+  const state = getTaskState(taskId, taskRoot);
+  const requirements = Array.isArray(state?.requirements) ? state.requirements : [];
+  const active =
+    requirements.find((r) => r.status !== "done" && r.status !== "verified") ||
+    requirements[0] ||
+    null;
+  return active?.id || null;
+}
+
+/**
+ * Propagate a SUPPORTED execution outcome to the requirement lifecycle:
+ * mark it verified and attach the producing evidence id. This is the seam
+ * where the cognition store (evidence) meets the task state (requirement
+ * status); without it a successful tool leaves the completion gate blocked.
+ */
+function markRequirementVerified(taskRoot, taskId, requirementId, evidenceId) {
+  if (!requirementId) return false;
+  const state = getTaskState(taskId, taskRoot);
+  if (!state || !Array.isArray(state.requirements)) return false;
+  const requirement = state.requirements.find((r) => r.id === requirementId);
+  if (!requirement) return false;
+  requirement.status = "verified";
+  if (evidenceId) {
+    if (!Array.isArray(requirement.evidence)) requirement.evidence = [];
+    if (!requirement.evidence.includes(evidenceId)) requirement.evidence.push(evidenceId);
+  }
+  requirement.verifiedAt = requirement.verifiedAt || Date.now();
+  persistTaskState(taskId, state, taskRoot);
+  return true;
 }
 
 /**
@@ -112,7 +155,15 @@ export function noteFailure(taskRoot, taskId, { hypothesisId, experimentId, reas
   // a terminal state (SUPPORTED), archive it so callers observing the cognition
   // store see REJECTED/ARCHIVED instead of stale TESTING. This preserves
   // noteSuccess semantics (no forced archive on success outcomes).
-  if (hypothesisStatus !== HYPOTHESIS_STATUS.SUPPORTED) {
+  // Preserve terminal decisions: REJECTED is already the outcome of a
+  // high-severity contradiction (state-machine derive). Only soft-archive
+  // non-terminal states (e.g. TESTING) so callers never observe stale
+  // TESTING. Archiving REJECTED on top of itself erased the distinction
+  // between "contradicted" and "retired".
+  if (
+    hypothesisStatus !== HYPOTHESIS_STATUS.SUPPORTED &&
+    hypothesisStatus !== HYPOTHESIS_STATUS.REJECTED
+  ) {
     archiveHypothesis(taskRoot, taskId, hypothesisId, reason || "failure");
   }
   return {
@@ -127,9 +178,13 @@ export function noteSuccess(taskRoot, taskId, { hypothesisId, experimentId, resu
   // 0. Mark the experiment as COMPLETED (mirrors noteFailure → failExperiment).
   if (experimentId) completeExperiment(taskRoot, taskId, experimentId, { result });
 
+  // Bind the outcome to a requirement even when the caller omits it, so the
+  // evidence lineage and the task lifecycle stay connected.
+  const effectiveRequirementId = resolveRequirementId(taskRoot, taskId, requirementId);
+
   // 1. Create evidence first so we can carry its id into the observation facts.
   const { evidence } = produceExecutionEvidence(taskId, taskRoot, {
-    requirementId,
+    requirementId: effectiveRequirementId,
     result,
     hypothesisId,
   });
@@ -149,13 +204,19 @@ export function noteSuccess(taskRoot, taskId, { hypothesisId, experimentId, resu
   // 3. Bind evidence to the requirement lineage when both sides are known.
   linkEvidenceIfBound({
     evidenceId: evidence.id,
-    requirementId,
+    requirementId: effectiveRequirementId,
     hypothesisId,
     experimentId,
     observationId: observation?.id,
     taskId,
     taskRoot,
   });
+
+  // A supported outcome verifies the requirement it satisfies: this closes the
+  // seam between cognition evidence and task-state verification.
+  if (assessment.result === AssessmentResult.SUPPORTED) {
+    markRequirementVerified(taskRoot, taskId, effectiveRequirementId, evidence?.id);
+  }
 
   if (assessment.result === AssessmentResult.CONTRADICTED) {
     if (shouldNoteContradiction({ assessment, hypothesisStatus })) {

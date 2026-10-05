@@ -82,6 +82,21 @@ function extractRelevantSections(docName, body, taskTokens, { base = false } = {
 }
 
 /**
+ * Cap on individually-rendered requirement capsules in N3.
+ *
+ * Every requirement node is MANDATORY in the router, so a task with dozens of
+ * requirements produces one capsule per requirement. The mandatory N2 line
+ * already reports requirement counts, so listing each requirement here is
+ * duplication that floods the pack. Above this cap the requirement set is
+ * consolidated into a single summary line.
+ */
+const MAX_VISIBLE_REQS = 8;
+
+function isRequirementCapsule(c) {
+  return c?.scope === "requirement" || String(c?.context_id || "").startsWith("req-");
+}
+
+/**
  * Ensambla el Context Pack de la tarea.
  *
  * @returns { levels, lines, budget_used, budget, budget_violation, reserved, flex, rationale, continuation }
@@ -186,7 +201,8 @@ export function assembleContext({
       `req: ${pend}/${reqs.length} pend | next: ${nextActionTruncated}`,
     ].join("\n") || liveBody;
   }
-  const n2TaskSpent = liveBody ? reserve("N2", liveBody, ADMISSION.MANDATORY, "live task state") : 0;
+  const n2Head = liveBody ? `[wam N2 task]\n${liveBody}` : "";
+  const n2TaskSpent = n2Head ? reserve("N2", n2Head, ADMISSION.MANDATORY, "live task state") : 0;
   let reserved = n0Spent + n2TaskSpent;
 
   // Cognitive state injection (compact, only if cognition exists) - also conditional, but handled by router
@@ -223,7 +239,15 @@ export function assembleContext({
     // -- N1 Project (selectivo por dominio, consume flex) -------------------
     const ctx = getOperationalContext(projectPath);
     const recent = ctx.recentChanges?.body || "";
-    const recentSummary = recent.split(/^## /m).slice(0, 3).map((s) => s.trim()).filter(Boolean).join("\n# ");
+    // Recent changes are only relevant when their scope/content overlaps the
+    // task. An unrelated task must not inherit unrelated operational history.
+    const recentSummary = recent
+      .split(/^## /m)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .filter((s) => taskTokens.length === 0 || overlap(taskTokens, tokenize(s)) > 0)
+      .slice(0, 3)
+      .join("\n# ");
     if (!isTrivial) {
       // N1 solo si hay memoria operacional real — cero líneas vacías (rigor = ahorro de tokens)
       const n1summary = summarizeOperationalContext(projectPath);
@@ -262,8 +286,14 @@ if (!isTrivial) {
       // experiments) by delegating to buildContextGraph for the base.
       // This keeps context-graph-builder.js as the single source of truth
       // for the canonical node/edge schema while preserving full coverage.
+      // The active task id may live on the assembly options rather than on the
+      // taskState payload. Normalize it so the router graph is anchored on the
+      // real task node instead of degrading to a fallback.
+      const effectiveTaskState = taskState
+        ? { ...taskState, taskId: taskState.taskId || taskId }
+        : (taskId ? { taskId } : taskState);
       const graph = buildRuntimeContextGraph({
-        taskState,
+        taskState: effectiveTaskState,
         runState,
         evidenceLineage,
         cognitionState,
@@ -275,7 +305,7 @@ if (!isTrivial) {
         experiments,
       });
       const routerPkg = routeAndAdapt(graph, {
-        taskId: taskState?.taskId,
+        taskId: effectiveTaskState?.taskId,
         budget: flex,
         root: projectPath,
       });
@@ -306,7 +336,30 @@ if (!isTrivial) {
         rationale.push("N3: router returned insufficient — no legacy fallback without WAM_CONTEXT_SELECTOR=legacy");
       }
 
-      for (const c of pkg.capsules) {
+      // Capsule store enrichment: the Context Router selects graph nodes while
+      // the Context Selection Engine (context.js) selects persisted capsules.
+      // Both feed N3; dedupe by context_id. The router stays the sufficiency
+      // authority (C02) — this is not a selector fallback.
+      if (selectionSource !== "legacy") {
+        const capsulePkg = selectContext(prompt, {
+          budget: flex,
+          root: projectPath,
+          sessionId: getSessionId(projectPath),
+        });
+        const merged = [];
+        for (const c of pkg.capsules || []) {
+          // The active task is already emitted as the mandatory N2 line;
+          // re-listing it under N3 is duplication, not supporting context.
+          if (c.context_id === effectiveTaskState?.taskId) continue;
+          if (!merged.some((m) => m.context_id === c.context_id)) merged.push(c);
+        }
+        for (const c of capsulePkg.capsules || []) {
+          if (!merged.some((m) => m.context_id === c.context_id)) merged.push(c);
+        }
+        pkg = { ...pkg, capsules: merged };
+      }
+
+      const emitCapsule = (c) => {
         const head = `[wam N3 ${c.level || "N3"} ${c.provenance}] ${c.context_id} — ${(c.purpose || "").slice(0, 100)}`;
         const contentMax = 800;
         const truncated = (c.content || "").length > contentMax
@@ -314,6 +367,26 @@ if (!isTrivial) {
           : (c.content || "");
         const line = truncated ? `${head}\n  content: ${truncated.replace(/\n+/g, " ").slice(0, contentMax)}` : head;
         spend("N3", line, ADMISSION.OPTIONAL, `capsule ${c.context_id} (${selectionSource})`);
+      };
+
+      // Split requirement-derived capsules from everything else. Requirement
+      // nodes are MANDATORY in the router, so a task with many requirements
+      // yields one capsule each; emitting them all is duplication of the N2
+      // summary. Above MAX_VISIBLE_REQS, consolidate into a single count line.
+      const requirementCapsules = (pkg.capsules || []).filter(isRequirementCapsule);
+      const otherCapsules = (pkg.capsules || []).filter((c) => !isRequirementCapsule(c));
+
+      for (const c of otherCapsules) emitCapsule(c);
+
+      if (requirementCapsules.length > MAX_VISIBLE_REQS) {
+        spend(
+          "N3",
+          `[wam N3 requirements] ${requirementCapsules.length} reqs consolidados — ver /wam req list`,
+          ADMISSION.OPTIONAL,
+          "requirement capsule consolidation"
+        );
+      } else {
+        for (const c of requirementCapsules) emitCapsule(c);
       }
 
       // Router mandatory omissions: explicitly report as admission failures, never silently drop
