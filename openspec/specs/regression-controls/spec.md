@@ -1,7 +1,7 @@
 # regression-controls Specification
 
 ## Purpose
-TBD - created by archiving change harden-context-efficiency-validation. Update Purpose after archive.
+Define the correctness controls for the context-efficiency benchmark. These controls assert that the optimization never corrupts state or hides negative results: no stale or invalid snapshot is classified `VALID`, no required rebuild is skipped, no stale context reaches execution, verification is never lost, and negative savings are never clamped to zero. They deliberately do not assert that WAM always saves tokens.
 ## Requirements
 ### Requirement: Regression Controls
 The benchmark MUST contain explicit assertions that protect the optimization's correctness, and MUST NOT assert that WAM always saves tokens.

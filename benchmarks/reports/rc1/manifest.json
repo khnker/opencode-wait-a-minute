@@ -1,0 +1,33 @@
+{
+  "schema": "rc1-evidence-manifest@1",
+  "generatedAt": "2026-10-05T11:02:10.244Z",
+  "suite": "rc1-report",
+  "separationPolicy": "Three evidence classes are reported independently; no merged figure is produced.",
+  "artifacts": [
+    {
+      "path": "raw.json",
+      "bytes": 68415,
+      "sha256": "95c84f17dd57a7fc0c1b737d5f738332379afd59de3067b217a94da616f2ce73"
+    },
+    {
+      "path": "metrics.json",
+      "bytes": 872,
+      "sha256": "504b6a0da865a2e087f593e2ce70f1b94aba26c59e7ae11db51ee83de998b850"
+    },
+    {
+      "path": "comparison.json",
+      "bytes": 766,
+      "sha256": "51f5e4aa13c296c15ea6bb3e18ec98c5fa991bb95d305f1293475947de5cb6d8"
+    },
+    {
+      "path": "evidence.json",
+      "bytes": 6444,
+      "sha256": "b18e5a886c43ef4c39f00d226e6252dd233d8968613da8575a438e5a117eabff"
+    },
+    {
+      "path": "report.md",
+      "bytes": 7312,
+      "sha256": "c867ee00ddb01fdd46953c6c51ea0c17b52894d7b239025d046e402576f50f8b"
+    }
+  ]
+}

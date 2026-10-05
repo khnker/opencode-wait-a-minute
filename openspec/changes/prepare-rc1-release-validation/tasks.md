@@ -9,18 +9,18 @@
 - [x] Assert negative-control results are preserved (never clamped).
 
 ## Commit 2 — Mutation Scenarios and Cost Model
-- [ ] Add the multi-turn mutation sequence (full, fast, fast, partial, fast, full, fast).
-- [ ] Add the break-even table (`turns | baseline | WAM | overhead | net | cumulative`) to the real report.
-- [ ] Add continuation turn scaling 1/3/5/10/20 wired to the real harness.
+- [x] Add the multi-turn mutation sequence (full, fast, fast, partial, fast, full, fast) in `benchmarks/scenarios/rc1.mjs`.
+- [x] Add the break-even computation (`cumulative` + `breakEvenTurn`) in `benchmarks/evaluation/compare-runs.mjs` and surface it in the real report.
+- [x] Add continuation turn scaling 1/3/5/10/20 (`CONTINUATION_TURNS` in `benchmarks/scenarios/workloads.mjs`) wired to the real harness.
 
 ## Commit 3 — Package and Release Gate
-- [ ] Add `scripts/rc1-gate.mjs` composing test, deterministic validation, package verification, `npm pack`, fresh-install smoke, real benchmark, evidence validation.
-- [ ] Write `artifacts/rc1/{gate.json,report.md}`; fail non-zero on any stage failure.
-- [ ] Add `npm run rc1`, `npm run rc1:package`, `npm run validate` scripts.
-- [ ] Add `.github/workflows/rc1-validation.yml`; keep PR CI free of the real benchmark.
+- [x] Add `scripts/release-gate.mjs` composing version parity, package integrity, security audit, migration/isolation E2E, OpenCode smoke E2E and performance sanity; fails non-zero on any required stage.
+- [x] Emit machine-readable RC1 evidence to `benchmarks/reports/rc1/{manifest.json,report.md,raw.json,metrics.json,comparison.json,evidence.json}` via `npm run report:rc1`.
+- [x] Add `npm run rc1`, `npm run validate` and `npm run production:gate` aliases for the unified gate.
+- [x] Add `.github/workflows/rc1-validation.yml` (manual + `v1.1.0-rc.*` tags); PR CI stays free of the real benchmark.
 
 ## Commit 4 — Specs and Release Validation
-- [ ] Replace placeholder `Purpose` in `openspec/specs/{regression-controls,snapshot-state-validation,workload-matrix}/spec.md`.
-- [ ] Run the full deterministic suite and the real benchmark; record evidence.
-- [ ] Update `CHANGELOG.md` with RC1 validation notes.
-- [ ] Tag `v1.1.0-rc.1`.
+- [x] Replace placeholder `Purpose` in `openspec/specs/{regression-controls,snapshot-state-validation,workload-matrix}/spec.md`.
+- [x] Run the full deterministic suite (`npm run bench:validation`) and the real-benchmark dry-run; record evidence (`npm run report:rc1`).
+- [x] Update `CHANGELOG.md` with RC1 validation notes.
+- [ ] Tag `v1.1.0-rc.1` (pending final approval).

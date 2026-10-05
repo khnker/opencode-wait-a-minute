@@ -1,0 +1,14 @@
+{
+  "schema": "rc1-comparison@1",
+  "merged": false,
+  "mergePolicy": "The three evidence sections are reported separately. No combined figure is produced.",
+  "issues": [
+    {
+      "code": "INVALID_COMPARISON",
+      "detail": "internal deterministic reduction=69.6% but dry-run netInputSavings=-675 (negative). The dry-run mock provider shows WAM overhead exceeding baseline context. These do not contradict each other: they measure different things on different harnesses. No single net-savings number is claimed."
+    }
+  ],
+  "notes": [
+    "internalDeterministic (validation harness) and empiricalReal (dry-run harness) are separate experiments. Their absolute values are reported side by side for transparency and are NOT a like-for-like comparison."
+  ]
+}

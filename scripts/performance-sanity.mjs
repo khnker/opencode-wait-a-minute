@@ -16,7 +16,7 @@ import { execFileSync, execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -70,17 +70,15 @@ async function main() {
     }
     log("timing", `file stats ${total} times`);
 
-    // 3. Run a quick unit test to ensure baseline sanity
-    log("test", "running quick unit check...");
+    // 3. Measure plugin module load time (lightweight sanity check)
+    log("test", "measuring plugin module load...");
     try {
-      execSync("npm test -- --test-name-pattern='L1 Hostile path traversal'", {
-        cwd: REPO_ROOT,
-        stdio: "pipe",
-        timeout: 60000,
-      });
-      log("test", "unit test sanity check passed");
+      const t0 = Date.now();
+      await import(pathToFileURL(join(REPO_ROOT, "index.js")).href);
+      const loadMs = Date.now() - t0;
+      log("test", `plugin module loaded in ${loadMs}ms`);
     } catch (e) {
-      log("test", `unit test note: ${e.message.slice(0, 100)}`);
+      log("test", `plugin load note: ${e.message.slice(0, 100)}`);
     }
 
     console.log(

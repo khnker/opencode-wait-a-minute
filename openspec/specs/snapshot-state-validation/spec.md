@@ -1,7 +1,7 @@
 # snapshot-state-validation Specification
 
 ## Purpose
-TBD - created by archiving change harden-context-efficiency-validation. Update Purpose after archive.
+Define how the benchmark validates snapshot state transitions. Each snapshot state (`VALID`, `STALE`, `INVALID`) and each invalidation cause (Git revision, project context, task state, malformed snapshot) MUST be exercised by explicit scenarios, and mutations MUST change exactly one state dimension at a time so invalidations remain attributable.
 ## Requirements
 ### Requirement: Snapshot Matrix
 The benchmark MUST include scenarios covering each snapshot state and its expected behavior.

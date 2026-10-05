@@ -23,13 +23,14 @@
 - Node.js >=20 required.
 
 ### Validation
-Run:
+Run the unified RC1 release gate (also available as `npm run rc1` / `npm run validate`):
 ```bash
-npm run gate        # Unit + integration + validation tests
-npm run pack:test   # Package integrity (tarball install verification)
+npm run gate        # Version parity + package integrity + security + migration/isolation E2E + OpenCode smoke E2E + perf sanity
+npm run report:rc1  # Regenerate the machine-readable RC1 evidence bundle (benchmarks/reports/rc1/)
 npm run smoke       # Plugin loads without exception
 ```
+The OpenCode smoke E2E is skipped automatically when the `opencode` binary or a model provider is unavailable (CI); set `WAM_SKIP_OPENCODE_E2E=1` to force-skip.
 
 ### Known limitations
-- Real E2E against live OpenCode runtime requires manual verification (no CI harness in RC1).
-- Performance baseline to be captured post-RC1 release.
+- Real-provider benchmark (`npm run benchmark:real`) requires `WAM_BENCH_BASE_URL`/`WAM_BENCH_API_KEY`/`WAM_BENCH_MODEL`; it is skipped when unset. RC1 ships the deterministic suite plus a real-harness dry-run.
+- Performance baseline is a soft sanity check, not a regression threshold.

@@ -10,7 +10,7 @@
 import { execFileSync, execSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync, readdirSync } from "node:fs";
 
 import { fileURLToPath } from "node:url";
 
@@ -76,12 +76,18 @@ if (audit.error) {
 log("scan", "packing temporary tarball...");
 const tsDir = join(tmpdir(), `wam-scan-${Date.now()}`);
 mkdirSync(tsDir, { recursive: true });
-const packDest = join(tsDir, "package.tgz");
 
-const pack = run("npm", ["pack", "--pack-destination", packDest], REPO_ROOT);
+const pack = run("npm", ["pack", "--pack-destination", tsDir], REPO_ROOT);
 if (pack.error) {
-  fail("scan", "npm pack failed: " + pack.error.message);
+  fail("scan", "npm pack failed: " + pack.error);
 }
+// npm pack writes the .tgz into the destination dir; locate it.
+const files = readdirSync(tsDir);
+const tgzFile = files.find(f => f.endsWith(".tgz"));
+if (!tgzFile) {
+  fail("scan", "npm pack produced no tgz file in " + tsDir + "\nstdout: " + pack.stdout + "\nstderr: " + pack.stderr);
+}
+const packDest = join(tsDir, tgzFile);
 log("scan", `packed to ${packDest}`);
 
 log("scan", "listing tarball contents...");

@@ -1,0 +1,36 @@
+{
+  "schema": "rc1-metrics@1",
+  "separationPolicy": "Three evidence classes are reported independently; no merged figure is produced.",
+  "internalDeterministic": {
+    "snapshotCases": 10,
+    "snapshotPassed": 10,
+    "snapshotFailed": 0,
+    "fastPathCount": 34,
+    "contextRebuilds": 8,
+    "turns": 42,
+    "totalReductionPct": 69.6
+  },
+  "empiricalReal": {
+    "inputTokens": 870,
+    "baselineInputTokens": 195,
+    "totalTokens": 1080,
+    "rebuilds": 30,
+    "outcomeMatch": 0,
+    "evaluated": 30,
+    "nonEquivalent": 30,
+    "netInputSavings": -675,
+    "invalidComparisons": 0
+  },
+  "externalEvidence": {
+    "corpus": "wam-rc1-external-evidence",
+    "version": "1.0.0",
+    "sourceCount": 6,
+    "counts": {
+      "provider": 2,
+      "academic": 2,
+      "open-source": 2,
+      "independent": 0
+    },
+    "cachedTokensReportedSeparately": true
+  }
+}

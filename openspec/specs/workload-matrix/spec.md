@@ -1,7 +1,7 @@
 # workload-matrix Specification
 
 ## Purpose
-TBD - created by archiving change harden-context-efficiency-validation. Update Purpose after archive.
+Define the workload families the context-efficiency benchmark must cover so that savings are reported together with workload composition. Four families are required: local (measures fixed overhead), contextual (measures selective assembly), continuation (measures multi-turn behavior), and mutation (measures invalidation handling).
 ## Requirements
 ### Requirement: Workload Matrix
 The benchmark MUST include four workload families covering the efficiency envelope.

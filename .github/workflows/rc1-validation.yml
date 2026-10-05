@@ -1,0 +1,42 @@
+name: RC1 Validation
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v1.1.0-rc.*"
+
+permissions:
+  contents: read
+
+jobs:
+  rc1-gate:
+    runs-on: ubuntu-latest
+    env:
+      # The real OpenCode E2E requires a configured model provider. CI has none,
+      # so the smoke gate is skipped here and exercised in local RC1 validation.
+      WAM_SKIP_OPENCODE_E2E: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unified RC1 release gate
+        run: npm run gate
+
+      - name: Generate RC1 evidence bundle
+        run: npm run report:rc1
+
+      - name: Upload RC1 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rc1-evidence
+          path: benchmarks/reports/rc1/
+          if-no-files-found: error
