@@ -1,0 +1,159 @@
+# Benchmark Methodology Freeze
+
+## ADDED Requirements
+
+### Requirement: Benchmark Methodology Freeze
+Deterministic and live-provider benchmark results MUST be separated and MUST carry full provenance.
+
+#### Scenario: Separation holds
+- **WHEN** benchmark results are produced
+- **THEN** d
+- **THEN** e
+- **THEN** t
+- **THEN** e
+- **THEN** r
+- **THEN** m
+- **THEN** i
+- **THEN** n
+- **THEN** i
+- **THEN** s
+- **THEN** t
+- **THEN** i
+- **THEN** c
+- **THEN**  
+- **THEN** a
+- **THEN** n
+- **THEN** d
+- **THEN**  
+- **THEN** l
+- **THEN** i
+- **THEN** v
+- **THEN** e
+- **THEN**  
+- **THEN** f
+- **THEN** i
+- **THEN** g
+- **THEN** u
+- **THEN** r
+- **THEN** e
+- **THEN** s
+- **THEN**  
+- **THEN** a
+- **THEN** r
+- **THEN** e
+- **THEN**  
+- **THEN** n
+- **THEN** e
+- **THEN** v
+- **THEN** e
+- **THEN** r
+- **THEN**  
+- **THEN** m
+- **THEN** e
+- **THEN** r
+- **THEN** g
+- **THEN** e
+- **THEN** d
+
+
+#### Scenario: Provenance present
+- **WHEN** a result is emitted
+- **THEN** i
+- **THEN** t
+- **THEN**  
+- **THEN** c
+- **THEN** o
+- **THEN** n
+- **THEN** t
+- **THEN** a
+- **THEN** i
+- **THEN** n
+- **THEN** s
+- **THEN**  
+- **THEN** c
+- **THEN** o
+- **THEN** m
+- **THEN** m
+- **THEN** i
+- **THEN** t
+- **THEN** ,
+- **THEN**  
+- **THEN** v
+- **THEN** e
+- **THEN** r
+- **THEN** s
+- **THEN** i
+- **THEN** o
+- **THEN** n
+- **THEN** ,
+- **THEN**  
+- **THEN** s
+- **THEN** c
+- **THEN** e
+- **THEN** n
+- **THEN** a
+- **THEN** r
+- **THEN** i
+- **THEN** o
+- **THEN** ,
+- **THEN**  
+- **THEN** t
+- **THEN** o
+- **THEN** k
+- **THEN** e
+- **THEN** n
+- **THEN**  
+- **THEN** f
+- **THEN** i
+- **THEN** e
+- **THEN** l
+- **THEN** d
+- **THEN** s
+- **THEN** ,
+- **THEN**  
+- **THEN** e
+- **THEN** q
+- **THEN** u
+- **THEN** i
+- **THEN** v
+- **THEN** a
+- **THEN** l
+- **THEN** e
+- **THEN** n
+- **THEN** t
+- **THEN**  
+- **THEN** a
+- **THEN** n
+- **THEN** d
+- **THEN**  
+- **THEN** p
+- **THEN** r
+- **THEN** o
+- **THEN** v
+- **THEN** i
+- **THEN** d
+- **THEN** e
+- **THEN** r
+- **THEN** /
+- **THEN** m
+- **THEN** o
+- **THEN** d
+- **THEN** e
+- **THEN** l
+- **THEN**  
+- **THEN** w
+- **THEN** h
+- **THEN** e
+- **THEN** n
+- **THEN**  
+- **THEN** a
+- **THEN** p
+- **THEN** p
+- **THEN** l
+- **THEN** i
+- **THEN** c
+- **THEN** a
+- **THEN** b
+- **THEN** l
+- **THEN** e
+

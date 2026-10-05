@@ -1,0 +1,105 @@
+# Architecture Documentation
+
+## ADDED Requirements
+
+### Requirement: Architecture Documentation
+Architecture documentation MUST describe how each subsystem works.
+
+#### Scenario: Architecture set complete
+- **WHEN** the docs are reviewed
+- **THEN** o
+- **THEN** v
+- **THEN** e
+- **THEN** r
+- **THEN** v
+- **THEN** i
+- **THEN** e
+- **THEN** w
+- **THEN** ,
+- **THEN**  
+- **THEN** l
+- **THEN** i
+- **THEN** f
+- **THEN** e
+- **THEN** c
+- **THEN** y
+- **THEN** c
+- **THEN** l
+- **THEN** e
+- **THEN** ,
+- **THEN**  
+- **THEN** c
+- **THEN** o
+- **THEN** n
+- **THEN** t
+- **THEN** e
+- **THEN** x
+- **THEN** t
+- **THEN** -
+- **THEN** p
+- **THEN** a
+- **THEN** c
+- **THEN** k
+- **THEN** s
+- **THEN** ,
+- **THEN**  
+- **THEN** c
+- **THEN** o
+- **THEN** g
+- **THEN** n
+- **THEN** i
+- **THEN** t
+- **THEN** i
+- **THEN** o
+- **THEN** n
+- **THEN** ,
+- **THEN**  
+- **THEN** c
+- **THEN** o
+- **THEN** m
+- **THEN** p
+- **THEN** l
+- **THEN** e
+- **THEN** t
+- **THEN** i
+- **THEN** o
+- **THEN** n
+- **THEN** ,
+- **THEN**  
+- **THEN** p
+- **THEN** e
+- **THEN** r
+- **THEN** s
+- **THEN** i
+- **THEN** s
+- **THEN** t
+- **THEN** e
+- **THEN** n
+- **THEN** c
+- **THEN** e
+- **THEN**  
+- **THEN** a
+- **THEN** n
+- **THEN** d
+- **THEN**  
+- **THEN** e
+- **THEN** v
+- **THEN** i
+- **THEN** d
+- **THEN** e
+- **THEN** n
+- **THEN** c
+- **THEN** e
+- **THEN**  
+- **THEN** e
+- **THEN** a
+- **THEN** c
+- **THEN** h
+- **THEN**  
+- **THEN** e
+- **THEN** x
+- **THEN** i
+- **THEN** s
+- **THEN** t
+
+

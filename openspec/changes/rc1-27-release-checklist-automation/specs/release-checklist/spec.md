@@ -1,0 +1,125 @@
+# Release Checklist Automation
+
+## ADDED Requirements
+
+### Requirement: Release Checklist Automation
+A single command MUST evaluate every RC1 gate and emit a machine-readable READY/BLOCKED verdict.
+
+#### Scenario: All-green yields READY
+- **WHEN** every mandatory gate passes
+- **THEN** t
+- **THEN** h
+- **THEN** e
+- **THEN**  
+- **THEN** s
+- **THEN** u
+- **THEN** m
+- **THEN** m
+- **THEN** a
+- **THEN** r
+- **THEN** y
+- **THEN**  
+- **THEN** p
+- **THEN** r
+- **THEN** i
+- **THEN** n
+- **THEN** t
+- **THEN** s
+- **THEN**  
+- **THEN** R
+- **THEN** C
+- **THEN** 1
+- **THEN**  
+- **THEN** R
+- **THEN** E
+- **THEN** A
+- **THEN** D
+- **THEN** Y
+- **THEN**  
+- **THEN** a
+- **THEN** n
+- **THEN** d
+- **THEN**  
+- **THEN** e
+- **THEN** x
+- **THEN** i
+- **THEN** t
+- **THEN** s
+- **THEN**  
+- **THEN** 0
+
+
+#### Scenario: Any failure yields BLOCKED
+- **WHEN** a mandatory gate fails
+- **THEN** t
+- **THEN** h
+- **THEN** e
+- **THEN**  
+- **THEN** s
+- **THEN** u
+- **THEN** m
+- **THEN** m
+- **THEN** a
+- **THEN** r
+- **THEN** y
+- **THEN**  
+- **THEN** p
+- **THEN** r
+- **THEN** i
+- **THEN** n
+- **THEN** t
+- **THEN** s
+- **THEN**  
+- **THEN** R
+- **THEN** C
+- **THEN** 1
+- **THEN**  
+- **THEN** B
+- **THEN** L
+- **THEN** O
+- **THEN** C
+- **THEN** K
+- **THEN** E
+- **THEN** D
+- **THEN**  
+- **THEN** w
+- **THEN** i
+- **THEN** t
+- **THEN** h
+- **THEN**  
+- **THEN** t
+- **THEN** h
+- **THEN** e
+- **THEN**  
+- **THEN** b
+- **THEN** l
+- **THEN** o
+- **THEN** c
+- **THEN** k
+- **THEN** e
+- **THEN** r
+- **THEN**  
+- **THEN** l
+- **THEN** i
+- **THEN** s
+- **THEN** t
+- **THEN**  
+- **THEN** a
+- **THEN** n
+- **THEN** d
+- **THEN**  
+- **THEN** e
+- **THEN** x
+- **THEN** i
+- **THEN** t
+- **THEN** s
+- **THEN**  
+- **THEN** n
+- **THEN** o
+- **THEN** n
+- **THEN** -
+- **THEN** z
+- **THEN** e
+- **THEN** r
+- **THEN** o
+

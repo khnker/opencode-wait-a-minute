@@ -1,0 +1,124 @@
+# Repository Structure Modernization
+
+## ADDED Requirements
+
+### Requirement: Repository Structure Modernization
+The repository MUST present a category-based layout (runtime, tests, benchmarks, docs, tooling) without changing behavior.
+
+#### Scenario: Structural move preserves behavior
+- **WHEN** the repository has been migrated to the category layout
+- **THEN** `
+- **THEN** n
+- **THEN** p
+- **THEN** m
+- **THEN**  
+- **THEN** t
+- **THEN** e
+- **THEN** s
+- **THEN** t
+- **THEN** `
+- **THEN** ,
+- **THEN**  
+- **THEN** `
+- **THEN** n
+- **THEN** p
+- **THEN** m
+- **THEN**  
+- **THEN** p
+- **THEN** a
+- **THEN** c
+- **THEN** k
+- **THEN** `
+- **THEN**  
+- **THEN** a
+- **THEN** n
+- **THEN** d
+- **THEN**  
+- **THEN** `
+- **THEN** n
+- **THEN** p
+- **THEN** m
+- **THEN**  
+- **THEN** r
+- **THEN** u
+- **THEN** n
+- **THEN**  
+- **THEN** g
+- **THEN** a
+- **THEN** t
+- **THEN** e
+- **THEN** `
+- **THEN**  
+- **THEN** a
+- **THEN** l
+- **THEN** l
+- **THEN**  
+- **THEN** p
+- **THEN** a
+- **THEN** s
+- **THEN** s
+
+
+#### Scenario: No functional drift
+- **WHEN** files are relocated
+- **THEN** g
+- **THEN** i
+- **THEN** t
+- **THEN**  
+- **THEN** h
+- **THEN** i
+- **THEN** s
+- **THEN** t
+- **THEN** o
+- **THEN** r
+- **THEN** y
+- **THEN**  
+- **THEN** s
+- **THEN** h
+- **THEN** o
+- **THEN** w
+- **THEN** s
+- **THEN**  
+- **THEN** m
+- **THEN** o
+- **THEN** v
+- **THEN** e
+- **THEN** s
+- **THEN**  
+- **THEN** o
+- **THEN** n
+- **THEN** l
+- **THEN** y
+- **THEN**  
+- **THEN** (
+- **THEN** n
+- **THEN** o
+- **THEN**  
+- **THEN** l
+- **THEN** o
+- **THEN** g
+- **THEN** i
+- **THEN** c
+- **THEN**  
+- **THEN** e
+- **THEN** d
+- **THEN** i
+- **THEN** t
+- **THEN** s
+- **THEN**  
+- **THEN** i
+- **THEN** n
+- **THEN**  
+- **THEN** m
+- **THEN** o
+- **THEN** v
+- **THEN** e
+- **THEN** d
+- **THEN**  
+- **THEN** f
+- **THEN** i
+- **THEN** l
+- **THEN** e
+- **THEN** s
+- **THEN** )
+
