@@ -12,6 +12,9 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # CI has no model provider; the real OpenCode round-trip E2E is exercised locally.
+      WAM_SKIP_OPENCODE_E2E: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -27,27 +30,5 @@ jobs:
       - name: Run unit/invariant tests
         run: npm test
 
-      - name: Run smoke test
-        run: npm run smoke
-
-      - name: Run package verification
-        run: npm run pack:test
-
-  production-validation:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run production validation gate
-        run: node scripts/production-gate.mjs
+      - name: Run unified release gate
+        run: npm run gate

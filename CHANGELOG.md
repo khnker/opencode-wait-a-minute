@@ -15,6 +15,11 @@
 - `package.json` — Add `release-gate` script alias for unified validation.
 - `benchmarks/reporters/rc1-report.mjs` — Distinguish live-provider from dry-run evidence in section B, comparison notes and metrics; select the latest suite envelope by mtime (dry-run dirs named `dry-run-<epoch>` previously sorted above ISO-timestamped live runs); add a live-run caveat about textual outcome equivalence.
 - `SKILL.md` — Align version metadata to `1.1.0` (was `1.0.0`).
+- `.github/workflows/ci.yml`, `.github/workflows/release.yml` — Run the canonical `npm run gate` on pull requests and releases (with `WAM_SKIP_OPENCODE_E2E=1`); remove the redundant `production-validation` job.
+- `tests/e2e/opencode/smoke.mjs` — Require the expected model answer in the output (real round-trip assertion) instead of treating a clean exit as success; consolidate duplicate stdout listeners.
+
+### Removed
+- `scripts/production-gate.mjs` — Legacy 8-test subset, superseded by the unified `scripts/release-gate.mjs`. Its suites remain covered by `npm test`.
 
 ### Fixed
 - Paired runner cross-contamination test: WAM arm now correctly includes turn prompt (was silently dropped, breaking test expectations).

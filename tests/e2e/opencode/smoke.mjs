@@ -107,11 +107,13 @@ let opencodeProc = null;
 let timedOut = false;
 let pluginLoaded = false;
 let pluginError = null;
+let stdoutBuf = "";
+const EXPECTED = /\b42\b/;
 
 // --- Spawn opencode ----------------------------------------------------
 log("spawn", "launching opencode with simple prompt...");
 // Use a prompt that should trigger the plugin quickly but not require heavy reasoning.
-const prompt = "Responde con un solo número: 42";
+const prompt = "¿Cuánto es 6 multiplicado por 7? Responde solo con el número.";
 
 opencodeProc = spawn("opencode", ["run", prompt], {
   env,
@@ -121,17 +123,24 @@ opencodeProc = spawn("opencode", ["run", prompt], {
 });
 
 opencodeProc.stdout.on("data", (data) => {
-  const line = data.toString();
-// Look for signs that the plugin loaded and is participating.
-if (line.includes("WAM") || line.includes("wait-a-minute")) {
-  log("output", line.trim());
-}
-// Detect plugin load success via known boot message (if any).
-// If the plugin throws, it might appear in stderr.
-// Also log first few lines of output for debugging
-if (line.trim() && !line.includes("\x1b[")) { // Avoid ANSI codes for cleaner logs
-  log("output-raw", line.substring(0, 200));
-}
+  const raw = data.toString();
+  stdoutBuf += raw;
+  const line = raw.replace(/\x1b\[[0-9;]*m/g, "").trim();
+  if (!line) return;
+  if (line.includes("WAM") || line.includes("wait-a-minute")) {
+    log("output", line);
+  } else {
+    log("output-raw", line.slice(0, 200));
+  }
+  if (
+    line.includes("tool.execute") ||
+    line.includes("permission.ask") ||
+    line.includes("chat.message") ||
+    line.includes("WAM")
+  ) {
+    pluginLoaded = true;
+    log("event", `detected plugin event: line=${line.slice(0, 100)}`);
+  }
 });
 
 opencodeProc.stderr.on("data", (data) => {
@@ -172,35 +181,22 @@ const startupTimer = setTimeout(() => {
 opencodeProc.on("close", (code) => {
   if (timedOut) return;
   clearTimeout(startupTimer);
+  const clean = stdoutBuf.replace(/\x1b\[[0-9;]*m/g, "");
   if (code !== 0) {
     log("exit", `opencode exited with code ${code}`);
     if (pluginError) {
       fail("plugin", `plugin error detected: ${pluginError}`, 1);
-    } else {
-      fail("exit", `opencode exited non-zero (${code})`, 1);
     }
-  } else {
-    log("exit", "opencode exited cleanly");
-    // If we got here without detecting plugin activity, assume it loaded but didn't emit.
-    // For RC1 we consider load success sufficient.
-    if (!pluginLoaded && !pluginError) {
-      log("result", "Plugin loaded (no errors observed)");
-      cleanup(0);
-    }
+    fail("exit", `opencode exited non-zero (${code})`, 1);
   }
+  log("exit", "opencode exited cleanly");
+  if (EXPECTED.test(clean)) {
+    log("result", "round-trip verified: model answered the arithmetic prompt");
+    cleanup(0);
+  }
+  log("output-full", clean.slice(-500));
+  log("result", `no expected answer found (pluginLoaded=${pluginLoaded}, pluginError=${pluginError})`);
+  fail("roundtrip", "expected model response (42) not found in opencode output", 2);
 });
 
-// Simple heuristic: if we see any stdout line that looks like a tool event from the plugin,
-// consider the plugin loaded and participating.
-opencodeProc.stdout.on("data", (data) => {
-  const line = data.toString();
-  if (
-    line.includes("tool.execute") ||
-    line.includes("permission.ask") ||
-    line.includes("chat.message") ||
-    line.includes("WAM")
-  ) {
-    pluginLoaded = true;
-    log("event", `detected plugin event: line=${line.slice(0, 100)}`);
-  }
-});
+

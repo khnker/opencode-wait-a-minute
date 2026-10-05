@@ -650,7 +650,7 @@ External skill repositories
         └── embed SKILL.md content
         │
         ▼
-   Skills/registry.json
+   skills/registry.json
         │
         ▼
     WAM runtime
