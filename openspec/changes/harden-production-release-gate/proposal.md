@@ -2,7 +2,7 @@
 
 ## Problem
 
-WAM already has a `production-gate`, but its coverage does not yet correspond exactly to the invariants that define a production-safe release.
+WAM already has a release gate (`npm run gate`), but its coverage does not yet correspond exactly to the invariants that define a production-safe release.
 
 Several important behaviors are currently covered by the general test suite rather than being explicit release invariants:
 
@@ -17,7 +17,7 @@ At the same time, `wam-audit` contains heuristic behavioral analysis that should
 
 ## Goal
 
-Make `production-gate` the authoritative deterministic release gate.
+Make `gate` the authoritative deterministic release gate.
 
 A release must demonstrate that:
 
@@ -41,4 +41,4 @@ This change covers the release gate and its deterministic checks.
 
 ## Expected result
 
-`npm run production-gate` becomes the final machine-verifiable barrier before release.
+`npm run gate` becomes the final machine-verifiable barrier before release.

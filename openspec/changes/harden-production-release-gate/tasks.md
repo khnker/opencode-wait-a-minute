@@ -53,7 +53,7 @@
 
 ## Gate integration
 
-* [ ] Add all deterministic suites to `production-gate`.
+* [ ] Add all deterministic suites to `gate`.
 * [ ] Ensure production gate reports each layer independently.
 * [ ] Ensure any deterministic failure produces a non-zero exit code.
 * [ ] Ensure heuristic audit classifications do not independently fail release.
@@ -61,7 +61,7 @@
 ## Final verification
 
 * [ ] Run complete test suite.
-* [ ] Run `production-gate`.
+* [ ] Run `gate`.
 * [ ] Run package verification.
 * [ ] Run `npm pack` and clean-install verification.
 * [ ] Confirm release artifact contains all required runtime files.

@@ -23,5 +23,5 @@
 - [x] 3.6 Implement the RC1 evidence bundle generation in `benchmarks/reports/rc1/` with full provenance.
 
 ## 4. Layout and Docs Cleanup
-- [ ] 4.1 Freeze published surface in `package.json` (`files` and `main` fields).
-- [ ] 4.2 Update `openspec/changes/harden-production-release-gate/` to remove references to `scripts/production-gate.mjs`.
+- [x] 4.1 Freeze published surface in `package.json` (`files` and `main` fields).
+- [x] 4.2 Update `openspec/changes/harden-production-release-gate/` to remove references to `scripts/production-gate.mjs`.

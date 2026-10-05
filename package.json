@@ -43,7 +43,10 @@
     "policy/",
     "strategy/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "!**/*.test.js",
+    "!**/*.test.mjs",
+    "!**/bench-*.mjs"
   ],
   "scripts": {
     "gate": "node scripts/release-gate.mjs",
