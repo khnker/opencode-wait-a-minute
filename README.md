@@ -444,6 +444,24 @@ The pack reports per-level token usage:
 
 No-task assumption: for resume intents without an active task ("¿en qué estábamos?") WAM asks whether to continue (`/wam resume <id>`) instead of injecting the previous task's context.
 
+### Worked example: where the tokens go
+
+Real benchmark scenario **S7** (3 turns, model `auto/best-fast`). The **baseline** arm rebuilds and dumps the *full* runtime context graph on every turn. The **WAM** arm assembles the four-level pack and, on continuations, injects only the task delta.
+
+| Turn | Baseline request | WAM pack (N0–N3) | WAM overhead | WAM request |
+| --- | --- | --- | --- | --- |
+| 1 | 5,194 | 722 | 1,709 | 2,431 |
+| 2 | 5,596 | 954 | 1,653 | 2,607 |
+| 3 | 6,438 | 1,187 | 1,596 | 2,783 |
+| **Total** | **17,228** | **2,863** | **4,958** | **7,821** |
+
+- **Baseline grows every turn** (5,194 → 6,438): the whole raw graph is re-sent.
+- **WAM's pack grows slowly** (722 → 1,187): continuations inject the N2 delta, never a rebuild.
+- **WAM overhead** is the provider-charged input *beyond* the pack (prompt wrapper, task text, bookkeeping). It is charged against WAM, not hidden.
+- **Net saving: 9,407 tokens (−54.6%)** for this scenario.
+
+Aggregated over all 24 scenarios / 39 turns: baseline **225,077** vs WAM effective **129,720** → **95,357 tokens saved**. See [Empirical Evidence (RC1)](#empirical-evidence-rc1).
+
 ---
 
 ## `/wam` CLI
