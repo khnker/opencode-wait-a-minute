@@ -213,6 +213,9 @@ test("generateRc1Report accepts explicit inputs and is deterministic in structur
     assert.equal(metrics.empiricalReal.outcomeMatch, 1);
     assert.equal(metrics.empiricalReal.evaluated, 1);
     assert.equal(metrics.empiricalReal.invalidComparisons, 0);
+    assert.equal(metrics.empiricalReal.contextReduction, 60);
+    assert.equal(metrics.empiricalReal.wamOverhead, 0);
+    assert.equal(metrics.empiricalReal.netInputSavings, 60);
 
     // Manifest must still be internally consistent after explicit inputs.
     const manifest = JSON.parse(

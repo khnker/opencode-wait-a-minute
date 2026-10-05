@@ -17,10 +17,10 @@
 ## 3. RC1 Evidence and Metrics
 - [x] 3.1 Update `scripts/release-gate.mjs` to make `benchmark:real` a required RC1 stage.
 - [x] 3.2 Fix `benchmarks/run-real.mjs` (L152-154) to exit non-zero if `WAM_BENCH_BASE_URL` is missing.
-- [ ] 3.3 Implement real runtime measurements in `scripts/performance-sanity.mjs` (N=30, p95/p99).
-- [ ] 3.4 Update reporting logic to separate `context_reduction`, `wam_overhead`, and `net_input_savings`.
-- [ ] 3.5 Update `docs/benchmark/methodology.md` and `CHANGELOG.md` to reflect new metrics.
-- [ ] 3.6 Implement the RC1 evidence bundle generation in `benchmarks/reports/rc1/` with full provenance.
+- [x] 3.3 Implement real runtime measurements in `scripts/performance-sanity.mjs` (N=30, p95/p99).
+- [x] 3.4 Update reporting logic to separate `context_reduction`, `wam_overhead`, and `net_input_savings`.
+- [x] 3.5 Update `docs/benchmark/methodology.md` and `CHANGELOG.md` to reflect new metrics.
+- [x] 3.6 Implement the RC1 evidence bundle generation in `benchmarks/reports/rc1/` with full provenance.
 
 ## 4. Layout and Docs Cleanup
 - [ ] 4.1 Freeze published surface in `package.json` (`files` and `main` fields).

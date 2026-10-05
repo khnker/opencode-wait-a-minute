@@ -155,7 +155,9 @@ test("computeMetrics: keeps legacy metrics intact", () => {
   assert.equal(m.SuccessRate, 100);
   assert.equal(m.EquivalenceRate, 100);
   assert.equal(m.FastPathRate, 50);
-  assert.equal(m.TokenReductionPct, 50);
+  assert.equal(m.context_reduction, 50);
+  assert.equal(m.wam_overhead, 0);
+  assert.equal(m.net_input_savings, 50);
   assert.equal(typeof m.VerificationRate, "number");
   assert.deepEqual(m.correctnessSource, { verification: 0, fallback: 1 });
 });

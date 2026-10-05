@@ -8,8 +8,21 @@ export function computeMetrics({ results, evaluations }) {
   const successfulTasks = evaluations.filter(e => e.success).length;
   const numEvaluations = evaluations.length || 1;
 
-  const TokenReductionPct = sumBaselineTokens > 0
+  const sumWamOverheadTokens = results.reduce((n, r) => n + (r.wamOverheadTokens || 0), 0);
+
+  // Three distinct savings figures, all as a percentage of baseline input tokens.
+  // Mirrors benchmarks/evaluation/ablation.mjs:
+  //   netInputSavings = baselineInputTokens - (wamInputTokens + wamOverheadTokens)
+  // context_reduction is the raw saving before WAM overhead; wam_overhead is the
+  // cost WAM itself adds; net_input_savings is the actual gain and may be negative.
+  const contextReductionPct = sumBaselineTokens > 0
     ? ((sumBaselineTokens - sumWamTokens) / sumBaselineTokens) * 100
+    : 0;
+  const wamOverheadPct = sumBaselineTokens > 0
+    ? (sumWamOverheadTokens / sumBaselineTokens) * 100
+    : 0;
+  const netInputSavingsPct = sumBaselineTokens > 0
+    ? ((sumBaselineTokens - (sumWamTokens + sumWamOverheadTokens)) / sumBaselineTokens) * 100
     : 0;
 
   const SuccessRate = (successfulTasks / numEvaluations) * 100;
@@ -44,7 +57,9 @@ export function computeMetrics({ results, evaluations }) {
   );
 
   return {
-    TokenReductionPct: Number(TokenReductionPct.toFixed(2)),
+    context_reduction: Number(contextReductionPct.toFixed(2)),
+    wam_overhead: Number(wamOverheadPct.toFixed(2)),
+    net_input_savings: Number(netInputSavingsPct.toFixed(2)),
     SuccessfulTasks: successfulTasks,
     SuccessRate: Number(SuccessRate.toFixed(2)),
     EquivalenceRate: Number(EquivalenceRate.toFixed(2)),

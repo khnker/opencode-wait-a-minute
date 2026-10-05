@@ -103,9 +103,10 @@ function buildEmpiricalReal(realReport) {
       acc.inputTokens += r.inputTokens ?? 0;
       acc.totalTokens += r.totalTokens ?? 0;
       acc.contextRebuilds += r.contextRebuilds ?? 0;
+      acc.wamOverheadTokens += r.wamOverheadTokens ?? 0;
       return acc;
     },
-    { inputTokens: 0, totalTokens: 0, contextRebuilds: 0 }
+    { inputTokens: 0, totalTokens: 0, contextRebuilds: 0, wamOverheadTokens: 0 }
   );
 
   const outcomeMatch = evaluations.filter(
@@ -128,6 +129,16 @@ function buildEmpiricalReal(realReport) {
   if (evaluations.length === 0) {
     invalidComparisons.push({ index: -1, pairId: null, reason: "no evaluations recorded" });
   }
+
+  // Three distinct figures, mirroring the ablation formula in
+  // benchmarks/evaluation/ablation.mjs:
+  //   netInputSavings = baselineInputTokens - (wamInputTokens + wamOverheadTokens)
+  const wamOverheadTokens =
+    totals.wamOverheadTokens ?? runTotals.wamOverheadTokens ?? 0;
+  const contextReduction =
+    baselineInputTokens != null && totalInputTokens != null
+      ? baselineInputTokens - totalInputTokens
+      : null;
 
   const multiturn = (Array.isArray(rr.perScenario) ? rr.perScenario : Object.values(rr.perScenario || {})).map(
     (s) => ({
@@ -161,6 +172,9 @@ function buildEmpiricalReal(realReport) {
       stateEquivalent: totals.stateEquivalent ?? null
     },
     multiturn,
+    contextReduction,
+    wamOverhead: wamOverheadTokens,
+    wamOverheadTokens,
     netInputSavings: totals.netInputSavings ?? rr.netInputSavings ?? null,
     INVALID_COMPARISON: invalidComparisons,
     raw: rr
@@ -504,6 +518,8 @@ export function generateRc1Report(options = {}) {
       outcomeMatch: empirical.outcomeEquivalence.outcomeMatch,
       evaluated: empirical.outcomeEquivalence.evaluated,
       nonEquivalent: empirical.outcomeEquivalence.nonEquivalent,
+      contextReduction: empirical.contextReduction,
+      wamOverhead: empirical.wamOverhead,
       netInputSavings: empirical.netInputSavings,
       invalidComparisons: empirical.INVALID_COMPARISON.length
     },

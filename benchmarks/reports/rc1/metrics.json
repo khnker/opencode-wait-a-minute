@@ -11,14 +11,16 @@
     "totalReductionPct": 69.6
   },
   "empiricalReal": {
-    "inputTokens": 35053,
-    "baselineInputTokens": 225077,
-    "totalTokens": 155288,
-    "rebuilds": 54,
+    "inputTokens": 420,
+    "baselineInputTokens": 195,
+    "totalTokens": 600,
+    "rebuilds": 30,
     "outcomeMatch": 0,
-    "evaluated": 39,
-    "nonEquivalent": 39,
-    "netInputSavings": 95357,
+    "evaluated": 30,
+    "nonEquivalent": 30,
+    "contextReduction": -225,
+    "wamOverhead": 0,
+    "netInputSavings": -225,
     "invalidComparisons": 0
   },
   "externalEvidence": {

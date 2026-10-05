@@ -1,96 +1,245 @@
 #!/usr/bin/env node
 /**
- * Performance sanity test for RC1 release gate.
+ * Real runtime performance baseline for the RC1 release gate.
  *
- * Measures basic operation timing to establish a performance baseline:
- *   - Plugin init/load time (ms)
- *   - Assessment phase time (ms)
- *   - Context assembly time (ms)
+ * Measures ACTUAL in-process latencies (not file existence) for the seven
+ * phases required by openspec/changes/rc1-release-engineering/specs/
+ * rc1-release-evidence/spec.md:
  *
- * This establishes a performance baseline for RC1.
+ *   preflight, classification, context assembly, skill routing,
+ *   continuation fast-path, completion gate, task persistence.
  *
- * Exit 0 on success (thresholds are soft — only warns if drastically different).
+ * Each phase is executed N >= 30 times against the plugin's real exported
+ * functions and reported as median / p95 / p99 in milliseconds.
+ *
+ * Exit 0 on success. No top-level `return` (valid ESM).
  */
 
-import { execFileSync, execSync } from "node:child_process";
-import { tmpdir } from "node:os";
-import { join, resolve, dirname } from "node:path";
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { dirname, join, resolve } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { performance } from "node:perf_hooks";
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const REPO_ROOT = resolve(dirname(__filename), "..");
+const TRIALS = Number(process.env.WAM_PERF_TRIALS || 30);
 const GREEN = "\x1b[32m";
-const RED = "\x1b[31m";
 const RESET = "\x1b[0m";
 
-function log(step, msg) {
-  console.log(`[${step}] ${msg}`);
+/** Load a module by absolute path (ESM). */
+function load(rel) {
+  return import(pathToFileURL(join(REPO_ROOT, rel)).href);
 }
 
-function fail(step, msg) {
-  console.error(`[${step}] FAIL: ${msg}`);
-  process.exit(1);
+/** Linear-interpolated percentile over an already time-ordered sample set. */
+function percentile(sorted, p) {
+  if (sorted.length === 0) return 0;
+  if (sorted.length === 1) return sorted[0];
+  const idx = (p / 100) * (sorted.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
 }
 
-function run(cmd, args, cwd) {
-  return execFileSync(cmd, args, {
-    cwd,
-    stdio: ["ignore", "pipe", "pipe"],
-    encoding: "utf8",
-    timeout: 60000,
-  });
+function summarize(samples) {
+  const sorted = [...samples].sort((a, b) => a - b);
+  return {
+    n: sorted.length,
+    median: percentile(sorted, 50),
+    p95: percentile(sorted, 95),
+    p99: percentile(sorted, 99),
+  };
+}
+
+const fmt = (ms) => `${ms.toFixed(3)}ms`;
+const PHASE_WIDTH = 22;
+
+function printRow(phase, s) {
+  console.log(
+    `${phase.padEnd(PHASE_WIDTH)} | ${fmt(s.median).padStart(9)} | ` +
+      `${fmt(s.p95).padStart(9)} | ${fmt(s.p99).padStart(9)}`,
+  );
+}
+
+/**
+ * Build the seven phase runners. Each runner closes over the real imported
+ * functions and performs one genuine invocation per call.
+ */
+async function buildPhases() {
+  const [
+    { classifyContextItems },
+    { build },
+    { routeWithConstraints },
+    { checkContinuation },
+    { isCompletionAllowed },
+    engine,
+  ] = await Promise.all([
+    load("context-classification.js"),
+    load("context-builder.js"),
+    load("skill-routing.js"),
+    load("context-snapshot.js"),
+    load("completion-gate.js"),
+    load("engine.js"),
+  ]);
+
+  const { classifyRequest, detectStack, persistTaskState, getTaskState } = engine;
+
+  // Scratch root for phases that touch disk (persistence + snapshots).
+  const scratchRoot = mkdtempSync(join(tmpdir(), "wam-perf-"));
+  const taskId = "__perf_probe__";
+
+  // Unmeasured setup: seed a real task state so the completion gate has a
+  // genuine task to evaluate (it dereferences the persisted requirements).
+  persistTaskState(
+    taskId,
+    {
+      taskId,
+      requirements: [{ id: "r1", status: "pending", evidence: [] }],
+      updatedAt: Date.now(),
+    },
+    scratchRoot,
+  );
+
+  const samplePrompt =
+    "Rediseñar el pipeline de contexto para reducir latencia en producción";
+  const classificationItems = Array.from({ length: 12 }, (_, i) => ({
+    id: `item-${i}`,
+    text: i % 3 === 0
+      ? "The build failed with a stack trace error"
+      : "The result concluded and the task is complete",
+    content: "El resultado concluyó y la tarea está completa",
+    type: i % 4 === 0 ? "ERROR" : "RESULT",
+    lastAccess: Date.now(),
+  }));
+  const contextItems = Array.from({ length: 20 }, (_, i) => ({
+    id: `ctx-${i}`,
+    content: `Contexto sintético número ${i} para medición de ensamblado`,
+    text: `synthetic context ${i}`,
+    category: "FACT",
+    lastAccess: Date.now(),
+  }));
+  const candidateSkills = ["backend-exec", "frontend-exec", "debugger"];
+  const targetFiles = ["src/api/users.ts", "src/frontend/app.component.ts"];
+
+  const phases = [
+    {
+      name: "preflight",
+      run() {
+        // Real pre-flight cognitive analysis: request classification + stack detection.
+        classifyRequest(samplePrompt);
+        detectStack(REPO_ROOT);
+      },
+    },
+    {
+      name: "classification",
+      run() {
+        classifyContextItems(classificationItems);
+      },
+    },
+    {
+      name: "context assembly",
+      run() {
+        build({
+          context: contextItems,
+          memory: contextItems.slice(0, 5),
+          decision: [],
+          query: { keywords: ["contexto", "latencia"] },
+          options: { maxItems: 10, ttl: 600000 },
+        });
+      },
+    },
+    {
+      name: "skill routing",
+      run() {
+        routeWithConstraints(candidateSkills, targetFiles, {});
+      },
+    },
+    {
+      name: "continuation fast-path",
+      run() {
+        checkContinuation(
+          taskId,
+          { taskId, requirements: [], updatedAt: Date.now() },
+          scratchRoot,
+        );
+      },
+    },
+    {
+      name: "completion gate",
+      run() {
+        isCompletionAllowed(scratchRoot, taskId);
+      },
+    },
+    {
+      name: "task persistence",
+      run() {
+        persistTaskState(
+          taskId,
+          {
+            taskId,
+            requirements: [{ id: "r1", status: "pending", evidence: [] }],
+            updatedAt: Date.now(),
+          },
+          scratchRoot,
+        );
+        getTaskState(taskId, scratchRoot);
+      },
+    },
+  ];
+
+  // Ensure every phase is backed by a real function.
+  for (const phase of phases) {
+    if (typeof phase.run !== "function") {
+      throw new Error(`phase "${phase.name}" has no runnable implementation`);
+    }
+  }
+
+  return { phases, scratchRoot };
 }
 
 async function main() {
-  const REPO_ROOT = resolve(__dirname, "..");
-  const tmpBase = mkdtempSync(join(tmpdir(), "wam-perf-"));
+  const t0 = performance.now();
+  const { phases, scratchRoot } = await buildPhases();
 
+  console.log(`\nRC1 real runtime performance baseline — ${TRIALS} trials/phase\n`);
+  console.log(
+    `${"phase".padEnd(PHASE_WIDTH)} | ${"median".padStart(9)} | ` +
+      `${"p95".padStart(9)} | ${"p99".padStart(9)}`,
+  );
+  console.log("-".repeat(PHASE_WIDTH + 3 + 9 * 3 + 6));
+
+  const all = [];
   try {
-    // Warm up - just run the tests to make sure nothing crashes
-    log("init", "warming up test runner...");
+    for (const phase of phases) {
+      // Warm-up invocation (not measured).
+      phase.run();
 
-    // Use import instead of require for ES module compatibility
-    // We'll create a simple check to ensure the module can be loaded
-    const { promises: fs } = await import("node:fs");
-    const { join } = await import("node:path");
-
-    // 1. Plugin init timing
-    const initStart = Date.now();
-    const pkgPath = join(REPO_ROOT, "index.js");
-    await fs.access(pkgPath);
-    const initMs = Date.now() - initStart;
-    log("timing", `plugin exists check: ${initMs}ms`);
-
-    // 2. A simple assessment-like measurement
-    let total = 0;
-    for (let i = 0; i < 10; i++) {
-      await fs.stat(pkgPath);
-      total++;
+      const samples = [];
+      for (let i = 0; i < TRIALS; i++) {
+        const start = performance.now();
+        phase.run();
+        samples.push(performance.now() - start);
+      }
+      all.push(...samples);
+      printRow(phase.name, summarize(samples));
     }
-    log("timing", `file stats ${total} times`);
-
-    // 3. Measure plugin module load time (lightweight sanity check)
-    log("test", "measuring plugin module load...");
-    try {
-      const t0 = Date.now();
-      await import(pathToFileURL(join(REPO_ROOT, "index.js")).href);
-      const loadMs = Date.now() - t0;
-      log("test", `plugin module loaded in ${loadMs}ms`);
-    } catch (e) {
-      log("test", `plugin load note: ${e.message.slice(0, 100)}`);
-    }
-
-    console.log(
-      `\n${GREEN}Perf sanity completed${RESET}\n` +
-      `Timings captured above. Save these metrics for RC1 baseline.\n`
-    );
-    process.exit(0);
-  } catch (e) {
-    fail("perf", `performance sanity failed: ${e.message}`);
   } finally {
-    rmSync(tmpBase, { recursive: true, force: true });
+    rmSync(scratchRoot, { recursive: true, force: true });
   }
+
+  console.log("-".repeat(PHASE_WIDTH + 3 + 9 * 3 + 6));
+  printRow("OVERALL", summarize(all));
+
+  const totalMs = performance.now() - t0;
+  console.log(
+    `\n${GREEN}Perf sanity OK${RESET} — ${all.length} measured calls in ${totalMs.toFixed(1)}ms ` +
+      `(trials/phase=${TRIALS})\n`,
+  );
 }
 
-main();
+main().catch((err) => {
+  console.error(`\nperf sanity FAILED: ${err && err.stack ? err.stack : err}\n`);
+  process.exit(1);
+});

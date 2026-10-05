@@ -36,7 +36,9 @@ test("metrics", () => {
     { success: false, equivalent: false }
   ];
   const metrics = computeMetrics({ results, evaluations });
-  assert.strictEqual(metrics.TokenReductionPct, 50);
+  assert.strictEqual(metrics.context_reduction, 50);
+  assert.strictEqual(metrics.wam_overhead, 0);
+  assert.strictEqual(metrics.net_input_savings, 50);
   assert.strictEqual(metrics.SuccessRate, 50);
   assert.strictEqual(metrics.EquivalenceRate, 50);
   assert.strictEqual(metrics.ReconstructionReductionPct, 50);

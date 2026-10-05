@@ -1,6 +1,6 @@
 # RC1 Evidence Report
 
-Generated: 2026-10-05T11:33:56.266Z
+Generated: 2026-10-05T22:01:20.832Z
 
 This report keeps three kinds of evidence strictly separate. They are **not** combined into a single number, and no section's numbers stand in for another's.
 
@@ -28,49 +28,28 @@ Source: `benchmarks/run-validation.mjs` — deterministic-simulation, no network
 - Turns: 42
 - Total reduction: 69.6%
 
-## B. Empirical Real (live provider)
+## B. Empirical Real (dry-run)
 
-Source: `benchmarks/run-real.mjs (live provider)` — provider `openai-compatible`, model `auto/best-fast`, live network.
+Source: `benchmarks/run-real.mjs (runDryRun)` — provider `mock`, model `mock/dry-run`, no network.
 
-- Input tokens (WAM): 35053
-- Input tokens (baseline): 225077
-- Total tokens: 155288
-- Rebuilds: 54
-- outcomeMatch: 0 / 39
-- Non-equivalent: 39
+- Input tokens (WAM): 420
+- Input tokens (baseline): 195
+- Total tokens: 600
+- Rebuilds: 30
+- outcomeMatch: 0 / 30
+- Non-equivalent: 30
 - State equivalent: true
-- Net input savings: 95357
-
-> **Live-run caveat:** `outcomeMatch`/`Non-equivalent` compare the exact normalized text of two independent stochastic LLM generations (baseline vs WAM). For live provider runs these are expected to be ~0 and are NOT a correctness signal. The authoritative live signals are `State equivalent`, the deterministic internal suite, and `Net input savings`.
+- Net input savings: -225
 
 ### Multi-turn breakdown
 
 | scenario | turns | baseline input | wam input | rebuilds | net savings |
 | --- | --- | --- | --- | --- | --- |
-| S7 | 3 | 17228 | 2863 | 6 | 9407 |
-| S8 | 1 | 5417 | 954 | 1 | 2813 |
-| S9 | 1 | 4583 | 1889 | 1 | 1322 |
-| S10 | 1 | 3457 | 261 | 1 | 1441 |
-| S11 | 1 | 5205 | 495 | 1 | 2514 |
-| S12 | 1 | 5193 | 495 | 1 | 2502 |
-| S13 | 1 | 6041 | 963 | 1 | 2983 |
-| S14 | 1 | 7995 | 1431 | 1 | 4585 |
-| S15 | 1 | 8967 | 495 | 1 | 6276 |
-| S16 | 1 | 11883 | 2367 | 1 | 7769 |
-| S17 | 2 | 10299 | 1458 | 2 | 4535 |
-| S18 | 3 | 16021 | 2889 | 3 | 6292 |
-| S19 | 2 | 8269 | 1458 | 2 | 2257 |
-| S20 | 4 | 19234 | 3384 | 10 | 4626 |
-| S21 | 4 | 18143 | 2916 | 4 | 3695 |
-| S22 | 1 | 6874 | 971 | 1 | 3070 |
-| S23 | 1 | 7855 | 1207 | 1 | 3851 |
-| S24 | 1 | 8839 | 1443 | 1 | 4577 |
-| S25 | 1 | 7823 | 1679 | 1 | 3476 |
-| S26 | 4 | 31909 | 5300 | 10 | 15701 |
-| S27 | 1 | 3454 | 27 | 1 | 359 |
-| S28 | 1 | 3454 | 27 | 1 | 359 |
-| S29 | 1 | 3469 | 42 | 1 | 467 |
-| S30 | 1 | 3465 | 39 | 1 | 480 |
+| local | 1 | 5 | 14 | 1 | -9 |
+| contextual | 1 | 6 | 14 | 1 | -8 |
+| continuation | 20 | 151 | 280 | 20 | -129 |
+| mutation | 7 | 28 | 98 | 7 | -70 |
+| negative-control | 1 | 5 | 14 | 1 | -9 |
 
 ### INVALID_COMPARISON markers
 
@@ -148,8 +127,8 @@ These are **mechanism precedents**, not measurements of WAM. They are listed so 
 
 ## Comparison notes
 
-- internalDeterministic (validation harness) and empiricalReal (live provider harness) are separate experiments. Their absolute values are reported side by side for transparency and are NOT a like-for-like comparison.
+- internalDeterministic (validation harness) and empiricalReal (dry-run harness) are separate experiments. Their absolute values are reported side by side for transparency and are NOT a like-for-like comparison.
 
 ## Comparison issues
 
-None.
+- `INVALID_COMPARISON`: internal deterministic reduction=69.6% but dry-run netInputSavings=-225 (negative). The dry-run mock provider shows WAM overhead exceeding baseline context. These do not contradict each other: they measure different things on different harnesses. No single net-savings number is claimed.

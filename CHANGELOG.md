@@ -13,9 +13,11 @@
 - `benchmarks/providers/openai-compatible.mjs` — Add timeout with `AbortSignal.timeout();` fall back to `reasoning_content` when `content` is empty (for reasoning-routed models).
 - `benchmarks/real/runners/paired-runner.mjs` — Append `[Task]\n${turn.prompt}` to WAM assembled context so both baseline and WAM arms receive the user prompt. Removes silent omission bug.
 - `package.json` — Add `release-gate` script alias for unified validation.
+- `benchmarks/evaluation/metrics.mjs`, `benchmarks/reporters/rc1-report.mjs` — Split the ambiguous `TokenReductionPct` into three distinct metrics: `context_reduction`, `wam_overhead`, and `net_input_savings` (net = baseline − (WAM + overhead), per `ablation.mjs`). Removed `TokenReductionPct`.
+- `scripts/performance-sanity.mjs` — Measure real in-process latencies across 7 phases (preflight, classification, context assembly, skill routing, continuation fast-path, completion gate, task persistence) over N≥30 trials, reporting median/p95/p99 instead of file-existence checks.
 - `benchmarks/reporters/rc1-report.mjs` — Distinguish live-provider from dry-run evidence in section B, comparison notes and metrics; select the latest suite envelope by mtime (dry-run dirs named `dry-run-<epoch>` previously sorted above ISO-timestamped live runs); add a live-run caveat about textual outcome equivalence.
 - `SKILL.md` — Align version metadata to `1.1.0` (was `1.0.0`).
-- `.github/workflows/ci.yml`, `.github/workflows/release.yml` — Run the canonical `npm run gate` on pull requests and releases (with `WAM_SKIP_OPENCODE_E2E=1`); remove the redundant `production-validation` job.
+- `.github/workflows/ci.yml`, `.github/workflows/release.yml` — Run the canonical `npm run gate` on pull requests and releases (OpenCode E2E required in CI); remove the redundant `production-validation` job.
 - `tests/e2e/opencode/smoke.mjs` — Require the expected model answer in the output (real round-trip assertion) instead of treating a clean exit as success; consolidate duplicate stdout listeners.
 
 ### Removed
