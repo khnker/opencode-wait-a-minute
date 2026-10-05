@@ -21,6 +21,6 @@
 
 ## Commit 4 — Specs and Release Validation
 - [x] Replace placeholder `Purpose` in `openspec/specs/{regression-controls,snapshot-state-validation,workload-matrix}/spec.md`.
-- [x] Run the full deterministic suite (`npm run bench:validation`) and the real-benchmark dry-run; record evidence (`npm run report:rc1`).
+- [x] Run the full deterministic suite (`npm run bench:validation`) and the real benchmark both as dry-run and against a live OpenAI-compatible provider (`WAM_BENCH_*`, model `auto/best-fast`); record evidence (`npm run report:rc1`).
 - [x] Update `CHANGELOG.md` with RC1 validation notes.
 - [ ] Tag `v1.1.0-rc.1` (pending final approval).

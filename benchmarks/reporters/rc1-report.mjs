@@ -12,7 +12,7 @@
  *
  * HARD RULE: the three evidence sections are never merged into one figure.
  *   A) internalDeterministic — WAM validation suite (no external input)
- *   B) empiricalReal        — WAM dry-run evidence (mock provider, no network)
+ *   B) empiricalReal        — WAM real-harness evidence (live provider or mock dry-run)
  *   C) externalEvidence     — the curated external corpus (context only)
  *
  * Provider caching numbers are reported only inside (C), with an explicit
@@ -90,6 +90,9 @@ function buildEmpiricalReal(realReport) {
   const totals = rr.totals || {};
   const runs = Array.isArray(rr.runs) ? rr.runs : [];
   const evaluations = Array.isArray(rr.evaluations) ? rr.evaluations : [];
+  const isProviderExecution =
+    (rr.provider && rr.provider !== "mock") ||
+    rr.evidence?.execution === "provider_execution";
 
   const totalInputTokens = totals.wamInputTokens ?? null;
   const baselineInputTokens = totals.baselineInputTokens ?? null;
@@ -139,8 +142,10 @@ function buildEmpiricalReal(realReport) {
 
   return {
     origin: "empirical-real",
-    suite: "benchmarks/run-real.mjs (runDryRun)",
-    network: false,
+    suite: isProviderExecution
+      ? "benchmarks/run-real.mjs (live provider)"
+      : "benchmarks/run-real.mjs (runDryRun)",
+    network: isProviderExecution,
     evidenceKind: rr.evidence?.execution ?? "deterministic_simulation",
     provider: rr.provider ?? "mock",
     model: rr.model ?? null,
@@ -211,11 +216,12 @@ function buildComparison(internal, empirical) {
   const issues = [];
   const notes = [];
 
-  // The deterministic suite and the dry-run suite are different harnesses over
-  // different models. Their absolute numbers are NOT comparable — say so.
+  // The deterministic suite and the empirical-real suite are different harnesses
+  // over different models. Their absolute numbers are NOT comparable — say so.
   if (internal.origin !== empirical.origin) {
     notes.push(
-      "internalDeterministic (validation harness) and empiricalReal (dry-run harness) " +
+      "internalDeterministic (validation harness) and empiricalReal " +
+        `(${empirical.network ? "live provider" : "dry-run"} harness) ` +
         "are separate experiments. Their absolute values are reported side by side " +
         "for transparency and are NOT a like-for-like comparison."
     );
@@ -228,10 +234,10 @@ function buildComparison(internal, empirical) {
       issues.push({
         code: "INVALID_COMPARISON",
         detail:
-          `internal deterministic reduction=${intRed}% but dry-run netInputSavings=${empNet} ` +
-          "(negative). The dry-run mock provider shows WAM overhead exceeding baseline " +
-          "context. These do not contradict each other: they measure different things " +
-          "on different harnesses. No single net-savings number is claimed."
+          `internal deterministic reduction=${intRed}% but ${empirical.network ? "live" : "dry-run"} ` +
+          `netInputSavings=${empNet} (negative). The ${empirical.network ? "live provider" : "dry-run mock provider"} ` +
+          "shows WAM overhead exceeding baseline context. These do not contradict each other: " +
+          "they measure different things on different harnesses. No single net-savings number is claimed."
       });
     }
   }
@@ -301,11 +307,13 @@ function buildMarkdown(internal, empirical, external, comparison, generatedAt) {
   L.push(`- Total reduction: ${pct(internal.deterministicAccounting.totalReductionPct)}`);
   L.push("");
 
-  L.push("## B. Empirical Real (dry-run)");
+  L.push(
+    `## B. Empirical Real (${empirical.network ? "live provider" : "dry-run"})`
+  );
   L.push("");
   L.push(
     `Source: \`${empirical.suite}\` — provider \`${empirical.provider}\`, model ` +
-      `\`${empirical.model}\`, no network.`
+      `\`${empirical.model}\`, ${empirical.network ? "live network." : "no network."}`
   );
   L.push("");
   L.push(`- Input tokens (WAM): ${empirical.inputTokens}`);
@@ -316,6 +324,16 @@ function buildMarkdown(internal, empirical, external, comparison, generatedAt) {
   L.push(`- Non-equivalent: ${empirical.outcomeEquivalence.nonEquivalent}`);
   L.push(`- State equivalent: ${empirical.outcomeEquivalence.stateEquivalent}`);
   L.push(`- Net input savings: ${empirical.netInputSavings}`);
+  if (empirical.network) {
+    L.push("");
+    L.push(
+      "> **Live-run caveat:** `outcomeMatch`/`Non-equivalent` compare the exact " +
+        "normalized text of two independent stochastic LLM generations (baseline vs WAM). " +
+        "For live provider runs these are expected to be ~0 and are NOT a correctness " +
+        "signal. The authoritative live signals are `State equivalent`, the deterministic " +
+        "internal suite, and `Net input savings`."
+    );
+  }
   L.push("");
   L.push("### Multi-turn breakdown");
   L.push("");
@@ -426,10 +444,18 @@ export function generateRc1Report(options = {}) {
       const entries = fs
         .readdirSync(searchRoot, { withFileTypes: true })
         .filter((e) => e.isDirectory())
-        .map((e) => e.name)
-        .sort()
-        .reverse();
-      for (const name of entries) {
+        .map((e) => {
+          const full = path.join(searchRoot, e.name);
+          let mtimeMs = 0;
+          try {
+            mtimeMs = fs.statSync(full).mtimeMs;
+          } catch {
+            mtimeMs = 0;
+          }
+          return { name: e.name, mtimeMs };
+        })
+        .sort((a, b) => b.mtimeMs - a.mtimeMs);
+      for (const { name } of entries) {
         const dir = path.join(searchRoot, name);
         if (!validationSummary) {
           const found =

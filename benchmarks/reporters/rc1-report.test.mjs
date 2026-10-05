@@ -40,7 +40,7 @@ test("report.md contains the three section headers", () => {
     generateRc1Report({ outDir: out });
     const md = fs.readFileSync(path.join(out, "report.md"), "utf8");
     assert.match(md, /^## A\. Internal Deterministic$/m);
-    assert.match(md, /^## B\. Empirical Real \(dry-run\)$/m);
+    assert.match(md, /^## B\. Empirical Real \((dry-run|live provider)\)$/m);
     assert.match(md, /^## C\. External Evidence$/m);
   } finally {
     fs.rmSync(out, { recursive: true, force: true });

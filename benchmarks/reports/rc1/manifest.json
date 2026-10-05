@@ -1,33 +1,33 @@
 {
   "schema": "rc1-evidence-manifest@1",
-  "generatedAt": "2026-10-05T11:02:10.244Z",
+  "generatedAt": "2026-10-05T11:33:56.266Z",
   "suite": "rc1-report",
   "separationPolicy": "Three evidence classes are reported independently; no merged figure is produced.",
   "artifacts": [
     {
       "path": "raw.json",
-      "bytes": 68415,
-      "sha256": "95c84f17dd57a7fc0c1b737d5f738332379afd59de3067b217a94da616f2ce73"
+      "bytes": 90111,
+      "sha256": "4bd6ddfecfe8020742faea3ddcdf09f72d0c5f33cea0388c3e8164aee15a6ff3"
     },
     {
       "path": "metrics.json",
-      "bytes": 872,
-      "sha256": "504b6a0da865a2e087f593e2ce70f1b94aba26c59e7ae11db51ee83de998b850"
+      "bytes": 880,
+      "sha256": "3e8199d54c08835e124b1a80a29bcbdaa1dc64392eb5796445e7d77cdb8dfc06"
     },
     {
       "path": "comparison.json",
-      "bytes": 766,
-      "sha256": "51f5e4aa13c296c15ea6bb3e18ec98c5fa991bb95d305f1293475947de5cb6d8"
+      "bytes": 415,
+      "sha256": "e3d12b65858d3065b0489b11b8ed90d2cb5e382d39b70e6fe662a4aa41ab61e0"
     },
     {
       "path": "evidence.json",
       "bytes": 6444,
-      "sha256": "b18e5a886c43ef4c39f00d226e6252dd233d8968613da8575a438e5a117eabff"
+      "sha256": "a98479777b4a037760ca2c611344303c9369daf3b2be08ed1cc9625cc35e743c"
     },
     {
       "path": "report.md",
-      "bytes": 7312,
-      "sha256": "c867ee00ddb01fdd46953c6c51ea0c17b52894d7b239025d046e402576f50f8b"
+      "bytes": 8077,
+      "sha256": "1979aa28b50ac879b93e77767d758822a97e7153f788b851575ffc604db550bf"
     }
   ]
 }
