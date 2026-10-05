@@ -98,19 +98,20 @@ test("SUITES lists the three runnable suites", () => {
   assert.deepEqual([...SUITES].sort(), ["deterministic", "real", "validation"]);
 });
 
-test("legacy benchmark files still exist and were not moved", () => {
+test("catalogue legacy benchmark files exist at their recorded locations", () => {
   const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-  for (const f of [
-    "context-benchmark.mjs",
-    "context-benchmark-router.mjs",
-    "context-benchmark.cwr.test.mjs"
-  ]) {
-    assert.ok(fs.existsSync(path.join(root, f)), `legacy file ${f} must not be moved`);
-  }
   // The legacy catalogue must exist and be valid JSON.
   const index = JSON.parse(
     fs.readFileSync(path.join(root, "benchmarks", "legacy", "index.json"), "utf8")
   );
+  for (const b of index.benchmarks) {
+    const loc = (b.location || "").replace(/\/$/, "");
+    const rel =
+      !loc || loc === "repository root" || b.file.startsWith(loc + "/")
+        ? b.file
+        : path.join(loc, b.file);
+    assert.ok(fs.existsSync(path.join(root, rel)), `catalogue file ${rel} must exist`);
+  }
   assert.ok(Array.isArray(index.benchmarks));
   assert.ok(index.benchmarks.length >= 3);
   for (const b of index.benchmarks) {

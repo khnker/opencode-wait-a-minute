@@ -81,7 +81,7 @@ function runLegacy(files) {
 
 function main() {
   const isLegacy = process.argv.includes("--legacy");
-  const explicit = path.join(ROOT, "wait-a-minute-test.mjs");
+  const explicit = path.join(ROOT, "tests/legacy/wait-a-minute-test.mjs");
   let discovered = collectTests(ROOT);
 
   if (!isLegacy) {

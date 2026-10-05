@@ -1,2 +1,2 @@
-import { selectContext, retrieveContext } from "../context.js";
+import { selectContext, retrieveContext } from "../src/context.js";
 export { selectContext, retrieveContext };

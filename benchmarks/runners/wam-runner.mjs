@@ -1,5 +1,5 @@
 
-import { assembleContext } from "../../assembly.js";
+import { assembleContext } from "../../src/assembly.js";
 import { logicalStateHash } from "../evaluation/state-equivalence.mjs";
 
 export async function runWamTurn({ scenario, turn, turnIndex, provider, collector, repoCommit, root, budget }) {

@@ -12,7 +12,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { createSnapshot, checkContinuation, rebuildScope } from "../../context-snapshot.js";
+import { createSnapshot, checkContinuation, rebuildScope } from "../../src/context-snapshot.js";
 import { createCollector } from "../instrumentation/collector.mjs";
 
 const TASK_ID = "snapshot-matrix";

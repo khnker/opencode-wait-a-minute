@@ -1,2 +1,2 @@
-import { getSessionId } from "../context.js";
+import { getSessionId } from "../src/context.js";
 export { getSessionId };

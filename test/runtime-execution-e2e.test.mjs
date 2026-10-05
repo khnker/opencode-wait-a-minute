@@ -22,14 +22,14 @@ import path from "node:path";
 import os from "node:os";
 
 import pluginDefault from "../index.js";
-import { startExperiment, noteSuccess, noteFailure } from "../execution-engine.js";
+import { startExperiment, noteSuccess, noteFailure } from "../src/execution-engine.js";
 import {
   listHypotheses,
   listExperiments,
   listObservations,
   HYPOTHESIS_STATUS,
-} from "../cognition-store.js";
-import { getAllEvidence } from "../evidence-lineage.js";
+} from "../src/cognition-store.js";
+import { getAllEvidence } from "../src/evidence-lineage.js";
 
 function setupTmp() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wam-rt-e2e-"));

@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { assembleContext } from "../assembly.js";
-import { initMemory } from "../memory.js";
-import { createCapsule, getSessionId, resetSessionCache } from "../context.js";
+import { assembleContext } from "../src/assembly.js";
+import { initMemory } from "../src/memory.js";
+import { createCapsule, getSessionId, resetSessionCache } from "../src/context.js";
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "wam-invariants-"));
 initMemory(ROOT);

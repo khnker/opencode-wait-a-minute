@@ -16,9 +16,9 @@
  */
 
 import process from "node:process";
-import { runBenchmark, corpusA, corpusB, corpusC, scoringSelector } from "../context-benchmark.mjs";
-import { runAblation, relativeDelta, ablationMatrix } from "../context-ablation-study.mjs";
-import { evaluateGates, DEFAULT_GATES } from "../context-optimization-metrics.js";
+import { runBenchmark, corpusA, corpusB, corpusC, scoringSelector } from "../benchmarks/context-benchmark.mjs";
+import { runAblation, relativeDelta, ablationMatrix } from "../benchmarks/context-ablation-study.mjs";
+import { evaluateGates, DEFAULT_GATES } from "../src/context-optimization-metrics.js";
 
 const args = new Set(process.argv.slice(2));
 const jsonMode = args.has("--json");

@@ -1,18 +1,18 @@
-import { analyze, getTaskState, persistTaskState, routeSkillsV2, loadSkillOnDemand, cavemanify, estimateTokens, buildAssumptions, escalateAssumptions, formatBacklog, findDuplicateTask } from "./engine.js";
-import { startExperiment, noteSuccess, noteFailure } from "./execution-engine.js";
-import { migrateLegacyCognition } from "./cognition-store.js";
+import { analyze, getTaskState, persistTaskState, routeSkillsV2, loadSkillOnDemand, cavemanify, estimateTokens, buildAssumptions, escalateAssumptions, formatBacklog, findDuplicateTask } from "./src/engine.js";
+import { startExperiment, noteSuccess, noteFailure } from "./src/execution-engine.js";
+import { migrateLegacyCognition } from "./src/cognition-store.js";
 import { handleMessage } from "./runtime/message-handler.js";
 
-import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, updateLiveContext, compactDecisions } from "./memory.js";
-import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules } from "./context.js";
-import { assembleContext } from "./assembly.js";
-import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./verification.js";
-import { ContextDecisionTracer } from "./context-decision-audit.js";
-import { guardAction } from "./runtime-guards.js";
-import { WamPolicyBlock, evaluateAction } from "./risk-engine.js";
+import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, updateLiveContext, compactDecisions } from "./src/memory.js";
+import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules } from "./src/context.js";
+import { assembleContext } from "./src/assembly.js";
+import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./src/verification.js";
+import { ContextDecisionTracer } from "./src/context-decision-audit.js";
+import { guardAction } from "./src/runtime-guards.js";
+import { WamPolicyBlock, evaluateAction } from "./src/risk-engine.js";
 import { classifyByCapabilities, buildCandidate } from "./policy/strategy-capabilities.js";
-import { getStatusReport } from "./execution-state.js";
-import { createSnapshot, checkContinuation, rebuildScope } from "./context-snapshot.js";
+import { getStatusReport } from "./src/execution-state.js";
+import { createSnapshot, checkContinuation, rebuildScope } from "./src/context-snapshot.js";
 import fs from "node:fs";
 import path from "node:path";
 

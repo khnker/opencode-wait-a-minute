@@ -8,7 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { checkContinuation, createSnapshot } from "../../context-snapshot.js";
+import { checkContinuation, createSnapshot } from "../../src/context-snapshot.js";
 import { createCollector } from "../instrumentation/collector.mjs";
 
 function mkRoot() {

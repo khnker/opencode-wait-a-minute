@@ -2,7 +2,7 @@
  * Task State — Create, normalize, and validate task state.
  */
 
-import { PHASE_PROPOSED } from "../orchestration.js";
+import { PHASE_PROPOSED } from "../src/orchestration.js";
 
 export function createState(taskId) {
   return {

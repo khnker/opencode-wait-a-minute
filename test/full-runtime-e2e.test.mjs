@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { startExperiment, noteSuccess, noteFailure } from "../execution-engine.js";
-import { getTaskState } from "../engine.js";
+import { startExperiment, noteSuccess, noteFailure } from "../src/execution-engine.js";
+import { getTaskState } from "../src/engine.js";
 import { evaluateCompletion } from "../contract/completion-gate.js";
 
 /** Helper: create task with 1 pending requirement */

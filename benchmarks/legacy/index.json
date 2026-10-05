@@ -1,7 +1,7 @@
 {
   "schema": "wam-legacy-benchmark-index@1",
   "version": "1.0.0",
-  "note": "Catalogue only. These files are NOT moved or deleted — they are imported by existing tests and modules. Relocating them would break imports.",
+  "note": "Catalogue only. Locations reflect the RC1-21 category layout; imports were updated during the move. Relocate via this catalogue when needed.",
   "preferredEntrypoint": "benchmarks/cli.mjs",
   "dispositions": {
     "retained": "Still executed by the test suite; keep in place and keep tested.",
@@ -10,7 +10,7 @@
   "benchmarks": [
     {
       "file": "context-benchmark.mjs",
-      "location": "repository root",
+      "location": "benchmarks",
       "disposition": "retained",
       "rationale": "Imported by context-benchmark-ground-truth.test.mjs and asserts the C06 metric gates (CRR/SPR/COR/CWR/PFR/RPC) from context-optimization-metrics.js. Deleting it would drop coverage of the context selector's falsifiable gates.",
       "supersededBy": null,
@@ -20,7 +20,7 @@
     },
     {
       "file": "context-benchmark-router.mjs",
-      "location": "repository root",
+      "location": "src",
       "disposition": "retained",
       "rationale": "Exercised by context-benchmark-router.test.mjs. Covers router-side selection behaviour that the unified validation suite does not replicate. Retained for coverage.",
       "supersededBy": null,
@@ -30,9 +30,9 @@
     },
     {
       "file": "context-benchmark.cwr.test.mjs",
-      "location": "repository root",
+      "location": "tests/unit",
       "disposition": "retained",
-      "rationale": "Self-contained node --test file covering the CWR (context window retention) metric. It is a test file, not a harness, so it is never relocated.",
+      "rationale": "Self-contained node --test file covering the CWR (context window retention) metric. Relocated to tests/unit by RC1-21; discovery is recursive so coverage is preserved.",
       "supersededBy": null,
       "consumers": []
     },

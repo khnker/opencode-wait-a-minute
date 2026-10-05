@@ -9,6 +9,7 @@
   "files": [
     "*.js",
     "*.mjs",
+    "src/",
     "assessment/",
     "preflight/",
     "skills/",
@@ -65,7 +66,7 @@
     "verify:published": "node scripts/verify-published-package.mjs",
     "smoke": "node -e \"import('./index.js').then(m => console.log('WAM plugin loaded successfully'))\"",
     "test": "node scripts/run-tests.mjs",
-    "test:legacy": "node --test --test-concurrency=1 wait-a-minute-test.mjs",
+    "test:legacy": "node --test --test-concurrency=1 tests/legacy/wait-a-minute-test.mjs",
     "test:validation": "node --test benchmarks/validation/*.test.mjs",
     "test:e2e:opencode": "node tests/e2e/opencode/smoke.mjs",
     "test:e2e:package": "node scripts/package-e2e.mjs",

@@ -14,8 +14,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { synthesizeContract } from "../engine.js";
-import { assembleContext } from "../assembly.js";
+import { synthesizeContract } from "../src/engine.js";
+import { assembleContext } from "../src/assembly.js";
 
 // --- Helpers ---
 

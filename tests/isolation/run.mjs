@@ -11,7 +11,7 @@
  */
 
 import assert from "node:assert/strict";
-import { createWamState, loadWamState, saveWamState } from "../../wam-state.js";
+import { createWamState, loadWamState, saveWamState } from "../../src/wam-state.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdir, rm, writeFile } from "node:fs/promises";

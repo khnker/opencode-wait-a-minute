@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert";
 import { createCollector, COUNTER_NAMES } from "./collector.mjs";
-import { assembleContext } from "../../assembly.js";
+import { assembleContext } from "../../src/assembly.js";
 
 test("Collector basic functionality", () => {
   const col = createCollector();

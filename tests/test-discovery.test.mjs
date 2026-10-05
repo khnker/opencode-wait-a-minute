@@ -38,13 +38,13 @@ describe("test-discovery", () => {
     assert.deepEqual(collectTests("/nonexistent/path/that/does/not/exist"), []);
   });
 
-  it("discovers *.test.mjs files at the project root", () => {
+  it("discovers unit suites under tests/unit", () => {
     const files = collectTests(ROOT);
     const rels = files.map((p) => path.relative(ROOT, p));
-    // At least one top-level *.test.mjs must be present.
+    // The flat unit suites live under tests/unit after the RC1-21 restructure.
     assert.ok(
-      rels.some((r) => !r.includes(path.sep) && r.endsWith(".test.mjs")),
-      `expected at least one top-level *.test.mjs, got: ${rels.slice(0, 5).join(", ")}…`
+      rels.some((r) => r.startsWith(path.join("tests", "unit") + path.sep) && r.endsWith(".test.mjs")),
+      `expected at least one tests/unit/*.test.mjs, got: ${rels.slice(0, 5).join(", ")}…`
     );
   });
 

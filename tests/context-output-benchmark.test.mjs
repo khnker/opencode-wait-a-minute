@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { wamRouterSelector } from "../context-benchmark-router.mjs";
-import { runScenario } from "../context-benchmark.mjs";
+import { wamRouterSelector } from "../src/context-benchmark-router.mjs";
+import { runScenario } from "../benchmarks/context-benchmark.mjs";
 
 // TASK-08: requirement::output contract – nodes with type "output" and admission: "MANDATORY" are treated as required.
 // This test ensures that the selector respects mandatory outputs in SPR / COR calculations.

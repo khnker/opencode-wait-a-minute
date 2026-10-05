@@ -76,12 +76,12 @@ async function buildPhases() {
     { isCompletionAllowed },
     engine,
   ] = await Promise.all([
-    load("context-classification.js"),
-    load("context-builder.js"),
-    load("skill-routing.js"),
-    load("context-snapshot.js"),
-    load("completion-gate.js"),
-    load("engine.js"),
+    load("src/context-classification.js"),
+    load("src/context-builder.js"),
+    load("src/skill-routing.js"),
+    load("src/context-snapshot.js"),
+    load("src/completion-gate.js"),
+    load("src/engine.js"),
   ]);
 
   const { classifyRequest, detectStack, persistTaskState, getTaskState } = engine;
