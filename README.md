@@ -534,8 +534,44 @@ See `docs/OPENCODE_COMPATIBILITY.md` for:
 - File system contract (`.wam/` layout)
 - Node.js version requirement
 
+### Empirical Evidence (RC1)
+
+The machine-readable bundle lives in [`benchmarks/reports/rc1/`](benchmarks/reports/rc1/). It keeps three evidence kinds strictly separate and never merges them into a single figure.
+
+**Deterministic suite** (`npm run bench:validation`, no network):
+- Snapshot correctness: 10/10 passed
+- Context rebuilds: 8 (5 full, 3 partial); fast-path count 34
+- Deterministic total reduction: 69.6% over 8 scenarios / 42 turns
+
+**Live provider run** (`npm run benchmark:real`, model `auto/best-fast`, 24 scenarios / 39 turns):
+
+| Metric | Value |
+| --- | --- |
+| Baseline input tokens | 225,077 |
+| WAM input tokens | 35,053 |
+| WAM effective input (incl. overhead) | 129,720 |
+| Net input savings | 95,357 |
+| Token reduction (harness metric) | 35.94% |
+| State equivalent | true |
+| Non-equivalent turns | 0 |
+| Context rebuilds | 54 |
+
+> Textual `outcomeMatch` is `0/39` and is **not** a correctness signal: it compares the exact normalized text of two independent stochastic LLM generations (baseline vs WAM). The authoritative live signals are state equivalence, the deterministic suite, and net input savings. See [`benchmarks/reports/rc1/report.md`](benchmarks/reports/rc1/report.md) for the full multi-turn breakdown.
+
+Reproduce:
+
+```bash
+WAM_BENCH_BASE_URL=<openai-compatible-url> \
+WAM_BENCH_API_KEY=<key> \
+WAM_BENCH_MODEL=auto/best-fast \
+npm run benchmark:real
+
+npm run report:rc1   # regenerate benchmarks/reports/rc1/
+```
+
 ### Known Limitations
 - Real E2E against live OpenCode runtime is currently manual (no CI harness in RC1)
+- Real-provider benchmark requires `WAM_BENCH_BASE_URL`/`WAM_BENCH_API_KEY`/`WAM_BENCH_MODEL` and is skipped when unset
 - Performance baseline to be captured in a post-RC1 release
 
 ---
