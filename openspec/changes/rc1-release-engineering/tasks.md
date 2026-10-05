@@ -12,11 +12,11 @@
 - [x] 2.3 Fix `scripts/verify-published-package.mjs`: import `existsSync` from `fs`.
 - [x] 2.4 Fix `scripts/verify-published-package.mjs`: wrap `main()` in `async` to support dynamic `import`.
 - [x] 2.5 Implement registry-backed installation in `scripts/verify-published-package.mjs`.
-- [ ] 2.6 Update `.github/workflows/release.yml` to include registry wait and `verify:published` step.
+- [x] 2.6 Update `.github/workflows/release.yml` to include registry wait and `verify:published` step.
 
 ## 3. RC1 Evidence and Metrics
-- [ ] 3.1 Update `scripts/release-gate.mjs` to make `benchmark:real` a required RC1 stage.
-- [ ] 3.2 Fix `benchmarks/run-real.mjs` (L152-154) to exit non-zero if `WAM_BENCH_BASE_URL` is missing.
+- [x] 3.1 Update `scripts/release-gate.mjs` to make `benchmark:real` a required RC1 stage.
+- [x] 3.2 Fix `benchmarks/run-real.mjs` (L152-154) to exit non-zero if `WAM_BENCH_BASE_URL` is missing.
 - [ ] 3.3 Implement real runtime measurements in `scripts/performance-sanity.mjs` (N=30, p95/p99).
 - [ ] 3.4 Update reporting logic to separate `context_reduction`, `wam_overhead`, and `net_input_savings`.
 - [ ] 3.5 Update `docs/benchmark/methodology.md` and `CHANGELOG.md` to reflect new metrics.

@@ -150,8 +150,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
 
   if (!process.env.WAM_BENCH_BASE_URL) {
-    console.log("[run-real] skipped: set WAM_BENCH_BASE_URL/WAM_BENCH_API_KEY/WAM_BENCH_MODEL to run");
-    process.exit(0);
+    console.error("[run-real] ERROR: WAM_BENCH_BASE_URL not set");
+    process.exit(2);
   }
 
   const provider = resolveProvider();

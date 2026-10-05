@@ -31,6 +31,9 @@ const GATES = [
   { name: "Isolation E2E", cmd: "node tests/isolation/run.mjs", required: true },
   { name: "OpenCode Smoke E2E", cmd: "node tests/e2e/opencode/smoke.mjs", required: true },
   { name: "Performance Sanity", cmd: "node scripts/performance-sanity.mjs", required: false },
+  ...(process.env.WAM_RC1_EVIDENCE === "1"
+    ? [{ name: "Real Benchmark (RC1 evidence)", cmd: "npm run benchmark:real", required: true }]
+    : []),
 ];
 
 console.log("==================================================");

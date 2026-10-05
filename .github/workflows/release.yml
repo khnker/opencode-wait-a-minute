@@ -9,6 +9,9 @@ permissions:
   id-token: write
   contents: read
 
+env:
+  PACKAGE_NAME: wait-a-minute
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -25,16 +28,37 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run unit/invariant tests
-        run: npm test
-
-      # OpenCode E2E is required; CI must provide a real provider.
       # OpenCode E2E is required; CI must provide a real provider.
       - name: Run unified release gate
         run: npm run gate
+
+      - name: Run smoke check
+        run: npm run smoke
+
+      - name: Test packaged artifact
+        run: npm run pack:test
 
       - name: Verify package metadata
         run: node -e "const p=require('./package.json'); for (const k of ['repository','license','engines']) { if(!p[k]) { console.error('missing '+k); process.exit(1);} } console.log('metadata ok')"
 
       - name: Publish to npm (Trusted Publishing / OIDC)
         run: npm publish --provenance --access public
+
+      - name: Determine version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Wait for registry to serve the published version
+        run: |
+          for i in $(seq 1 30); do
+            if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
+              echo "${PACKAGE_NAME}@${VERSION} is available on the registry"
+              exit 0
+            fi
+            echo "attempt ${i}/30: ${PACKAGE_NAME}@${VERSION} not yet available, retrying in 10s..."
+            sleep 10
+          done
+          echo "timed out waiting for ${PACKAGE_NAME}@${VERSION}" >&2
+          exit 1
+
+      - name: Verify published artifact
+        run: npm run verify:published -- "${PACKAGE_NAME}@${VERSION}"
