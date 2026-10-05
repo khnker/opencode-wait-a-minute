@@ -5,21 +5,22 @@
  * Validates both:
  *   1) npm audit - no high/critical vulnerabilities in production dependencies.
  *   2) Tarball content - no forbidden files.
+ *
+ * Exit codes:
+ *   0 - PASS    (no high/critical vulnerabilities, no forbidden files)
+ *   1 - FAIL    (high/critical vulnerabilities or forbidden files present)
+ *   2 - BLOCKED (npm audit could not be run or parsed)
  */
 
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdirSync, rmSync, readdirSync } from "node:fs";
-
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = resolve(__filename, "..");
 const REPO_ROOT = resolve(__dirname, "..");
-const GREEN = "\x1b[32m";
-const RED = "\x1b[31m";
-const RESET = "\x1b[0m";
 
 function log(step, msg) {
   console.log(`[${step}] ${msg}`);
@@ -39,38 +40,71 @@ function run(cmd, args, cwd) {
         encoding: "utf8",
         timeout: 60000,
       }),
-      error: null
+      error: null,
     };
   } catch (e) {
     return {
       stdout: e.stdout || "",
       stderr: e.stderr || "",
-      error: e.message || e
+      // Normalize the error to a string once so consumers never read `.message`
+      // from an already-stringified error.
+      error: e.message || String(e),
     };
   }
 }
 
+function emitSecurity(status, reason) {
+  const line = `SECURITY: ${status} — ${reason}`;
+  if (status === "PASS") {
+    console.log(line);
+    return;
+  }
+  console.error(line);
+  process.exit(status === "FAIL" ? 1 : 2);
+}
+
+function classifyAudit(audit) {
+  let report = null;
+  const raw = (audit.stdout || "").trim();
+  if (raw) {
+    try {
+      report = JSON.parse(raw);
+    } catch {
+      report = null;
+    }
+  }
+
+  if (report && report.metadata && report.metadata.vulnerabilities) {
+    const v = report.metadata.vulnerabilities;
+    const high = v.high || 0;
+    const critical = v.critical || 0;
+    if (high > 0 || critical > 0) {
+      return {
+        status: "FAIL",
+        reason: `${high} high, ${critical} critical vulnerabilities`,
+      };
+    }
+    return { status: "PASS", reason: "no high/critical vulnerabilities" };
+  }
+
+  if (report && report.error) {
+    const err = report.error;
+    const detail = err.summary || err.detail || err.code || "unknown audit error";
+    return { status: "BLOCKED", reason: `audit error: ${detail}` };
+  }
+
+  const detail = audit.error || audit.stderr || "audit produced no parseable report";
+  return {
+    status: "BLOCKED",
+    reason: `audit unavailable: ${String(detail).trim() || "unknown error"}`,
+  };
+}
+
 // --- npm audit --------------------------------------------------
 log("security", "running npm audit (high+ critical)");
-const audit = run("npm", ["audit", "--audit-level=high"], REPO_ROOT);
-if (audit.error) {
-  const msg = (audit.stdout || audit.stderr || "").toLowerCase();
-  if (msg.includes("found") && msg.includes("vulnerabilit")) {
-    fail("security", "high+ vulnerabilities present.\n" + (audit.stderr || audit.stdout));
-  } else {
-    // npm audit may have failed for other reasons; still report but continue.
-    log("security", `audit exited with warning: ${audit.error.message}`);
-  }
-} else {
-  const out = audit.stdout.toLowerCase();
-  if (out.includes("found 0 vulnerabilities")) {
-    log("security", "no vulnerabilities found");
-  } else if (!out.includes("vulnerabilit") || !out.includes("found")) {
-    log("security", "audit passed (no high/critical issues)");
-  } else {
-    log("security", "vulnerabilities may be present: " + out);
-  }
-}
+const audit = run("npm", ["audit", "--json", "--audit-level=high"], REPO_ROOT);
+const { status, reason } = classifyAudit(audit);
+emitSecurity(status, reason);
 
 // --- Forbidden file scan in tarball -----------------------------
 log("scan", "packing temporary tarball...");
@@ -113,7 +147,7 @@ const forbiddenPatterns = [
   /~$/,
 ];
 
-let found = [];
+const found = [];
 for (const entry of entries) {
   if (!entry) continue;
   const name = entry.endsWith("/") ? entry.slice(0, -1) : entry;

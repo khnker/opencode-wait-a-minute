@@ -1,17 +1,17 @@
 # Tasks
 
 ## 1. Deterministic Environment
-- [ ] 1.1 Commit `package-lock.json` to the repository.
-- [ ] 1.2 Update `.github/workflows/ci.yml` (L25) to use `npm ci`.
-- [ ] 1.3 Update `.github/workflows/rc1-validation.yml` (L25) and `.github/workflows/release.yml` (L26) to use `npm ci`.
-- [ ] 1.4 Verify that a fresh clone and `npm ci` succeeds.
+- [x] 1.1 Commit `package-lock.json` to the repository.
+- [x] 1.2 Update `.github/workflows/ci.yml` (L25) to use `npm ci`.
+- [x] 1.3 Update `.github/workflows/rc1-validation.yml` (L25) and `.github/workflows/release.yml` (L26) to use `npm ci`.
+- [x] 1.4 Verify that a fresh clone and `npm ci` succeeds.
 
 ## 2. Security and Package Hardening
-- [ ] 2.1 Fix `scripts/verify-security.mjs`: implement PASS/FAIL/BLOCKED logic.
-- [ ] 2.2 Fix `scripts/verify-security.mjs`: resolve audit error-shape bug (L62).
-- [ ] 2.3 Fix `scripts/verify-published-package.mjs`: import `existsSync` from `fs`.
-- [ ] 2.4 Fix `scripts/verify-published-package.mjs`: wrap `main()` in `async` to support dynamic `import`.
-- [ ] 2.5 Implement registry-backed installation in `scripts/verify-published-package.mjs`.
+- [x] 2.1 Fix `scripts/verify-security.mjs`: implement PASS/FAIL/BLOCKED logic.
+- [x] 2.2 Fix `scripts/verify-security.mjs`: resolve audit error-shape bug (L62).
+- [x] 2.3 Fix `scripts/verify-published-package.mjs`: import `existsSync` from `fs`.
+- [x] 2.4 Fix `scripts/verify-published-package.mjs`: wrap `main()` in `async` to support dynamic `import`.
+- [x] 2.5 Implement registry-backed installation in `scripts/verify-published-package.mjs`.
 - [ ] 2.6 Update `.github/workflows/release.yml` to include registry wait and `verify:published` step.
 
 ## 3. RC1 Evidence and Metrics

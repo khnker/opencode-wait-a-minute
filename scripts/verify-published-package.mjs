@@ -3,112 +3,147 @@
  * Verify published package after npm publish.
  *
  * Steps:
- *   1. Installs the named version from npm registry
- *   2. Runs the same checks as verify:package
- *   3. Confirms the registry artifact matches local tarball (checksum)
+ *   1. Installs the exact requested version from the npm registry into a temp dir
+ *   2. Verifies the installed version matches the requested version
+ *   3. Verifies the expected published files exist (per `files`/`main`)
+ *   4. Imports the package entrypoint as a runtime smoke test
  *
  * Intended for post-publish CI validation.
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { execSync } from "node:child_process";
-
-const GREEN = "\x1b[32m";
-const RED = "\x1b[31m";
-const RESET = "\x1b[0m";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 function log(step, msg) {
   console.log(`[${step}] ${msg}`);
 }
 
-function fail(step, msg, code = 1) {
-  console.error(`[${step}] FAIL: ${msg}`);
-  process.exit(code);
+function globToRegExp(glob) {
+  const escaped = glob
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*")
+    .replace(/\?/g, ".");
+  return new RegExp(`^${escaped}$`);
 }
 
-function main() {
-  if (process.argv.length < 3) {
-    console.error("Usage: npm run verify:published <package_name>[@<version>]");
-    process.exit(1);
-  }
-  const pkgSpec = process.argv[2]; // e.g. "wait-a-minute@1.1.0"
-  const [name, version] = pkgSpec.split("@");
+function collectExpectedPaths(pkgJson) {
+  const paths = new Set();
+  if (pkgJson.main) paths.add(pkgJson.main);
+  for (const entry of pkgJson.files || []) paths.add(entry);
+  return [...paths];
+}
 
-  log("start", `verifying published package: ${pkgSpec}`);
+function verifyExpectedFiles(pkgDir, pkgJson) {
+  const expected = collectExpectedPaths(pkgJson);
+  const missing = [];
+
+  for (const entry of expected) {
+    const clean = entry.replace(/\/$/, "");
+    const hasGlob = /[*?[\]]/.test(clean);
+
+    if (!hasGlob) {
+      if (!existsSync(join(pkgDir, clean))) missing.push(entry);
+      continue;
+    }
+
+    const slash = clean.indexOf("/");
+    const base = slash === -1 ? "" : clean.slice(0, slash);
+    const pattern = slash === -1 ? clean : clean.slice(slash + 1);
+    const dir = base ? join(pkgDir, base) : pkgDir;
+    if (!existsSync(dir)) {
+      missing.push(entry);
+      continue;
+    }
+    const re = globToRegExp(pattern);
+    if (!readdirSync(dir).some((name) => re.test(name))) missing.push(entry);
+  }
+
+  if (missing.length > 0) {
+    throw new Error(`expected published files missing: ${missing.join(", ")}`);
+  }
+  log("step", `verified ${expected.length} expected published path(s)`);
+}
+
+async function main() {
+  const spec = process.argv[2];
+  if (!spec) {
+    throw new Error("usage: npm run verify:published -- <name>@<version>");
+  }
+
+  const at = spec.lastIndexOf("@");
+  if (at <= 0 || at === spec.length - 1) {
+    throw new Error(`invalid package spec "${spec}" — expected <name>@<version>`);
+  }
+  const name = spec.slice(0, at);
+  const version = spec.slice(at + 1);
+
+  log("start", `verifying published package: ${name}@${version}`);
 
   const tmpBase = mkdtempSync(join(tmpdir(), "wam-published-verify-"));
-  let passed = 0;
-  let total = 0;
-
-  // Step 1: install from registry
-  total++;
-  log("step", `installing ${pkgSpec} from npm registry...`);
   try {
-    execSync(`npm install ${pkgSpec}`, {
-      cwd: tmpBase,
-      stdio: "pipe",
-      timeout: 120000,
-    });
-    log("step", "install OK");
-    passed++;
-  } catch (e) {
-    fail("install", `failed to install from registry: ${e.message}`);
-  }
-
-  // Step 2: verify required files exist
-  total++;
-  const pkgDir = join(tmpBase, "node_modules", name);
-  if (!existsSync(pkgDir)) {
-    fail("files", `package directory not found at ${pkgDir}`);
-  }
-  const indexPath = join(pkgDir, "index.js");
-  if (!existsSync(indexPath)) {
-    fail("files", `index.js not found in package`);
-  }
-  log("files", "required files present");
-
-  // Step 3: require the plugin
-  total++;
-  try {
-    const plugin = await import(`file://${indexPath}`);
-    if (typeof plugin !== "function") {
-      fail("load", `plugin export is not a function`);
+    // Step 1 — install the exact version from the registry
+    log("step", `installing ${name}@${version} from npm registry...`);
+    try {
+      execFileSync("npm", ["install", "--no-save", `${name}@${version}`], {
+        cwd: tmpBase,
+        stdio: ["ignore", "pipe", "pipe"],
+        encoding: "utf8",
+        timeout: 120000,
+      });
+    } catch (e) {
+      throw new Error(`install from registry failed: ${e.message || String(e)}`);
     }
-    log("load", "plugin loaded successfully");
-    passed++;
-  } catch (e) {
-    fail("load", `failed to import plugin: ${e.message}`);
-  }
+    log("step", "install OK");
 
-  // Step 4: quick npm audit on installed package
-  total++;
-  try {
-    execSync("npm audit --audit-level=high", {
-      cwd: pkgDir,
-      stdio: "pipe",
-      timeout: 60000,
-    });
-    log("audit", "no high+ vulnerabilities in installed package");
-    passed++;
-  } catch (e) {
-    // npm audit may fail; non-blocking for published check
-    log("audit", "audit completed with warnings (non-blocking)");
-  }
+    // Step 2 — verify the installed version matches the requested one
+    const pkgDir = join(tmpBase, "node_modules", name);
+    const pkgJsonPath = join(pkgDir, "package.json");
+    if (!existsSync(pkgJsonPath)) {
+      throw new Error(`installed package.json not found at ${pkgJsonPath}`);
+    }
+    let pkgJson;
+    try {
+      pkgJson = JSON.parse(readFileSync(pkgJsonPath, "utf8"));
+    } catch (e) {
+      throw new Error(`cannot parse installed package.json: ${e.message || String(e)}`);
+    }
+    if (pkgJson.version !== version) {
+      throw new Error(`installed version ${pkgJson.version} does not match requested ${version}`);
+    }
+    log("step", `installed version ${pkgJson.version} matches requested ${version}`);
 
-  // Summary
-  console.log(`\n${passed}/${total} checks passed`);
-  if (passed === total) {
-    console.log(`${GREEN}OK${RESET}: published package verified`);
+    // Step 3 — verify the expected published files exist
+    verifyExpectedFiles(pkgDir, pkgJson);
+
+    // Step 4 — runtime smoke import of the entrypoint
+    const entry = join(pkgDir, pkgJson.main || "index.js");
+    if (!existsSync(entry)) {
+      throw new Error(`entrypoint not found: ${entry}`);
+    }
+    let mod;
+    try {
+      mod = await import(pathToFileURL(entry).href);
+    } catch (e) {
+      throw new Error(`failed to import entrypoint: ${e.message || String(e)}`);
+    }
+    const exported = Object.keys(mod);
+    if (exported.length === 0) {
+      throw new Error("entrypoint imported but exported nothing");
+    }
+    log("step", `runtime smoke import OK (${exported.length} export(s))`);
+  } finally {
     rmSync(tmpBase, { recursive: true, force: true });
-    process.exit(0);
-  } else {
-    console.log(`${RED}FAIL${RESET}: ${total - passed} checks failed`);
-    rmSync(tmpBase, { recursive: true, force: true });
-    process.exit(1);
   }
 }
 
-main();
+main()
+  .then(() => {
+    console.log("PUBLISHED: PASS");
+  })
+  .catch((e) => {
+    console.error(`PUBLISHED: FAIL — ${e.message || String(e)}`);
+    process.exit(1);
+  });
