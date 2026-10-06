@@ -81,6 +81,14 @@ console.log("==================================================");
 results.forEach(r => console.log(`  ${r.status.padEnd(4)} ${r.name}`));
 console.log("==================================================");
 
+const verdict = failedCount === 0 ? "READY" : "BLOCKED";
+const exitCode = failedCount === 0 ? (skippedCount > 0 ? UNAVAILABLE_EXIT_CODE : 0) : 1;
+const blockers = results.filter((r) => r.status === "FAIL").map((r) => r.name);
+
+if (process.argv.includes("--json")) {
+  console.log(JSON.stringify({ verdict, exitCode, totalDuration, skipped: skippedCount, gates: results, blockers }));
+}
+
 if (failedCount === 0) {
   console.log(`RC1 READY (${totalDuration}ms, ${skippedCount} skipped)`);
   process.exit(skippedCount > 0 ? UNAVAILABLE_EXIT_CODE : 0);

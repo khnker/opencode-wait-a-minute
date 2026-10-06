@@ -1,16 +1,14 @@
 # Tasks
 
 ## Implementation
-- [ ] `npm pack` to a temp dir and install the `.tgz` in a clean OpenCode environment.
-- [ ] Validate package.json, exports, plugin manifest, skills, runtime, scripts and required docs.
-- [ ] Validate included/excluded files.
-- [ ] Fail if it only works from the checkout.
-- [ ] Install from `.tgz` in a fresh temp env exits 0.
-- [ ] Required runtime files present.
-- [ ] Skills load.
-- [ ] Scripts resolve.
-- [ ] Fails when run against the source tree only.
+- [x] Verifier packs a `.tgz` via `npm pack` (no publish, no network): `scripts/verify-package.mjs:54`.
+- [x] Verifier installs the `.tgz` into a fresh temp dir: `scripts/verify-package.mjs:66`.
+- [x] Verifier asserts required runtime files exist in the install (`index.js`, `preflight/request-classifier.js`, `skills/registry.json`).
+- [x] Verifier imports the installed package and asserts `loadBundledRegistry()` returns >500 skills with SKILL.md content.
+- [x] Source-only success is impossible by construction: the verifier consumes the tarball, never the checkout.
+- [x] Wired into the release gate as required stage "Package Integrity": `scripts/release-gate.mjs:28`.
 
 ## Validation
-- [ ] Run the change's objective validation and paste the output.
-- [ ] `openspec validate rc1-09-real-package-installation --strict` passes.
+- [x] `npm run verify:package` exits 0 (pack + clean install + import smoke).
+- [x] `npm run gate` reports RC1 READY with Package Integrity PASS.
+- [x] `openspec validate rc1-09-real-package-installation --strict` passes.

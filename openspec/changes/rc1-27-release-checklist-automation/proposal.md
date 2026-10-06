@@ -16,10 +16,10 @@ RC1 must not depend on remembering to run ~12 manual commands.
 One command reports every gate with an unambiguous READY/BLOCKED verdict.
 
 ## Validation
-- [ ] `npm run release:check` exits 0 iff all mandatory gates pass.
-- [ ] Summary is machine-readable.
-- [ ] Blockers are enumerated.
-- [ ] Checklist doc exists.
+- [x] `npm run release:check` exits 0 iff all mandatory gates pass.
+- [x] Summary is machine-readable.
+- [x] Blockers are enumerated.
+- [x] Checklist doc exists.
 
 ## Program
 - RC1 item: RC1-27 (B)

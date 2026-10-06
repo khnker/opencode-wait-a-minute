@@ -16,9 +16,9 @@ The published surface must be an explicit allowlist so the package cannot ship j
 The packed tarball contains exactly the allowlisted runtime surface and nothing else.
 
 ## Validation
-- [ ] `npm pack --dry-run` yields zero dev/test/bench files.
-- [ ] Every required artifact is present.
-- [ ] Test fails on any unexpected top-level entry.
+- [x] `npm pack --dry-run` yields zero dev/test/bench files.
+- [x] Every required artifact is present.
+- [x] Test fails on any unexpected top-level entry.
 
 ## Program
 - RC1 item: RC1-10 (B)

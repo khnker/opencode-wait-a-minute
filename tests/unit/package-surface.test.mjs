@@ -29,10 +29,20 @@ test("published surface: package.json declares main and explicit files", () => {
   }
 });
 
-test("published surface: no test or bench files shipped", () => {
-  const offenders = packedPaths().filter(
-    (p) => p.endsWith(".test.js") || p.endsWith(".test.mjs") || /^bench-.*\.mjs$/.test(p)
+const DENY_DIRS = ["tests/", "benchmarks/", "docs/", "scripts/", "openspec/", ".wam/", "fixtures/"];
+
+function isDevArtifact(p) {
+  return (
+    DENY_DIRS.some((d) => p === d.slice(0, -1) || p.startsWith(d)) ||
+    p.endsWith(".test.js") ||
+    p.endsWith(".test.mjs") ||
+    /(^|\/)bench-.*\.mjs$/.test(p) ||
+    /(^|\/)fixtures?\//.test(p)
   );
+}
+
+test("published surface: allowlist excludes dev artifacts", () => {
+  const offenders = packedPaths().filter(isDevArtifact);
   assert.deepEqual(offenders, [], `dev files must not ship in the tarball: ${offenders.join(", ")}`);
 });
 

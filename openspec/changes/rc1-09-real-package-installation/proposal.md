@@ -17,11 +17,11 @@ Tests must prove WAM works from the packed artifact in a clean environment, not 
 A clean temp workspace installs the `.tgz` and exercises WAM successfully.
 
 ## Validation
-- [ ] Install from `.tgz` in a fresh temp env exits 0.
-- [ ] Required runtime files present.
-- [ ] Skills load.
-- [ ] Scripts resolve.
-- [ ] Fails when run against the source tree only.
+- [x] Install from `.tgz` in a fresh temp env exits 0.
+- [x] Required runtime files present.
+- [x] Skills load.
+- [x] Scripts resolve.
+- [x] Fails when run against the source tree only.
 
 ## Program
 - RC1 item: RC1-09 (B)

@@ -54,6 +54,7 @@
     "rc1": "node scripts/release-gate.mjs",
     "validate": "node scripts/release-gate.mjs",
     "production:gate": "node scripts/release-gate.mjs",
+    "release:check": "node scripts/release-gate.mjs",
     "bench:validation": "node benchmarks/run-validation.mjs",
     "benchmark": "node benchmarks/run.mjs",
     "benchmark:real": "node benchmarks/run-real.mjs",

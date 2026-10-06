@@ -14,9 +14,9 @@ Version drift across package.json, README, CHANGELOG, plugin manifest and git ta
 All version sources agree, enforced by an automated check in the gate.
 
 ## Validation
-- [ ] A mismatch in any source fails the gate.
-- [ ] A matching set passes.
-- [ ] The check runs in CI and locally.
+- [x] A mismatch in any source fails the gate.
+- [x] A matching set passes.
+- [x] The check runs in CI and locally.
 
 ## Program
 - RC1 item: RC1-13 (B)

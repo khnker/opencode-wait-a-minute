@@ -14,10 +14,10 @@ The full clean-room flow must be reproducible end to end.
 A fresh checkout reproduces the install+smoke flow deterministically.
 
 ## Validation
-- [ ] `npm ci` succeeds from a clean checkout.
-- [ ] `npm pack` succeeds.
-- [ ] Clean install succeeds.
-- [ ] Smoke passes.
+- [x] `npm ci` succeeds from a clean checkout.
+- [x] `npm pack` succeeds.
+- [x] Clean install succeeds.
+- [x] Smoke passes.
 
 ## Program
 - RC1 item: RC1-11 (B)
