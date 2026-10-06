@@ -1,0 +1,100 @@
+# RC1 Release
+
+## Scope
+
+RC1 (Release Candidate 1) focuses on hardening the wait-a-minute-plugin for production use. It includes:
+
+- **Core pre-flight improvements**: Better assumption detection and task classification
+- **Completion control**: Robust evidence-based completion gating
+- **Context management**: Reduced unnecessary context loading
+- **Skill selection**: More accurate and efficient skill loading
+- **Task isolation**: Better separation between tasks
+- **Benchmarking**: Standardized methodology for measuring token savings
+- **Documentation**: Improved user and technical documentation
+- **Release gates**: Comprehensive validation before release
+
+## Features included
+
+### Cognitive Pre-flight
+- Four-category reasoning (facts, assumptions, unknowns, task type)
+- Skill-based clarification prompting
+- Repository inspection for context gathering
+
+### Completion Control
+- Task state machine with verified transitions
+- Evidence collection (tests, builds, logs)
+- Completion blocking until verification passes
+
+### Context Management
+- Task-aware context selection
+- Layered loading (core, supporting, evidence, extended)
+- Context pruning for irrelevant information
+
+### Skill Selection
+- Task-type matching
+- Skill scoring and ranking
+- On-demand loading with caching
+
+### Task Isolation
+- Per-task state instances
+- Automatic cleanup on task completion
+- Namespaced storage for task data
+
+### Benchmarking
+- Token accounting methodology
+- Effective input measurement
+- Baseline and WAM comparison
+- Net savings calculation
+
+### Documentation
+- User-focused README
+- Claims and evidence documentation
+- Conceptual explanations
+- Architecture overview
+- Benchmark methodology and results
+- Release validation guide
+
+## Compatibility
+
+RC1 maintains compatibility with:
+- OpenCode versions: >=1.0.0
+- Node.js versions: >=20
+- npm versions: >=10
+
+## Validation matrix
+
+RC1 requires passing the following gates:
+
+| Gate | Description | Required |
+|------|-------------|----------|
+| Version Parity | package.json and SKIP.md versions match | Yes |
+| Test Suite | All unit and integration tests pass | Yes |
+| Package Integrity | npm pack produces a valid tarball | Yes |
+| Security Audit | No high-severity vulnerabilities | Yes |
+| Migration E2E | Migration scenarios work correctly | Yes |
+| Isolation E2E | Task isolation works correctly | Yes |
+| OpenCode Smoke E2E | Basic OpenCode integration works | Yes |
+| Package E2E | Packaged plugin loads and exports a function | Yes |
+| Performance Sanity | Performance regressions are within bounds | No |
+| Real Benchmark (RC1 evidence) | Real-world benchmark validates token savings | Yes (local only) |
+
+## Known limitations
+
+- Context selection heuristics may not be optimal for all project types
+- Skill selection depends on accurate skill metadata
+- Real benchmark requires external API credentials
+- Some advanced OpenCode features may not be fully covered by pre-flight
+
+## Known risks
+
+- Over-reliance on WAM may reduce agent autonomy in simple tasks
+- Incorrect assumption detection may lead to excessive clarification
+- Performance overhead from context selection and skill loading
+
+## Release procedure
+
+See [docs/development/release.md] for the full release process.
+
+## Acknowledgments
+
+Thanks to all contributors who helped shape RC1 through feedback, testing, and implementation.
