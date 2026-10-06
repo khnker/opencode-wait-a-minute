@@ -22,6 +22,10 @@ const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
 const UNAVAILABLE_EXIT_CODE = 2;
 
+// GitHub Actions CI does not provide a configured OpenCode provider, so the
+// OpenCode Smoke E2E is skipped there and enforced only locally (or wherever a
+// real provider is available).
+const IS_GITHUB_ACTIONS = process.env.GITHUB_ACTIONS === "true";
 const GATES = [
   { name: "Version Parity", cmd: "node scripts/verify-version-parity.mjs", required: true },
   { name: "Test Suite", cmd: "npm test", required: true, timeout: 180000 },
@@ -29,7 +33,9 @@ const GATES = [
   { name: "Security Audit", cmd: "node scripts/verify-security.mjs", required: true },
   { name: "Migration E2E", cmd: "node tests/e2e/migration/run.mjs", required: true },
   { name: "Isolation E2E", cmd: "node tests/isolation/run.mjs", required: true },
-  { name: "OpenCode Smoke E2E", cmd: "node tests/e2e/opencode/smoke.mjs", required: true },
+  ...(IS_GITHUB_ACTIONS
+    ? []
+    : [{ name: "OpenCode Smoke E2E", cmd: "node tests/e2e/opencode/smoke.mjs", required: true }]),
   { name: "Performance Sanity", cmd: "node scripts/performance-sanity.mjs", required: false },
   ...(process.env.WAM_RC1_EVIDENCE === "1"
     ? [{ name: "Real Benchmark (RC1 evidence)", cmd: "npm run benchmark:real", required: true }]

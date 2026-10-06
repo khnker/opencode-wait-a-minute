@@ -2,7 +2,7 @@
 
 ## Implementation
 - [x] Real OpenCode smoke harness exists: `tests/e2e/opencode/smoke.mjs` (spawns `opencode`, waits for a plugin event, isolates HOME/XDG).
-- [x] Wired into the release gate as required stage "OpenCode Smoke E2E": `scripts/release-gate.mjs:32`.
+- [x] Wired into the release gate as a required stage locally, skipped on GitHub Actions: `scripts/release-gate.mjs` (conditional on `GITHUB_ACTIONS`).
 - [ ] Packed-artifact variant: load the plugin from the installed `.tgz` (not the checkout) inside real OpenCode, emitting a machine-readable JSON summary.
 - [ ] Machine-readable summary (`{artifact, instance, loaded, verdict}`) for the harness.
 
