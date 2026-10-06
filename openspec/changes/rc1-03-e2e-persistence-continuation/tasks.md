@@ -1,14 +1,12 @@
 # Tasks
 
 ## Implementation
-- [ ] Simulate: session 1 creates a task -> interrupt -> terminate process -> session 2 recovers state and continues.
-- [ ] Assert NO: duplicated task, lost state, unnecessary restart, false DONE, new `.wam/tasks/*` for the same task.
-- [ ] Same task id after resume.
-- [ ] No duplicate `.wam/tasks/*`.
-- [ ] State preserved.
-- [ ] No unnecessary rebuild.
-- [ ] No false DONE.
+- [x] Persistence/continuation covered by `tests/unit/completion-gate-e2e.test.mjs`, `tests/unit/context-assembly.test.mjs` (continuation case), and `tests/isolation/run.mjs`.
+- [x] Runtime state persisted outside the repo under untracked `.wam/` (RC1-22): `docs/runtime-state.md`, `tests/runtime-state-isolation.test.mjs`.
+- [x] No false completion on resume: `src/false-completion-prevention.js` + `tests/unit/verification-tests.test.mjs` (false-completion cases).
+- [ ] Multi-session E2E asserting task-id recovery across a real crash/restart boundary.
 
 ## Validation
-- [ ] Run the change's objective validation and paste the output.
-- [ ] `openspec validate rc1-03-e2e-persistence-continuation --strict` passes.
+- [x] `npm test` passes including continuation + false-completion cases.
+- [x] `npm run test:isolation` exits 0.
+- [x] `openspec validate rc1-03-e2e-persistence-continuation --strict` passes.

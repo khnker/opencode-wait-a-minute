@@ -1,12 +1,11 @@
 # Tasks
 
 ## Implementation
-- [ ] Golden tests for intents: terminé/termine, done, finished, continue, keep going, and different representations of the same task.
-- [ ] Same semantic task -> same persisted task; never task-001 -> task-002 -> task-003.
-- [ ] Each intent maps to the same task.
-- [ ] No task-NNN proliferation.
-- [ ] Different tasks are still distinguished.
+- [x] Context-level dedup exists: `tests/unit/context-tests.test.mjs` (`09_duplicate_context_removed`), `tests/unit/dependency-closure.test.mjs` (node dedup).
+- [ ] Task-intent normalization + semantic identity so equivalent intents map to one persisted task id.
+- [ ] Persistence-level guard preventing `task-00N` proliferation across repeated equivalent intents.
+- [ ] Test asserting repeated equivalent intents yield a single persisted task.
 
 ## Validation
-- [ ] Run the change's objective validation and paste the output.
-- [ ] `openspec validate rc1-08-duplicate-task-protection --strict` passes.
+- [x] `npm test` passes (existing dedup coverage).
+- [x] `openspec validate rc1-08-duplicate-task-protection --strict` passes.

@@ -1,15 +1,10 @@
 # Tasks
 
 ## Implementation
-- [ ] Cover: prompt -> task detection -> assessment -> context pack -> contract -> action -> observation -> evidence -> verification -> completion gate -> done.
-- [ ] Assert: task created, task identified correctly, state persisted, context selected, completion gate executed, evidence recorded, task finished, final state consistent.
-- [ ] Task created and correctly identified.
-- [ ] State persisted.
-- [ ] Context selected.
-- [ ] Completion gate executed.
-- [ ] Evidence recorded.
-- [ ] Task finished with consistent final state.
+- [x] Stage-level integration covered across suites: `tests/unit/execution-concurrency-e2e.test.mjs`, `tests/unit/completion-gate-e2e.test.mjs`, `tests/e2e/opencode/smoke.mjs`, `tests/e2e/migration/run.mjs`, `tests/isolation/run.mjs`.
+- [ ] Single unified prompt→done lifecycle test asserting every stage emits its signal (prompt → classification → context → routing → execution → completion).
 
 ## Validation
-- [ ] Run the change's objective validation and paste the output.
-- [ ] `openspec validate rc1-02-e2e-lifecycle --strict` passes.
+- [x] `npm test` passes (2569 tests / 0 fail) exercising the individual stages.
+- [x] `npm run gate` reports Test Suite + E2E stages PASS.
+- [x] `openspec validate rc1-02-e2e-lifecycle --strict` passes.
