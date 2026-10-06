@@ -1,7 +1,7 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { promoteItem } from "../../src/context-promotion.js";
-import { LIFECYCLE_STATES } from "../../src/context-lifecycle.js";
+import { promoteItem } from "../../src/context/context-promotion.js";
+import { LIFECYCLE_STATES } from "../../src/context/context-lifecycle.js";
 
 const now = 1700000000000;
 

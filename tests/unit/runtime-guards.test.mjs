@@ -4,13 +4,13 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import { guardAction } from "../../src/runtime-guards.js";
+import { guardAction } from "../../src/execution/runtime-guards.js";
 import {
   createHypothesis,
   createExperiment,
   failExperiment,
   DELETION_POLICY,
-} from "../../src/cognition-store.js";
+} from "../../src/cognition/cognition-store.js";
 
 function setup() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "wam-guard-"));

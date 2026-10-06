@@ -5,9 +5,9 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { retrieveContext } from "../../src/context-retrieval.js";
-import { ContextManager } from "../../src/context-manager.js";
-import { ContextSourceRegistry } from "../../src/context-source-registry.js";
+import { retrieveContext } from "../../src/context/context-retrieval.js";
+import { ContextManager } from "../../src/context/context-manager.js";
+import { ContextSourceRegistry } from "../../src/context/context-source-registry.js";
 
 function makeManagedItem(id, opts = {}) {
   return {

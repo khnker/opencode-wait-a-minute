@@ -20,7 +20,7 @@ import {
   persistVerificationState,
   loadVerificationState,
   createVerificationSnapshot,
-} from "../../src/verification-persistence.js";
+} from "../../src/verification/verification-persistence.js";
 
 const CWD = process.cwd();
 const WAM_DIR = path.join(CWD, ".wam", "verifications");

@@ -12,7 +12,7 @@ import {
   autoMarkStale,
   getStalenessReport,
   DEFAULT_CONFIG,
-} from "../../src/capsule-staleness.js";
+} from "../../src/context/capsule-staleness.js";
 
 describe("freshness", () => {
   it("returns 1.0 for just-updated capsule", () => {

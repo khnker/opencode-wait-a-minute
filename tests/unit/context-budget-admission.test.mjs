@@ -4,10 +4,10 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assembleContext, ADMISSION } from "../../src/assembly.js";
-import { ContextGraph } from "../../src/context-graph.js";
-import { resolveContext } from "../../src/context-router.js";
-import { adaptRouterResult, routeAndAdapt, buildGraphFromTaskState } from "../../src/router-adapter.js";
+import { assembleContext, ADMISSION } from "../../src/context/assembly.js";
+import { ContextGraph } from "../../src/context/context-graph.js";
+import { resolveContext } from "../../src/context/context-router.js";
+import { adaptRouterResult, routeAndAdapt, buildGraphFromTaskState } from "../../src/integration/router-adapter.js";
 
 describe("ADMISSION constants", () => {
   it("defines MANDATORY, CONDITIONAL, OPTIONAL", () => {

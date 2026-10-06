@@ -9,9 +9,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { assembleContext } from "../../src/assembly.js";
-import { updateContext, initMemory, addRecentChange, recordDecision, addConstraint } from "../../src/memory.js";
-import { createCapsule, resetSessionCache } from "../../src/context.js";
+import { assembleContext } from "../../src/context/assembly.js";
+import { updateContext, initMemory, addRecentChange, recordDecision, addConstraint } from "../../src/persistence/memory.js";
+import { createCapsule, resetSessionCache } from "../../src/context/context.js";
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "wam-assembly-"));
 

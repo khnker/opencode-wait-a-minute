@@ -8,7 +8,7 @@ import {
   createEvidence,
   detectEvidenceConflict,
   resolveEvidenceConflict,
-} from "../../src/evidence.js";
+} from "../../src/evidence/evidence.js";
 
 describe("detectEvidenceConflict", () => {
   it("returns null when requirementIds differ", () => {

@@ -5,7 +5,7 @@ import {
   VERIFICATION_STRATEGY_ORDER,
   rankVerificationStrategies,
   estimateStrategyCost,
-} from "../../src/verification-policy.js";
+} from "../../src/verification/verification-policy.js";
 
 describe("VERIFICATION_STRATEGY_ORDER", () => {
   it("contains all 6 strategies in ascending cost order", () => {

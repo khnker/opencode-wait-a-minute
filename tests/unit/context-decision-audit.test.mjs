@@ -9,7 +9,7 @@ import {
   inspectAudit,
   auditGate,
   resolveDecision,
-} from "../../src/context-decision-audit.js";
+} from "../../src/context/context-decision-audit.js";
 
 /* ------------------------------------------------------------------ */
 /* Test helpers                                                       */

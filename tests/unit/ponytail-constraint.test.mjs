@@ -2,7 +2,7 @@ import {
   CONSTRAINT_TYPES,
   applyConstraint,
   isConstraintActive
-} from "../../src/ponytail-constraint.js";
+} from "../../src/policy/ponytail-constraint.js";
 
 let passed = 0;
 let failed = 0;

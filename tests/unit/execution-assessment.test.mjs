@@ -4,7 +4,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createAssessment, AssessmentResult } from "../../src/execution-assessment.js";
+import { createAssessment, AssessmentResult } from "../../src/policy/execution-assessment.js";
 
 // -- SUPPORTED cases --
 
@@ -154,7 +154,7 @@ test("missing fields in actual are tracked", () => {
 // -- assessObservation via execution-engine --
 
 test("assessObservation with expectedObservation", async () => {
-  const { assessObservation } = await import("../../src/execution-engine.js");
+  const { assessObservation } = await import("../../src/execution/execution-engine.js");
   const experiment = {
     expectedObservation: { status: "ready" },
   };
@@ -164,7 +164,7 @@ test("assessObservation with expectedObservation", async () => {
 });
 
 test("assessObservation without expectedObservation", async () => {
-  const { assessObservation } = await import("../../src/execution-engine.js");
+  const { assessObservation } = await import("../../src/execution/execution-engine.js");
   const assessment = assessObservation({}, {});
   assert.equal(assessment.result, AssessmentResult.INCONCLUSIVE);
   assert.ok(assessment.reasoning.includes("No expectedObservation"));

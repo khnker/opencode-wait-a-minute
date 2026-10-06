@@ -8,7 +8,7 @@ import {
   transition,
   isRequirementComplete,
   summarizeRequirements,
-} from "../../src/requirement-state.js";
+} from "../../src/state/requirement-state.js";
 
 describe("REQUIREMENT_STATES", () => {
   it("exposes the six expected states", () => {

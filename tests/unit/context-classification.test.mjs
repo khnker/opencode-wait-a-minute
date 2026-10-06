@@ -5,7 +5,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { classifyContextItem, classifyContextItems } from "../../src/context-classification.js";
+import { classifyContextItem, classifyContextItems } from "../../src/context/context-classification.js";
 
 // -- FACT tests -------------------------------------------------------------
 

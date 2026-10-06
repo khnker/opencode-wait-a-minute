@@ -15,7 +15,7 @@ import {
   updateTaskMemory,
   updateProjectMemo,
   redact,
-} from "../../src/memory.js";
+} from "../../src/persistence/memory.js";
 
 function makeRoot() {
   const base = path.join(os.homedir(), ".cache", "wam-tests");

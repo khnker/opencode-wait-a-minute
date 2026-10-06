@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { classifyExecutionIntent, isDirectRequirementAction, isSupportingAction, EXECUTION_INTENT } from "../../src/execution-intent.js";
+import { classifyExecutionIntent, isDirectRequirementAction, isSupportingAction, EXECUTION_INTENT } from "../../src/execution/execution-intent.js";
 
 test("execution-intent: npm install playwright is SUPPORTING", () => {
   const intent = classifyExecutionIntent("bash", { command: "npm install playwright" }, "R1: scraper obtains Lider products");

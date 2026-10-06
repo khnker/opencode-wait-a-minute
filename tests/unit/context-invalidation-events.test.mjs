@@ -13,8 +13,8 @@ import {
   INVALIDATION_REASONS,
   CONTEXT_INVALIDATION_ACTIONS,
   determineInvalidationAction,
-} from "../../src/context-invalidation-events.js";
-import { CONTEXT_EVENT_TYPES } from "../../src/context-event-ingress.js";
+} from "../../src/context/context-invalidation-events.js";
+import { CONTEXT_EVENT_TYPES } from "../../src/context/context-event-ingress.js";
 
 class MockContextManager {
   constructor() {

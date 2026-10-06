@@ -12,10 +12,10 @@ import {
   evaluateRelease,
   evaluateSubGate,
   SUB_GATES,
-} from "../../src/release-gate.js";
-import { canaryDeploy } from "../../src/canary-deploy.js";
-import { createRollbackManager } from "../../src/rollback-manager.js";
-import { createMultiSigner } from "../../src/multi-signer.js";
+} from "../../src/integration/release-gate.js";
+import { canaryDeploy } from "../../src/integration/canary-deploy.js";
+import { createRollbackManager } from "../../src/integration/rollback-manager.js";
+import { createMultiSigner } from "../../src/policy/multi-signer.js";
 
 /* -------------------------------------------------------------------------- */
 /*  Helpers                                                                   */

@@ -1,6 +1,6 @@
 
 import { execSync } from "node:child_process";
-import { buildRuntimeContextGraph } from "../../src/runtime-context-graph.js";
+import { buildRuntimeContextGraph } from "../../src/context/runtime-context-graph.js";
 import { logicalStateHash } from "../evaluation/state-equivalence.mjs";
 
 export function getRepoCommit(cwd = process.cwd()) {

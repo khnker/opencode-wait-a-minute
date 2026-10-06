@@ -16,8 +16,8 @@ import {
   createObservation,
   evaluateObservationAgainst,
   demoCommandSucceedsNotRequirementSatisfied,
-} from "../../src/action-evaluation.js";
-import { interceptCompletionClaim, classifyClaim } from "../../src/false-completion-prevention.js";
+} from "../../src/execution/action-evaluation.js";
+import { interceptCompletionClaim, classifyClaim } from "../../src/verification/false-completion-prevention.js";
 
 // ═══════════════════════════════════════════════════════════
 // CASE 1 — agent sees failure → forms hypothesis

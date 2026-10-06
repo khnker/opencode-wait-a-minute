@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { TransactionLog, replay } from "../../src/transaction-log.js";
+import { TransactionLog, replay } from "../../src/persistence/transaction-log.js";
 
 async function tmpFile() {
   const dir = await mkdtemp(join(tmpdir(), "wam-tx-"));

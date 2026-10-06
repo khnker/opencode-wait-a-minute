@@ -12,12 +12,12 @@ import {
   loadVerificationContext,
   CONTEXT_LEVELS,
   validateContextBudget
-} from "../../src/verification-context.js";
+} from "../../src/verification/verification-context.js";
 import {
   compactContext,
   computeContextDelta,
   pruneContext
-} from "../../src/context-compaction.js";
+} from "../../src/context/context-compaction.js";
 
 test("01_relevant_context_not_sufficient", () => {
   const taskData = {

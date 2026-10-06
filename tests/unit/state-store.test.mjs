@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile, readFile, readdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { StateStore, atomicWrite } from "../../src/state-store.js";
-import { TransactionLog } from "../../src/transaction-log.js";
-import { verify } from "../../src/state-schema.js";
+import { StateStore, atomicWrite } from "../../src/state/state-store.js";
+import { TransactionLog } from "../../src/persistence/transaction-log.js";
+import { verify } from "../../src/state/state-schema.js";
 
 async function tmpRoot() {
   const dir = await mkdtemp(join(tmpdir(), "wam-store-"));

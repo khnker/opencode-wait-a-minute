@@ -7,7 +7,7 @@ import {
   createDecisionTrace,
   addToTrace,
   formatDecisionTrace,
-} from "../../src/wam-events.js";
+} from "../../src/shared/wam-events.js";
 
 describe("WAM_EVENTS", () => {
   it("defines all 13 event types", () => {

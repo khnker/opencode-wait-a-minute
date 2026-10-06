@@ -18,7 +18,7 @@ import {
   captureRepositoryState,
   DEFAULT_TIMEOUT_MS,
   MAX_OUTPUT_BYTES,
-} from "../../src/verification.js";
+} from "../../src/verification/verification.js";
 
 const CWD = process.cwd();
 const cmd = (code, extra = "") => `node -e "process.exit(${code})"${extra}`;

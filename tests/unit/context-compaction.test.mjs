@@ -11,7 +11,7 @@ import {
   pruneContext,
   reconstructContext,
   preserveMandatoryProvenance,
-} from "../../src/context-compaction.js";
+} from "../../src/context/context-compaction.js";
 
 // --- Existing Change 44 tests (compactContext still works) ---
 

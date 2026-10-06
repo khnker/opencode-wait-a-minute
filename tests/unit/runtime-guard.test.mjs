@@ -1,9 +1,9 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { sanitizeShellArg, sanitizePath, stripControlChars } from "../../src/l1-sanitize.js";
-import { ResourceGuard } from "../../src/l2-resource-guards.js";
-import { checkStateInvariant } from "../../src/l3-invariant-checker.js";
-import { runInSandbox } from "../../src/l4-containment.js";
+import { sanitizeShellArg, sanitizePath, stripControlChars } from "../../src/execution/l1-sanitize.js";
+import { ResourceGuard } from "../../src/execution/l2-resource-guards.js";
+import { checkStateInvariant } from "../../src/execution/l3-invariant-checker.js";
+import { runInSandbox } from "../../src/execution/l4-containment.js";
 
 describe("Runtime Guard - L1 Sanitize", () => {
   test("sanitizeShellArg escapes single quotes", () => {

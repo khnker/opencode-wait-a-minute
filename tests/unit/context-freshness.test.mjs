@@ -1,6 +1,6 @@
 
 import { strict as assert } from 'node:assert';
-import { calculateStaleness, isStale, updateLastAccess } from '../../src/context-freshness.js';
+import { calculateStaleness, isStale, updateLastAccess } from '../../src/context/context-freshness.js';
 
 // Test calculateStaleness
 const now = 10000;

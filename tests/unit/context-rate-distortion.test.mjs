@@ -10,9 +10,9 @@ import {
   crrAt,
   distortionAt,
   aggregateRateDistortion,
-} from "../../src/context-rate-distortion.js";
-import { buildOracleGraph } from "../../src/context-sufficiency-oracle.js";
-import { EDGE_TYPES } from "../../src/context-graph.js";
+} from "../../src/context/context-rate-distortion.js";
+import { buildOracleGraph } from "../../src/context/context-sufficiency-oracle.js";
+import { EDGE_TYPES } from "../../src/context/context-graph.js";
 
 function graph(nodes, edges) {
   return buildOracleGraph({ nodes, edges });

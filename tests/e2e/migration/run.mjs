@@ -25,7 +25,7 @@ import {
   saveWamState,
   getSchemaVersion,
   SCHEMA_VERSION,
-} from "../../../src/wam-state.js";
+} from "../../../src/state/wam-state.js";
 
 const tmpBase = join(tmpdir(), `wam-mig-e2e-${Date.now()}`);
 

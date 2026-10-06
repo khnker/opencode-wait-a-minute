@@ -11,7 +11,7 @@ import {
   groupByLayer,
   selectEvictions,
   archiveCandidates,
-} from "../../src/context-memory-layers.js";
+} from "../../src/context/context-memory-layers.js";
 
 describe("context-memory-layers", () => {
   describe("constants", () => {

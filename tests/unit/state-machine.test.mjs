@@ -10,8 +10,8 @@ import {
   SEVERITY,
   HYPOTHESIS_STATUS,
   EXPERIMENT_STATUS,
-} from "../../src/state-machine.js";
-import { AssessmentResult } from "../../src/assessment-engine.js";
+} from "../../src/state/state-machine.js";
+import { AssessmentResult } from "../../src/policy/assessment-engine.js";
 
 test("deriveHypothesisStatus: SUPPORTED → SUPPORTED, no severity", () => {
   const out = deriveHypothesisStatus({

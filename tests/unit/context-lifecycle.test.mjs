@@ -11,7 +11,7 @@ import {
   isUsable,
   isTerminal,
   stalenessCheck,
-} from "../../src/context-lifecycle.js";
+} from "../../src/context/context-lifecycle.js";
 
 describe("context-lifecycle", () => {
   describe("constants", () => {

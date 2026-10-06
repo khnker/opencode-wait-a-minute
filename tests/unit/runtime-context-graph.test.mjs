@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { ContextGraph } from "../../src/context-graph.js";
-import { buildRuntimeContextGraph } from "../../src/runtime-context-graph.js";
+import { ContextGraph } from "../../src/context/context-graph.js";
+import { buildRuntimeContextGraph } from "../../src/context/runtime-context-graph.js";
 
 // Fixture covering every runtime layer the builder claims to consume.
 function buildFixture() {

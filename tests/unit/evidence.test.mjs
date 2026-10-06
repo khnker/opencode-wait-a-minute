@@ -10,7 +10,7 @@ import {
   createEvidence,
   canCloseRequirement,
   findConflicts,
-} from "../../src/evidence.js";
+} from "../../src/evidence/evidence.js";
 
 describe("createEvidence", () => {
   it("creates evidence with all evidence types", () => {

@@ -27,7 +27,7 @@ import {
   resolveWamRoot,
   extractPaths,
   clearRepoCache,
-} from "../../src/context.js";
+} from "../../src/context/context.js";
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "wam-ctx-"));
 const cleanup = () => fs.rmSync(ROOT, { recursive: true, force: true });

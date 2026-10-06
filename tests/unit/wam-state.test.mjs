@@ -12,7 +12,7 @@ import {
   resumeSession,
   migrateWamState,
   SCHEMA_VERSION,
-} from '../../src/wam-state.js';
+} from '../../src/state/wam-state.js';
 
 let tmpRoot;
 

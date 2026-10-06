@@ -9,7 +9,7 @@ import {
   interceptContext,
   requirementFilter,
   relevanceScore,
-} from "../../src/context-interception.js";
+} from "../../src/context/context-interception.js";
 
 // -- Relevance Score --------------------------------------------------------
 

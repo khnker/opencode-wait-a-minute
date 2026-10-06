@@ -9,7 +9,7 @@ import {
   evaluateContract,
   mergeAssumptions,
   CONDITION_TYPES,
-} from "../../src/sufficiency-contract.js";
+} from "../../src/context/sufficiency-contract.js";
 
 describe("CONDITION_TYPES", () => {
   it("defines all condition types", () => {

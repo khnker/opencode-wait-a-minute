@@ -9,9 +9,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { handleMessage, extractPrompt } from "../runtime/message-handler.js";
-import { initMemory } from "../src/memory.js";
-import { getTaskState, persistTaskState } from "../src/engine.js";
+import { handleMessage, extractPrompt } from "../src/integration/message-handler.js";
+import { initMemory } from "../src/persistence/memory.js";
+import { getTaskState, persistTaskState } from "../src/skills/engine.js";
 
 // ---------------------------------------------------------------------------
 // Test fixtures

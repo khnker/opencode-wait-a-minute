@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { ContextGraph, NODE_TYPES, EDGE_TYPES } from "../../src/context-graph.js";
+import { ContextGraph, NODE_TYPES, EDGE_TYPES } from "../../src/context/context-graph.js";
 
 describe("ContextGraph", () => {
   // -- Node operations --

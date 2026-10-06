@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { recordDecision, getDecision, initMemory } from "../../src/memory.js";
+import { recordDecision, getDecision, initMemory } from "../../src/persistence/memory.js";
 
 function makeRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "wam-decision-"));

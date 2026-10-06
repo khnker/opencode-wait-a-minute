@@ -15,7 +15,7 @@ import {
   captureRequirementChange,
   captureVerificationResult,
   captureBatch,
-} from "../../src/context-capture.js";
+} from "../../src/context/context-capture.js";
 
 // -- 1. Tool calls ---------------------------------------------------------
 

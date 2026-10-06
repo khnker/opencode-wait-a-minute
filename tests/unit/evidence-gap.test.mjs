@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import {
   EVIDENCE_STRENGTH,
   createEvidence,
-} from "../../src/evidence.js";
-import { detectEvidenceGaps } from "../../src/evidence-gap.js";
+} from "../../src/evidence/evidence.js";
+import { detectEvidenceGaps } from "../../src/evidence/evidence-gap.js";
 
 describe("detectEvidenceGaps", () => {
   it("detecta requirement sin evidencia (NO_EVIDENCE)", () => {

@@ -9,7 +9,7 @@ import {
   routeAndAdapt,
   buildGraphFromTaskState,
   ADMISSION,
-} from "../../src/router-adapter.js";
+} from "../../src/integration/router-adapter.js";
 
 describe("adaptRouterResult", () => {
   it("transforms nodes to capsules", () => {

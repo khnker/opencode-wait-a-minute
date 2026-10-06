@@ -1,6 +1,6 @@
 
 import { strict as assert } from 'node:assert';
-import { build } from '../../src/context-builder.js';
+import { build } from '../../src/context/context-builder.js';
 
 const now = Date.now();
 const context = [

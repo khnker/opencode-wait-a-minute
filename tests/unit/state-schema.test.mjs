@@ -10,7 +10,7 @@ import {
   verify,
   validateSealed,
   canonicalJSON,
-} from "../../src/state-schema.js";
+} from "../../src/state/state-schema.js";
 
 test("validateSchema: accepts a valid object", () => {
   const r = validateSchema(

@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import pluginDefault from "../../index.js";
-import { getTaskState, persistTaskState } from "../../src/engine.js";
+import { getTaskState, persistTaskState } from "../../src/skills/engine.js";
 
 const CWD = process.cwd();
 

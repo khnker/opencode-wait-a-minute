@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { integrateRetrieval, retrieveForContext, CONTEXT_PURPOSE } from "../../src/context-retrieval-integration.js";
-import { LIFECYCLE_STATES } from "../../src/context-lifecycle.js";
-import { MEMORY_LAYERS } from "../../src/context-memory-layers.js";
+import { integrateRetrieval, retrieveForContext, CONTEXT_PURPOSE } from "../../src/context/context-retrieval-integration.js";
+import { LIFECYCLE_STATES } from "../../src/context/context-lifecycle.js";
+import { MEMORY_LAYERS } from "../../src/context/context-memory-layers.js";
 
 function makeItem(overrides = {}) {
   return {

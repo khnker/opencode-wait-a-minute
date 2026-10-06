@@ -6,7 +6,7 @@ import {
   trackAssumptionBudget,
   DEFAULT_ASSUMPTION_BUDGET,
   checkAssumptionBudget
-} from "../../src/assumption-tracking.js";
+} from "../../src/policy/assumption-tracking.js";
 
 describe("createAssumption", () => {
   it("crea una suposición con estructura correcta", () => {

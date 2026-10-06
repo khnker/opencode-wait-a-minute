@@ -1,7 +1,7 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { ContextManager } from "../../src/context-manager.js";
-import { ContextSourceRegistry } from "../../src/context-source-registry.js";
+import { ContextManager } from "../../src/context/context-manager.js";
+import { ContextSourceRegistry } from "../../src/context/context-source-registry.js";
 
 function makeSource(id, type = "test") {
   return { id, type, label: `Source ${id}` };

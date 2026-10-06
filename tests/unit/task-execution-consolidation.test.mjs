@@ -22,8 +22,8 @@ import {
   needsNewExecution,
   migrateLegacyExecutions,
   hasLegacyExecutions,
-} from "../../src/task-execution.js";
-import { startRun, closeRun, getRuns } from "../../src/task-runs.js";
+} from "../../src/state/task-execution.js";
+import { startRun, closeRun, getRuns } from "../../src/state/task-runs.js";
 
 const TEST_ROOT = path.join(process.cwd(), ".wam-test-execution-consolidation");
 

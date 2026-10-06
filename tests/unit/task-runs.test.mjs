@@ -24,8 +24,8 @@ import {
   needsNewRun,
   getRunCount,
   getRunsByStatus,
-} from "../../src/task-runs.js";
-import { persistTaskState } from "../../src/engine.js";
+} from "../../src/state/task-runs.js";
+import { persistTaskState } from "../../src/skills/engine.js";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-persistent-runs-test-"));
 let taskCounter = 0;

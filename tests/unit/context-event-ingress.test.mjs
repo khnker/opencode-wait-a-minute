@@ -9,7 +9,7 @@ import {
   emitToolFinished,
   emitObservation,
   CONTEXT_EVENT_TYPES,
-} from "../../src/context-event-ingress.js";
+} from "../../src/context/context-event-ingress.js";
 
 test("context-event: ingestToolStarted emits TOOL_STARTED event", () => {
   resetContextEventBus();

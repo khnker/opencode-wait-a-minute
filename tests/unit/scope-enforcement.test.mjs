@@ -6,7 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { detectScopeDrift, policyFor, recordDrift, SCOPE_DRIFT } from "../../src/scope-enforcement.js";
+import { detectScopeDrift, policyFor, recordDrift, SCOPE_DRIFT } from "../../src/policy/scope-enforcement.js";
 
 const CWD = process.cwd();
 const cleanup = (taskId) => {

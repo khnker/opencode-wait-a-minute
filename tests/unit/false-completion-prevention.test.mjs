@@ -6,7 +6,7 @@ import {
   classifyClaim,
   validateCompletionClaim,
   validateContractNotReduced,
-} from "../../src/false-completion-prevention.js";
+} from "../../src/verification/false-completion-prevention.js";
 
 describe("COMPLETION_KEYWORDS", () => {
   it("contiene los 9 keywords esperados", () => {

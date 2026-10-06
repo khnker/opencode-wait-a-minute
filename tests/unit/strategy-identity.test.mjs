@@ -18,7 +18,7 @@ import {
   normalizeStrategy,
   hashStrategy,
   sameStrategy,
-} from "../../src/strategy-identity.js";
+} from "../../src/execution/strategy-identity.js";
 
 const baseStrategy = () => ({
   strategy: "Modernizar escrapper-eltarro con OpenSpec",

@@ -1,6 +1,6 @@
-import { assembleContext } from "../src/assembly.js";
-import { createState } from "../task/task-state.js";
-import { saveTask } from "../task/task-store.js";
+import { assembleContext } from "../src/context/assembly.js";
+import { createState } from "../src/state/task-state.js";
+import { saveTask } from "../src/state/task-store.js";
 import os from "node:os";
 import fs from "node:fs";
 import path from "node:path";

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { checkContinuation, rebuildScope, createSnapshot } from "../../src/context-snapshot.js";
+import { checkContinuation, rebuildScope, createSnapshot } from "../../src/context/context-snapshot.js";
 import { createCollector } from "../instrumentation/collector.mjs";
 import { runBaselineTurn } from "./baseline-runner.mjs";
 import { runWamTurn } from "./wam-runner.mjs";

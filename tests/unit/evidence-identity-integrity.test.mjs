@@ -6,7 +6,7 @@ import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { createEvidence, getEvidence, getAllEvidence } from "../../src/evidence-lineage.js";
+import { createEvidence, getEvidence, getAllEvidence } from "../../src/evidence/evidence-lineage.js";
 
 const TEST_ROOT = path.join(process.cwd(), ".wam-test-evidence-identity");
 
