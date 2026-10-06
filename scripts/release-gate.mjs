@@ -33,14 +33,10 @@ const GATES = [
   { name: "Security Audit", cmd: "node scripts/verify-security.mjs", required: true },
   { name: "Migration E2E", cmd: "node tests/e2e/migration/run.mjs", required: true },
   { name: "Isolation E2E", cmd: "node tests/isolation/run.mjs", required: true },
-<<<<<<< HEAD
-  { name: "OpenCode Smoke E2E", cmd: "node tests/e2e/opencode/smoke.mjs", required: true },
-  { name: "Package E2E", cmd: "npm run test:e2e:package", required: false },
-=======
   ...(IS_GITHUB_ACTIONS
     ? []
     : [{ name: "OpenCode Smoke E2E", cmd: "node tests/e2e/opencode/smoke.mjs", required: true, timeout: 300000 }]),
->>>>>>> refactor/repo-structure-pillars
+  { name: "Package E2E", cmd: "npm run test:e2e:package", required: false },
   { name: "Performance Sanity", cmd: "node scripts/performance-sanity.mjs", required: false },
   ...(process.env.WAM_RC1_EVIDENCE === "1"
     ? [{ name: "Real Benchmark (RC1 evidence)", cmd: "npm run benchmark:real", required: true }]
