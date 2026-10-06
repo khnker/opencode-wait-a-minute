@@ -16,5 +16,5 @@ Assumptions are beliefs taken as true without verification. WAM tracks assumptio
 
 ## Related documentation
 
-- [Less Guessing](less-guessing.md)
+- [Less Guessing](../claims/less-guessing.md)
 - [Requirements](requirements.md)

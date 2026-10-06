@@ -22,9 +22,8 @@ Completion control blocks the Done state until verification is complete.
 
 ## Evidence
 
-- Implementation: `src/task/`
-- Unit tests: `tests/unit/task/`
-- E2E scenarios: `tests/e2e/task-lifecycle/`
+- Implementation: `src/state/task-state.js`, `src/state/state-machine.js`, `src/state/task-lifecycle.js`
+- Unit tests: `tests/unit/state-machine.test.mjs`, `tests/unit/decision-persistence.test.mjs`
 
 ## Limitations
 

@@ -20,4 +20,4 @@ WAM uses:
 ## Related documentation
 
 - [Evidence](evidence.md)
-- [Task State](task-state.md)
+- [Task State](../claims/task-state.md)

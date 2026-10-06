@@ -22,9 +22,9 @@ WAM:
 
 ## Evidence
 
-- Implementation: `src/task-store.js`
-- Unit tests: `tests/unit/task-store/`
-- E2E scenarios: `tests/e2e/task-isolation/`
+- Implementation: `src/state/task-store.js`, `src/state/state-store.js`
+- Unit tests: `tests/unit/state-store.test.mjs`, `tests/unit/active-context-boundary.test.mjs`
+- E2E scenarios: `tests/isolation/run.mjs`
 
 ## Limitations
 

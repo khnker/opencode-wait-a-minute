@@ -23,9 +23,8 @@ WAM's completion control requires:
 
 ## Evidence
 
-- Implementation: `src/completion/`
-- Unit tests: `tests/unit/completion/`
-- E2E scenarios: `tests/e2e/completion-control/`
+- Implementation: `src/verification/verification.js`, `src/verification/verification-lifecycle.js`
+- Unit tests: `tests/unit/verification.test.mjs`, `tests/unit/completion-gate.test.mjs`, `tests/unit/false-completion-prevention.test.mjs`
 
 ## Limitations
 

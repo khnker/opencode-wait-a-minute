@@ -26,8 +26,7 @@ It loads only the minimal context needed for the next step.
 ## Evidence
 
 - Implementation: `src/context/`
-- Unit tests: `tests/unit/context/`
-- E2E scenarios: `tests/e2e/context-selection/`
+- Unit tests: `tests/unit/context-manager.test.mjs`, `tests/unit/context-assembly.test.mjs`, `tests/unit/context-budget-manager.test.mjs`
 
 ## Limitations
 

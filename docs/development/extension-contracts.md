@@ -12,7 +12,7 @@ and the extension workflow.
 
 ### EP1 — Capability / skill registration
 
-- **Owner**: skills pillar (`src/engine.js`).
+- **Owner**: skills pillar (`src/skills/engine.js`).
 - **Input**: `availableSkills` — an object keyed by skill name. Each entry MAY be
   `{}`, `{ path }`, or `{ path, metadata }`.
   `metadata` MAY contain `capabilities`, `triggers`, `keywords`, `domain`, `risk`.
@@ -40,7 +40,7 @@ and the extension workflow.
 
 ### EP3 — Context strategies (benchmark / evaluation)
 
-- **Owner**: context pillar (`src/context-evaluation.js`, `src/context-routing-evaluation.js`).
+- **Owner**: context pillar (`src/context/context-evaluation.js`, `src/context/context-routing-evaluation.js`).
 - **Input**: a benchmark scenario (`{ name, setup(graph) }`).
 - **Output**: `{ strategy, ...metrics }` per strategy.
 - **Failure**: a strategy that throws fails its own row; it does not abort the run.
@@ -50,8 +50,8 @@ and the extension workflow.
 
 ### EP4 — Verification validators / completion gate
 
-- **Owner**: verification pillar (`src/verification-policy.js`,
-  `src/verification-model.js`, `src/evidence.js`).
+- **Owner**: verification pillar (`src/verification/verification-policy.js`,
+  `src/verification/verification-model.js`, `src/evidence/evidence.js`).
 - **Input**: task state / evidence records.
 - **Output**: gate decision + reasons; state transitions.
 - **Failure**: unknown state → rejected/UNKNOWN, never silently passes.
@@ -60,7 +60,7 @@ and the extension workflow.
 
 ### EP5 — Policy state machine
 
-- **Owner**: preflight/policy (`src/policy-state-machine.js`).
+- **Owner**: preflight/policy (`src/policy/policy-state-machine.js`).
 - **Input**: current policy state + event.
 - **Output**: next state or rejection.
 - **Failure**: illegal transition is rejected.
@@ -68,7 +68,7 @@ and the extension workflow.
 
 ### EP6 — Execution state transitions
 
-- **Owner**: execution pillar (`src/execution-state.js`).
+- **Owner**: execution pillar (`src/execution/execution-state.js`).
 - **Input**: `(from, to, taskState)`.
 - **Output**: validated transition.
 - **Failure**: illegal transition rejected.

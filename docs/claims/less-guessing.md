@@ -26,9 +26,8 @@ If assumptions are significant, the agent asks clarifying questions before proce
 
 ## Evidence
 
-- Implementation: `src/pre-flight/`
-- Unit tests: `tests/unit/pre-flight/`
-- E2E scenarios: `tests/e2e/pre-flight/`
+- Implementation: `src/policy/uncertainty.js`, `src/skills/engine.js`
+- Unit tests: `tests/unit/assumption-gate.test.mjs`, `tests/unit/clarification-gate.test.mjs`, `tests/unit/blocking-questions.test.mjs`
 
 ## Limitations
 

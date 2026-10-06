@@ -18,5 +18,5 @@ WAM selects context based on:
 
 ## Related documentation
 
-- [Context Management](context-management.md)
+- [Context Management](../claims/context-management.md)
 - [Tasks](tasks.md)

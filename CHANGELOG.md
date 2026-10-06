@@ -4,10 +4,10 @@
 
 ### Added
 - `docs/OPENCODE_COMPATIBILITY.md` — Defines OpenCode plugin contract (hooks used, API surface, Node.js engine requirement).
-- `docs/benchmark/` — RC1 benchmark documentation (methodology, limitations, RC1 report schema).
+- `docs/benchmarks/` — RC1 benchmark documentation (methodology, limitations, RC1 report schema).
 - `scripts/wam-audit-report.mjs` — Single-file WAM audit report generator; produces one unified report file instead of per-session files.
 - `docs/RC1.md` — RC1 release specification (purpose, scenarios, validation gates).
-- `docs/benchmark/methodology.md`, `limitations.md` — Benchmark design rationale and known limitations.
+- `docs/benchmarks/methodology.md`, `limitations.md` — Benchmark design rationale and known limitations.
 
 ### Changed
 - `benchmarks/providers/openai-compatible.mjs` — Add timeout with `AbortSignal.timeout();` fall back to `reasoning_content` when `content` is empty (for reasoning-routed models).
@@ -29,6 +29,9 @@
 ### Compatibility
 - OpenCode 1.18.33 tested pass; minimum version 1.18.0 (added).
 - Node.js >=20 required.
+
+### Performance
+- Deterministic runtime baseline from `npm run perf:sanity` (30 trials/phase, 210 measured calls): overall median 0.045 ms, p95 1.58 ms, p99 2.06 ms. Soft sanity check, not a regression threshold.
 
 ### Validation
 Run the unified RC1 release gate (also available as `npm run rc1` / `npm run validate`):

@@ -23,9 +23,8 @@ WAM's skill selection:
 
 ## Evidence
 
-- Implementation: `src/skill-selector.js`
-- Unit tests: `tests/unit/skill-selector/`
-- E2E scenarios: `tests/e2e/skill-selection/`
+- Implementation: `src/skills/engine.js`
+- Unit tests: `tests/unit/skill-routing.test.mjs`
 
 ## Limitations
 

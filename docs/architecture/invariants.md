@@ -8,7 +8,7 @@ the behaviors that MUST NOT regress.
 
 ## 1. Execution State Machine
 
-Source: `src/execution-state.js`.
+Source: `src/execution/execution-state.js`.
 
 States: `INITIALIZING`, `INVESTIGATING`, `EXECUTING`, `VERIFYING`, `COMPLETED`,
 `BLOCKED`, `WAITING_AUTHORIZATION`, `FAILED`.
@@ -35,7 +35,7 @@ Invariants:
 
 ## 2. Policy State Machine
 
-Source: `src/policy-state-machine.js`.
+Source: `src/policy/policy-state-machine.js`.
 
 - `POLICY_CHAIN` order: SCOPE → INVESTIGATE → ACTION → DEBUG → OBSERVE → VERIFY →
   REVIEW → COMPLETION.
@@ -43,12 +43,12 @@ Source: `src/policy-state-machine.js`.
 - `getNextPolicy` returns `null` at the end of the chain.
 - `POLICY_PRECONDITIONS` gate entry to each policy via `checkPolicyPreconditions`.
 
-Note: `src/verification-policy.js` also exports `validatePolicyFlow`/`getNextPolicy`,
+Note: `src/verification/verification-policy.js` also exports `validatePolicyFlow`/`getNextPolicy`,
 but over `VERIFICATION_STRATEGY` (a different domain). Do not conflate the two.
 
 ## 3. Context Levels N0–N3
 
-Sources: `src/verification-context.js`, `src/assembly.js`.
+Sources: `src/verification/verification-context.js`, `src/context/assembly.js`.
 
 | Level | Meaning | Pack class |
 |---|---|---|
@@ -65,7 +65,7 @@ Invariants:
 
 ## 4. Completion / Verification Gate (fail-closed)
 
-Source: `src/verification-policy.js#evaluateCompletionGate`.
+Source: `src/verification/verification-policy.js#evaluateCompletionGate`.
 
 Invariants:
 - A task is `blocked` unless EVERY mandatory (non-optional) requirement is
@@ -74,14 +74,14 @@ Invariants:
   empty arrays, which blocks completion.
 - Optional requirements do not affect `blocked`.
 
-Related: `src/orchestration.js#evaluateCompletionGate(state, promptText)` is a pure
+Related: `src/integration/orchestration.js#evaluateCompletionGate(state, promptText)` is a pure
 prompt/state gate. It auto-approves continuation prompts (`"continuar"`,
 `"aprobar contrato"`) and otherwise only evaluates when a done-claim is detected;
 blocking unknowns and pending work block it. It has no side effects.
 
 ## 5. Evidence Semantics
 
-Source: `src/evidence.js`.
+Source: `src/evidence/evidence.js`.
 
 - Types (`EVIDENCE_TYPES`): DIRECT, DERIVED, INFERRED, NEGATIVE, ENVIRONMENT,
   TOOL_OUTPUT, TEST_RESULT, USER_CONFIRMATION.
@@ -93,7 +93,7 @@ Source: `src/evidence.js`.
 
 ## 6. Continuation Fast-Path Constraints
 
-Source: `src/orchestration.js`.
+Source: `src/integration/orchestration.js`.
 
 - The fast-path only fires for explicit continuation/approval prompts.
 - It returns `autoApprove: true` with `blocked: false`; it does NOT mark a task done.
@@ -102,7 +102,7 @@ Source: `src/orchestration.js`.
 
 ## 7. Persistence / Recovery
 
-Sources: `src/persistence-manager.js`, `src/task-runs.js`, `.wam/`.
+Sources: `src/persistence/persistence-manager.js`, `src/state/task-runs.js`, `.wam/`.
 
 - Runtime task state lives under `.wam/` (`task-state.json`) and is untracked
   (see change `rc1-22-wam-runtime-state-isolation`).
@@ -113,7 +113,7 @@ Sources: `src/persistence-manager.js`, `src/task-runs.js`, `.wam/`.
 
 ## 8. OpenCode Integration Boundaries
 
-- Runtime adapters own host interaction (`src/router-adapter.js`, runtime adapters).
+- Runtime adapters own host interaction (`src/integration/router-adapter.js`, runtime adapters).
 - Pillars must not import orchestration; `shared` must not import domain pillars
   (see `wam-architecture-taxonomy`).
 - No network in runtime skill loading: the skill catalogue is build-time embedded.

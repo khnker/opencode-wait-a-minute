@@ -97,4 +97,4 @@ node --test benchmarks/evidence/evidence.test.mjs \
          benchmarks/cli.test.mjs
 ```
 
-See also `docs/benchmark/methodology.md` and `docs/benchmark/limitations.md`.
+See also `docs/benchmarks/methodology.md` and `docs/benchmarks/limitations.md`.
