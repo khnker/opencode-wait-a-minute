@@ -431,7 +431,7 @@ describe("canary-deploy", () => {
     const r = await canaryDeploy({
       releaseId: "r1",
       rolloutPercent: 10,
-      durationMs: 50,
+      durationMs: 200,
       healthCheck: () => {
         ticks.push(clock.now());
         return { ok: true, completionRate: 0.98, errorRate: 0.01 };
