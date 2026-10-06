@@ -125,6 +125,18 @@ function pluginMarkerPresent() {
   }
 }
 
+// Clear load evidence from a previous attempt so each run is judged on its own
+// (otherwise a stale marker from a stalled attempt could mask a failed load).
+function resetEvidence() {
+  try {
+    rmSync(markerPath, { force: true });
+  } catch (_) {}
+  try {
+    rmSync(wamHome, { recursive: true, force: true });
+    mkdirSync(wamHome, { recursive: true });
+  } catch (_) {}
+}
+
 // --- Spawn real opencode against the installed artifact ----------------
 function runOpencode(env) {
   return new Promise((resolvePromise) => {
@@ -134,6 +146,7 @@ function runOpencode(env) {
     let spawnError = null;
     let stdoutBuf = "";
 
+    resetEvidence();
     log("spawn", "launching opencode with simple prompt...");
     // A prompt that triggers the plugin quickly without heavy reasoning.
     const prompt = "¿Cuánto es 6 multiplicado por 7? Responde solo con el número.";
@@ -207,6 +220,9 @@ function runOpencode(env) {
     startupTimer = setTimeout(() => {
       timedOut = true;
       log("timeout", "opencode did not finish within timeout");
+      try {
+        opencodeProc.kill();
+      } catch (_) {}
       finish({
         code: 2,
         timedOut: true,
@@ -379,7 +395,17 @@ async function main() {
   log("opencode", `using instance ${summary.instance}`);
 
   // Step 6: spawn real opencode and observe the plugin.
-  const result = await runOpencode(env);
+  // The model backend intermittently stalls (opencode emits no model output and
+  // never exits); retry a few times before declaring the harness failed.
+  const MAX_ATTEMPTS = 3;
+  let result = await runOpencode(env);
+  for (let attempt = 2; attempt <= MAX_ATTEMPTS && result.timedOut; attempt++) {
+    log(
+      "retry",
+      `opencode attempt ${attempt - 1}/${MAX_ATTEMPTS} stalled; retrying`
+    );
+    result = await runOpencode(env);
+  }
   const wamState = wamStatePresent();
   const marker = pluginMarkerPresent();
   summary.loaded = result.pluginLoaded || wamState || marker;
@@ -389,7 +415,11 @@ async function main() {
   );
 
   if (result.timedOut) {
-    fail("timeout", "opencode did not finish within timeout", 2);
+    fail(
+      "timeout",
+      `opencode did not finish within timeout after ${MAX_ATTEMPTS} attempts`,
+      2
+    );
   }
   if (result.spawnError) {
     fail("spawn", `failed to spawn opencode: ${result.spawnError}`, 1);

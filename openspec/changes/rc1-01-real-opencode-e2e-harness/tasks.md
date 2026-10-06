@@ -10,5 +10,6 @@
 - [x] `node tests/e2e/opencode/smoke.mjs` exits 0 and prints `WAM_E2E_SUMMARY {"artifact":...,"instance":...,"loaded":true,"verdict":"pass"}` in the current environment (opencode 1.18.33).
 - [x] Summary is fail-closed: a forced `opencode` failure emits `{...,"loaded":false,"verdict":"fail"}` and the JSON file before exiting non-zero.
 - [x] Isolation preserved (HOME/XDG_*/WAM_HOME) and temp dirs removed via `rmSync` in `finally`.
+- [x] Transient model-backend stalls are retried up to 3 times; each attempt resets load evidence and the hung `opencode` process is killed before retrying.
 - [x] `npm run gate` reports OpenCode Smoke E2E PASS.
 - [x] `openspec validate rc1-01-real-opencode-e2e-harness --strict` passes.
