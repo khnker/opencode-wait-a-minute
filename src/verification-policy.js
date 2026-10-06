@@ -59,7 +59,9 @@ export function estimateStrategyCost(strategy) {
   return costs[strategy] || 10;
 }
 
-// Policy coordination: validate that policy transitions are legal
+// Verification-strategy coordination: validate that strategy transitions are legal.
+// NOTE: operates on VERIFICATION_STRATEGY, not policy states. Distinct from
+// policy-state-machine.js#validatePolicyFlow despite the shared name.
 export function validatePolicyFlow(currentPolicy, nextPolicy) {
   const validTransitions = {
     [VERIFICATION_STRATEGY.EXISTING_TEST]: [VERIFICATION_STRATEGY.TARGETED_COMMAND],
@@ -74,7 +76,8 @@ export function validatePolicyFlow(currentPolicy, nextPolicy) {
   return { valid: true };
 }
 
-// Policy coordination: get next policy in escalation chain
+// Verification-strategy coordination: get next strategy in escalation chain.
+// Distinct from policy-state-machine.js#getNextPolicy.
 export function getNextPolicy(currentPolicy) {
   const chain = [
     VERIFICATION_STRATEGY.EXISTING_TEST,
@@ -89,6 +92,22 @@ export function getNextPolicy(currentPolicy) {
   return chain[idx + 1];
 }
 
+/**
+ * Fail-closed completion gate over a task's requirements and evidence.
+ *
+ * Invariants:
+ * - A task is `blocked` unless EVERY mandatory (non-optional) requirement is
+ *   `VERIFIED` AND there are no evidence gaps.
+ * - Missing or malformed evidence never passes: absent requirements/evidence
+ *   default to empty arrays, which blocks completion.
+ * - Optional requirements do not affect `blocked`.
+ *
+ * @param {{ requirements?: Array<{id:string, optional?:boolean, status?:string}>,
+ *           evidence?: Array<object> }} task
+ * @returns {{ blocked: boolean, completedRequirements: number,
+ *            totalRequirements: number, evidenceGaps: Array<object>,
+ *            unresolvedRequirements: string[] }}
+ */
 export function evaluateCompletionGate(task) {
   const { requirements = [], evidence = [] } = task;
 

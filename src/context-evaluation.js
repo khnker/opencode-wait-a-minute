@@ -357,7 +357,6 @@ export function runScenario(scenario) {
 export function runAllScenarios() {
   const scenarios = SCENARIOS.map(runScenario);
 
-  // Aggregate summary
   const summary = {};
   for (const { results } of scenarios) {
     for (const result of results) {
