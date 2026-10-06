@@ -453,7 +453,7 @@ export async function handleMessage(input, output, deps) {
         selectedSkills: analysis.skills?.selected || [],
       });
       if (pack.lines.length) {
-        inject.push(pack.lines.join("\n") + `\n[wam pack ${pack.budget_used}/${pack.budget} tok ${pack.levels.N0 ? "N0" : ""}${pack.levels.N1 ? "+N1" : ""}${pack.levels.N2 ? "+N2" : ""}${pack.levels.N3 ? "+N3" : ""}${pack.levels.N4 ? "+N4" : ""}]`);
+        inject.push(pack.lines.join("\n") + `\n[wam pack ${pack.budget_used}/${pack.budget} tok ${pack.levels.N0 ? "N0" : ""}${pack.levels.N1 ? "+N1" : ""}${pack.levels.N2 ? "+N2" : ""}${pack.levels.N3 ? "+N3" : ""}]`);
       }
       try { createSnapshot(taskId, updatedState, wamRoot); } catch {}
     } catch {}

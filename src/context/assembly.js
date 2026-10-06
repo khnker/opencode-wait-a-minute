@@ -15,14 +15,13 @@
  * Admission classes:
  *   MANDATORY  — N0, N2, required dependencies (never dropped)
  *   CONDITIONAL — cognition, relevant sections (dropped after OPTIONAL)
- *   OPTIONAL   — extra context, N4 skills (dropped first)
+ *   OPTIONAL   — extra context, skills (dropped first)
  *
- * 5 niveles con fuente canónica, obligación y prohibición:
+ * 4 niveles con fuente canónica, obligación y prohibición:
  *   N0 Global/Policy  — obligatorio, tiny (MANDATORY)
  *   N1 Project        — selectivo por dominio (CONDITIONAL)
  *   N2 Task           — obligatorio (live task state) (MANDATORY)
  *   N3 Session        — capsules por utility (OPTIONAL)
- *   N4 Skills         — contenido de skills seleccionadas (OPTIONAL)
  *
  * Prohibido: L4 ephemeral, superseded, transcript, docs/dominios sin match.
  */
@@ -44,7 +43,7 @@ import { ADMISSION } from "./context-router.js";
 
 /**
  * @typedef {Object} AdmissionItem
- * @property {string} level - Context level (N0, N1, N2, N3, N4)
+ * @property {string} level - Context level (N0, N1, N2, N3)
  * @property {string} admission - Admission class
  * @property {string} reason - Why this item has this admission class
  * @property {number} tokenCost - Estimated token cost
@@ -124,7 +123,7 @@ export function assembleContext({
   useLegacySelector = false,
   collector = null,
 } = {}) {
-  const levels = { N0: [], N1: [], N2: [], N3: [], N4: [] };
+  const levels = { N0: [], N1: [], N2: [], N3: [] };
   const rationale = [];
   const taskTokens = tokenize(prompt);
   let routerSufficiency = null;
@@ -407,7 +406,7 @@ if (!isTrivial) {
       }
     }
 
-    // -- N4 Skills (contenido de skills seleccionadas, consume flex) ---------
+    // -- N3 Skills (contenido de skills seleccionadas, consume flex) ---------
     // Inyecta el contenido real de las skills seleccionadas para que el agente
     // respete las restricciones y patrones de cada skill (layer responsibility).
     // Lee directamente del registry sin importar engine.js (evita circular import).
@@ -418,19 +417,19 @@ if (!isTrivial) {
       
       for (const skill of selectedSkills) {
         if (skillSpent >= skillBudget) {
-          rationale.push(`N4: budget agotado para skills (${skillSpent}/${skillBudget})`);
+          rationale.push(`N3: budget agotado para skills (${skillSpent}/${skillBudget})`);
           break;
         }
         
         const skillData = skillRegistry[skill.id];
         if (!skillData) {
-          rationale.push(`N4: ${skill.id} no encontrada en registry`);
+          rationale.push(`N3: ${skill.id} no encontrada en registry`);
           continue;
         }
         
         const content = skillData.content || "";
         if (!content.trim()) {
-          rationale.push(`N4: ${skill.id} sin contenido embebido`);
+          rationale.push(`N3: ${skill.id} sin contenido embebido`);
           continue;
         }
         
@@ -438,16 +437,16 @@ if (!isTrivial) {
           ? content.slice(0, skillContentMax) + `...[truncado]`
           : content;
         
-        const head = `[wam N4 skill] ${skill.id} — ${(skill.reason || "").slice(0, 100)}`;
+        const head = `[wam N3 skill] ${skill.id} — ${(skill.reason || "").slice(0, 100)}`;
         const line = `${head}\n  content: ${truncated.replace(/\n+/g, " ").slice(0, skillContentMax)}`;
-        const cost = spend("N4", line, ADMISSION.OPTIONAL, `skill ${skill.id}`);
+        const cost = spend("N3", line, ADMISSION.OPTIONAL, `skill ${skill.id}`);
         skillSpent += cost;
-        rationale.push(`N4: ${skill.id} inyectada (${cost} tok, reason: ${skill.reason})`);
+        rationale.push(`N3: ${skill.id} inyectada (${cost} tok, reason: ${skill.reason})`);
       }
     }
   }
 
-  const lines = [...levels.N0, ...levels.N1, ...levels.N2, ...levels.N3, ...levels.N4];
+  const lines = [...levels.N0, ...levels.N1, ...levels.N2, ...levels.N3];
 
   // Admission report — Router is canonical authority for sufficiency when available.
   const mandatoryItems = admissionItems.filter((i) => i.admission === ADMISSION.MANDATORY);

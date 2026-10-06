@@ -5,7 +5,7 @@
  *
  *   Context Graph    = relationships (what connects to what)
  *   Context Router   = WHAT context is needed (graph-based resolution)
- *   Context Assembly = HOW to pack it (N0-N4 levels, budget, admission)
+ *   Context Assembly = HOW to pack it (N0-N3 levels, budget, admission)
  *   Context Selection = capsule retrieval (legacy, fallback only)
  *
  * Authority:
@@ -47,9 +47,9 @@ export const RESPONSIBILITIES = {
   },
   assembly: {
     authority: "how",
-    description: "Packs context into N0-N4 levels within budget",
+    description: "Packs context into N0-N3 levels within budget",
     decisions: [
-      "level allocation (N0-N4)",
+      "level allocation (N0-N3)",
       "budget partitioning",
       "admission classes",
       "final pack contents",
