@@ -13,9 +13,9 @@ Benchmark evidence must be auditable, not a number in the README.
 Benchmark evidence is reproducible and rejected when incomplete.
 
 ## Validation
-- [ ] `npm run bench:validate` rejects each invalid case.
-- [ ] It passes on valid auditable results.
-- [ ] Evidence is machine-checked.
+- [x] `npm run bench:validate` rejects each invalid case.
+- [x] It passes on valid auditable results.
+- [x] Evidence is machine-checked.
 
 ## Program
 - RC1 item: RC1-16 (E)

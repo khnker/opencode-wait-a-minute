@@ -24,7 +24,7 @@ test("published surface: package.json declares main and explicit files", () => {
   const pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));
   assert.equal(pkg.main, "index.js");
   assert.ok(Array.isArray(pkg.files) && pkg.files.length > 0, "files must be an explicit non-empty list");
-  for (const req of ["*.js", "*.mjs", "preflight/", "skills/"]) {
+  for (const req of ["*.js", "src/", "skills/"]) {
     assert.ok(pkg.files.includes(req), `files must list ${req}`);
   }
 });

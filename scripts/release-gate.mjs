@@ -36,7 +36,9 @@ const GATES = [
   ...(IS_GITHUB_ACTIONS
     ? []
     : [{ name: "OpenCode Smoke E2E", cmd: "node tests/e2e/opencode/smoke.mjs", required: true, timeout: 300000 }]),
-  { name: "Package E2E", cmd: "npm run test:e2e:package", required: false },
+  { name: "Package E2E", cmd: "npm run test:e2e:package", required: true, timeout: 300000 },
+  { name: "Docs Check", cmd: "node scripts/docs-check.mjs", required: true },
+  { name: "Bench Evidence Validation", cmd: "npm run bench:audit && npm run bench:validate", required: true },
   { name: "Performance Sanity", cmd: "node scripts/performance-sanity.mjs", required: false },
   ...(process.env.WAM_RC1_EVIDENCE === "1"
     ? [{ name: "Real Benchmark (RC1 evidence)", cmd: "npm run benchmark:real", required: true }]
