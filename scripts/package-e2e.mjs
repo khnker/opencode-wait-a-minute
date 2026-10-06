@@ -18,9 +18,13 @@
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { join, resolve } from "node:path";
-import { tmpdir, mkdirSync, mkdtempSync, rmSync, readdirSync, existsSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, rmSync, readdirSync, existsSync } from "node:fs";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
 const GREEN = "\x1b[32m";
 const RED = "\x1b[31m";
@@ -78,9 +82,11 @@ if (!existsSync(pluginPath)) {
   fail("require", `plugin entry point not found at ${pluginPath}`);
 }
 
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+
 let pluginModule;
 try {
-  // eslint-disable-next-line no-undef
   pluginModule = require(pluginPath);
 } catch (e) {
   fail("require", `failed to require plugin: ${e.message}`);
