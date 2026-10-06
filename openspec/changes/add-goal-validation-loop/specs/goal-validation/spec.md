@@ -1,39 +1,48 @@
-# Goal Validation Loop Specification
+# Goal Validation Loop
 
-## Requirements
+## ADDED Requirements
 
-### GOAL-001: Mandatory Self-Assessment Before DONE
-The agent must perform a self-assessment of whether the implemented change satisfies the user's goal before the task can be marked as DONE.
+### Requirement: Mandatory self-assessment before DONE
+The agent MUST perform a self-assessment of whether the implemented change satisfies the user's goal before the task can be marked as DONE.
 
-### GOAL-002: Self-Assessment Recording
-The agent can record its self-assessment using the `/wam assess-goal` command, providing a rationale and a status (SATISFIED or NOT_SATISFIED).
+#### Scenario: Self-assessment required
+- **WHEN** the agent is about to mark a task as DONE
+- **THEN** the agent MUST have performed a self-assessment of whether the change satisfies the user's goal
 
-### GOAL-003: Gate Blocking on Missing or Unsatisfied Assessment
-The Completion Gate must block the transition to DONE if:
-- No self-assessment has been recorded, OR
-- The self-assessment status is NOT_SATISFIED.
+### Requirement: Self-assessment recording
+The agent MUST be able to record its self-assessment using the `/wam assess-goal` command with a rationale and a status (SATISFIED or NOT_SATISFIED).
 
-### GOAL-004: Iteration Until Satisfaction
-If the self-assessment is NOT_SATISFIED, the agent must iterate on the implementation and reassess until satisfied.
+#### Scenario: Recording a satisfied assessment
+- **WHEN** the agent runs `/wam assess-goal` with status SATISFIED
+- **THEN** the assessment SHALL be recorded with the rationale and status
 
-### GOAL-005: Explicit Satisfaction Confirmation
-Only a self-assessment with status SATISFIED allows the Completion Gate to proceed (assuming other gates pass).
+#### Scenario: Recording an unsatisfied assessment
+- **WHEN** the agent runs `/wam assess-goal` with status NOT_SATISFIED
+- **THEN** the assessment SHALL be recorded with the rationale and status
 
-## Scenarios
+### Requirement: Gate blocking on missing or unsatisfied assessment
+The Completion Gate MUST block the transition to DONE if no self-assessment has been recorded or if the self-assessment status is NOT_SATISFIED.
 
-#### Scenario: Agent confidently satisfies goal
-Given a task with an implemented change that the agent believes satisfies the user goal
-When the agent runs `/wam assess-goal "The change adds the requested feature and passes tests" alternatives="[]" evidence="[test-pass]" `
-And the self-assessment status is SATISFIED
-Then the Completion Gate allows the task to proceed to DONE (if other gates pass)
+#### Scenario: Agent unsure blocks DONE
+- **WHEN** the agent runs `/wam assess-goal` with status NOT_SATISFIED
+- **THEN** the Completion Gate MUST block DONE
+- **AND** MUST prompt the agent to clarify the goal or iterate
 
-#### Scenario: Agent unsure, asks for clarification
-Given a task where the agent is unsure if the change satisfies the goal
-When the agent runs `/wam assess-goal "I'm not sure if this addresses the core need" alternatives="[]" evidence="[]" `
-And the self-assessment status is NOT_SATISFIED
-Then the Completion Gate blocks DONE and prompts the agent to clarify the goal or iterate
+#### Scenario: Missing assessment blocks DONE
+- **WHEN** no self-assessment has been recorded
+- **THEN** the Completion Gate MUST block the transition to DONE
 
-#### Scenario: Agent iterates until satisfaction
-Given an initial self-assessment with status NOT_SATISFIED
-When the agent improves the implementation and re-runs `/wam assess-goal` with status SATISFIED
-Then the Completion Gate no longer blocks on goal validation
+### Requirement: Iteration until satisfaction
+If the self-assessment is NOT_SATISFIED, the agent MUST iterate on the implementation and reassess until satisfied.
+
+#### Scenario: Iteration leads to satisfaction
+- **WHEN** the agent improves the implementation and re-runs `/wam assess-goal` with status SATISFIED after a prior NOT_SATISFIED assessment
+- **THEN** the Completion Gate SHALL no longer block on goal validation
+
+### Requirement: Explicit satisfaction confirmation
+Only a self-assessment with status SATISFIED MUST allow the Completion Gate to proceed (assuming other gates pass).
+
+#### Scenario: Satisfied allows completion
+- **WHEN** the self-assessment status is SATISFIED
+- **AND** other gates pass
+- **THEN** the Completion Gate MUST allow the task to proceed to DONE

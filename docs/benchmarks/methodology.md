@@ -1,63 +1,51 @@
-# Token Accounting & Benchmark Methodology
+# Benchmark methodology — input-token savings
 
-Status: first pass (RC1 pre-work, change 3 of 5)
-Date: 2026-10-05
+The benchmark reports **three distinct figures** instead of a single ambiguous
+"token reduction" number. A single figure hides the cost WAM itself adds, which
+can make a net regression look like a saving. All three are percentages of the
+baseline input tokens for the same turns.
 
-## Token Accounting
+| Metric | Key | Meaning |
+| --- | --- | --- |
+| Context reduction | `context_reduction` | Raw saving from reconstructing context: `baselineInputTokens - wamInputTokens`. Measured **before** WAM overhead. |
+| WAM overhead | `wam_overhead` | The cost WAM itself adds to the request (`wamOverheadTokens`), as a share of baseline input. |
+| Net input savings | `net_input_savings` | The actual gain after paying for WAM: `context_reduction - wam_overhead`. **May be negative.** |
 
-Source: `src/engine.js`.
+## Ablation formula (source of truth)
 
-- `estimateTokens(text) = Math.ceil(text.length / 4)` — a cheap chars/4 proxy. It is
-  deliberately NOT a real tokenizer: it is deterministic, dependency-free, and used
-  for relative comparisons and budgets, never for billing.
-- `cavemanify(text)` removes filler phrases, collapses repeated spaces/tabs, and
-  collapses 3+ blank lines to 2 before measurement. Reduction claims must state
-  whether they are measured before or after `cavemanify`.
-- Budgets consume `estimateTokens` (e.g. `DEFAULT_VERIFICATION_BUDGET.maxTokens`).
-  A budget breach is a comparison against this proxy, not a provider count.
+`benchmarks/evaluation/ablation.mjs` defines the canonical relation:
 
-Rule: any documented "% token reduction" MUST be computed with the same proxy on
-both sides. Never mix provider token counts with `estimateTokens`.
+```
+netInputSavings = baselineInputTokens - (wamInputTokens + wamOverheadTokens)
+```
 
-## Context Evaluation Metrics
+Equivalently, in percentage-of-baseline form:
 
-Source: `src/context-evaluation.js#computeMetrics`.
+```
+context_reduction  = (baselineInputTokens - wamInputTokens) / baselineInputTokens * 100
+wam_overhead       =  wamOverheadTokens / baselineInputTokens * 100
+net_input_savings  = (baselineInputTokens - wamInputTokens - wamOverheadTokens) / baselineInputTokens * 100
+```
 
-Each strategy is scored per scenario on:
+`net_input_savings` is the only figure that answers "did WAM actually help?".
+`context_reduction` alone must never be presented as the benefit, because it
+ignores how much context WAM injects to do its job.
 
-| Metric | Definition |
-|---|---|
-| `recall` | expected nodes retrieved / expected nodes |
-| `precision` | retrieved nodes that are expected / retrieved nodes |
-| `dependencyCoverage` | 0 if any expected dependency is missing, else 1 |
-| evidence coverage | presence of required evidence nodes |
-| `taskSuccess` | expected nodes non-empty AND recall == 1 |
-| `contextTokens` | `result.tokenEstimate` for the assembled context |
+## Where the metrics live
 
-Strategies currently benchmarked by `runScenario`: `full-context`, `semantic-topk`
-(k=10), `wam-routing` (`resolveContext`).
+- `benchmarks/evaluation/metrics.mjs` — emits `context_reduction`,
+  `wam_overhead`, `net_input_savings` (percentages, 2 decimals) from
+  `results[].totals.wamTokens/baselineTokens` plus `r.wamOverheadTokens`
+  (defaulting to `0` when absent).
+- `benchmarks/reporters/rc1-report.mjs` — the `empiricalReal` block of
+  `metrics.json` carries `contextReduction`, `wamOverhead` and
+  `netInputSavings` (raw token counts). The `wamOverheadTokens` total is sourced
+  from the real report totals and per-run metrics.
 
-## Benchmark Harnesses
+## Notes
 
-| Command | Harness | Purpose |
-|---|---|---|
-| `npm run benchmark` | `benchmarks/run.mjs` | deterministic suite |
-| `npm run benchmark:real` | `benchmarks/run-real.mjs` | live/real inputs |
-| `npm run benchmark:suite` | `benchmarks/cli.mjs` | CLI-invoked suite |
-| `npm run bench:validation` | `benchmarks/run-validation.mjs` | validation benches |
-
-Benchmarks are deterministic by default; `run-real.mjs` is the only live path and
-must not be required for the RC1 gate.
-
-## Reproducibility Rules
-
-- Deterministic benches MUST be runnable offline and produce comparable output.
-- Live benches MUST be clearly separated and never gate CI.
-- A benchmark result is only comparable to another result produced by the same
-  harness, same scenario set, and same proxy.
-
-## RC1 Gate Interaction
-
-`npm run gate` (`scripts/release-gate.mjs`) aggregates sub-gates; benchmark
-comparability is a supporting signal, not a substitute for `npm test`. The gate is
-the RC1 verdict; benchmarks explain the numbers behind it.
+- The legacy `TokenReductionPct` key is removed: it conflated raw context
+  reduction with net savings and was routinely misread as a benefit.
+- Provider prompt-caching figures are billing/throttling behaviour, **not**
+  context reduction, and are reported separately with an explicit caveat (see
+  the RC1 evidence report, section C).

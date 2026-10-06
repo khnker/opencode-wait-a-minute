@@ -1,7 +1,14 @@
-# Spec: Task Completion Validation
+# Task Completion Validation
 
-## Requirement
-Ensure all dependent tasks are complete before marking a task as complete.
+## ADDED Requirements
 
-## Rules
-- Task status transitions to 'complete' ONLY if all sub-tasks are 'complete'.
+### Requirement: Dependent task completion
+A task MUST only transition to `complete` when all dependent sub-tasks are `complete`.
+
+#### Scenario: Incomplete sub-task blocks completion
+- **WHEN** a task has at least one sub-task that is not `complete`
+- **THEN** the task MUST NOT transition to `complete`
+
+#### Scenario: All sub-tasks complete
+- **WHEN** all sub-tasks of a task are `complete`
+- **THEN** the task MAY transition to `complete`

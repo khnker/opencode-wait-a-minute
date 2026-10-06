@@ -12,7 +12,7 @@ Every decision derived from context layers (N0, N1, N2) must be recorded in task
 
 ### Requirement: Context audit inspection
 
-Users must be able to inspect the decision audit trail via CLI at any point during task execution.
+Users MUST be able to inspect the decision audit trail via CLI at any point during task execution.
 
 #### Scenario: Inspect audit trail
 - **WHEN** user executes `/wam audit`
@@ -20,7 +20,7 @@ Users must be able to inspect the decision audit trail via CLI at any point duri
 
 ### Requirement: Unverified context decision protection
 
-Critical context decisions marked as provisional or low confidence must prevent task completion until verified or accepted.
+Critical context decisions marked as provisional or low confidence MUST prevent task completion until verified or accepted.
 
 #### Scenario: Block completion on unverified decision
 - **WHEN** a critical context decision remains unverified
