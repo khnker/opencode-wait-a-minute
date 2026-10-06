@@ -819,22 +819,34 @@ function buildSkillRegistry(availableSkills) {
   };
 
   for (const [name, info] of Object.entries(availableSkills || {})) {
-    const meta = builtinCapabilities[name] || {
+    const base = builtinCapabilities[name] || {
       capabilities: [],
       triggers: [],
       risk: "low",
+    };
+    // Extension contract: an entry MAY carry explicit routing metadata under
+    // `metadata`. Injected metadata wins over builtins so a new capability can
+    // be registered without editing this module. Entries without `metadata`
+    // behave exactly as before.
+    const ext = info?.metadata || {};
+    const meta = {
+      capabilities: ext.capabilities ?? base.capabilities,
+      triggers: ext.triggers ?? base.triggers,
+      risk: ext.risk ?? base.risk,
     };
     // Skills locales ya presentes -> marcadas APPROVED (confianza local)
     registry[name] = {
       id: name,
       name,
-      source: { kind: "local", path: info.path, ref: "installed" },
+      source: { kind: "local", path: info?.path, ref: "installed" },
       capabilities: meta.capabilities,
       triggers: meta.triggers,
       risk: meta.risk,
       compatibility: { opencode: true },
       status: "APPROVED",
       cache: false,
+      ...(ext.keywords ? { keywords: ext.keywords } : {}),
+      ...(ext.domain ? { domain: ext.domain } : {}),
     };
   }
 
