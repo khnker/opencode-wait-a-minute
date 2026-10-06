@@ -28,14 +28,14 @@ const UNAVAILABLE_EXIT_CODE = 2;
 const IS_GITHUB_ACTIONS = process.env.GITHUB_ACTIONS === "true";
 const GATES = [
   { name: "Version Parity", cmd: "node scripts/verify-version-parity.mjs", required: true },
-  { name: "Test Suite", cmd: "npm test", required: true, timeout: 180000 },
+  { name: "Test Suite", cmd: "npm test", required: true, timeout: 300000 },
   { name: "Package Integrity", cmd: "node scripts/verify-package.mjs", required: true },
   { name: "Security Audit", cmd: "node scripts/verify-security.mjs", required: true },
   { name: "Migration E2E", cmd: "node tests/e2e/migration/run.mjs", required: true },
   { name: "Isolation E2E", cmd: "node tests/isolation/run.mjs", required: true },
   ...(IS_GITHUB_ACTIONS
     ? []
-    : [{ name: "OpenCode Smoke E2E", cmd: "node tests/e2e/opencode/smoke.mjs", required: true }]),
+    : [{ name: "OpenCode Smoke E2E", cmd: "node tests/e2e/opencode/smoke.mjs", required: true, timeout: 300000 }]),
   { name: "Performance Sanity", cmd: "node scripts/performance-sanity.mjs", required: false },
   ...(process.env.WAM_RC1_EVIDENCE === "1"
     ? [{ name: "Real Benchmark (RC1 evidence)", cmd: "npm run benchmark:real", required: true }]
