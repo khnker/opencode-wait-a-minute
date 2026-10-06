@@ -8,7 +8,7 @@ import {
   isValidPolicyTransition,
   POLICY_PRECONDITIONS,
   checkPolicyPreconditions
-} from "../../src/policy-state-machine.js";
+} from "../../src/policy/policy-state-machine.js";
 
 let passed = 0;
 let failed = 0;

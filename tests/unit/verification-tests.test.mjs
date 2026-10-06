@@ -22,19 +22,19 @@ import {
   evaluateObservationAgainst,
   verifyTask,
   demoCommandSucceedsNotRequirementSatisfied,
-} from "../../src/action-evaluation.js";
+} from "../../src/execution/action-evaluation.js";
 import {
   createRequirement,
   isRequirementCompletable,
   canCompleteTask,
   REQUIREMENT_STATES,
   VALID_TRANSITIONS,
-} from "../../src/verification-model.js";
+} from "../../src/verification/verification-model.js";
 import {
   resolveConflict,
   EVIDENCE_TYPES,
   EVIDENCE_STRENGTH,
-} from "../../src/evidence.js";
+} from "../../src/evidence/evidence.js";
 import {
   isValidVerificationState,
   transitionVerification,
@@ -42,13 +42,13 @@ import {
   canComplete,
   hasOutstandingWork,
   createEvidence as createVerificationEvidence,
-} from "../../src/verification-lifecycle.js";
+} from "../../src/verification/verification-lifecycle.js";
 import {
   VERIFICATION_STRATEGY,
   selectMinimalVerification,
   evaluateCompletionGate,
-} from "../../src/verification-policy.js";
-import { executeCheck } from "../../src/verification.js";
+} from "../../src/verification/verification-policy.js";
+import { executeCheck } from "../../src/verification/verification.js";
 
 const CWD = process.cwd();
 const passCmd = `node -e "process.exit(0)"`;
@@ -368,7 +368,7 @@ test("14_session_resume_preserves_state", () => {
 test("15_chromium_uses_intended_binary", async () => {
   // Regression test: the verification engine's Playwright script
   // must reference `chromium` (intended) not a hardcoded/alternate path.
-  const verificationJsPath = new URL("../../src/verification.js", import.meta.url);
+  const verificationJsPath = new URL("../../src/verification/verification.js", import.meta.url);
   const content = await readFileSafe(verificationJsPath.pathname);
   assert.ok(content !== null, "verification.js must exist");
   // Must use `chromium` from playwright (not chrome/chromium-browser/custom path)
@@ -389,7 +389,7 @@ test("15_chromium_uses_intended_binary", async () => {
 
 test("16_chromium_launch_respects_timeout", async () => {
   // The chromium launch in verification must have a timeout to avoid hangs.
-  const verificationJsPath = new URL("../../src/verification.js", import.meta.url);
+  const verificationJsPath = new URL("../../src/verification/verification.js", import.meta.url);
   const content = await readFileSafe(verificationJsPath.pathname);
   assert.ok(content !== null, "verification.js must exist");
   const launchIdx = content.indexOf("launch(");

@@ -6,7 +6,7 @@ import { describe, it, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { createSnapshot, loadSnapshot, checkContinuation, rebuildScope } from "../../src/context-snapshot.js";
+import { createSnapshot, loadSnapshot, checkContinuation, rebuildScope } from "../../src/context/context-snapshot.js";
 
 const CWD = process.cwd();
 const TEST_TASK = `snap-test-${Date.now()}`;

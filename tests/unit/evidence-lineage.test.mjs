@@ -24,10 +24,10 @@ import {
   getLineage,
   invalidateDependentEvidence,
   hasStaleEvidence,
-} from "../../src/evidence-lineage.js"; // Re-added for lineage tests
-import { persistTaskState, getTaskState } from "../../src/engine.js";
-import { noteContradiction } from "../../src/hypothesis-manager.js";
-import { checkEvidenceFreshness, prepareRequirementVerification } from "../../src/verification-context.js";
+} from "../../src/evidence/evidence-lineage.js"; // Re-added for lineage tests
+import { persistTaskState, getTaskState } from "../../src/skills/engine.js";
+import { noteContradiction } from "../../src/cognition/hypothesis-manager.js";
+import { checkEvidenceFreshness, prepareRequirementVerification } from "../../src/verification/verification-context.js";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-ev-lineage-test-"));
 let taskCounter = 0;

@@ -9,8 +9,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import pluginDefault from "../../index.js";
-import { evaluateRequirement as evaluateRequirementChecks } from "../../src/verification.js";
-import { persistTaskState } from "../../src/engine.js";
+import { evaluateRequirement as evaluateRequirementChecks } from "../../src/verification/verification.js";
+import { persistTaskState } from "../../src/skills/engine.js";
 
 const evaluateRequirement = evaluateRequirementChecks;
 

@@ -28,15 +28,15 @@ import {
   DEFAULT_GATES,
   nodesTokens,
   estimateTokens,
-} from "../src/context-optimization-metrics.js";
+} from "../src/context/context-optimization-metrics.js";
 
 import {
   buildOracleGraph,
   verifySufficiency,
   computeRequiredClosure,
-} from "../src/context-sufficiency-oracle.js";
+} from "../src/context/context-sufficiency-oracle.js";
 
-import { testMinimality } from "../src/context-minimality.js";
+import { testMinimality } from "../src/context/context-minimality.js";
 import { wamRouterSelector } from "../src/context-benchmark-router.mjs";
 
 // ---------------------------------------------------------------------------

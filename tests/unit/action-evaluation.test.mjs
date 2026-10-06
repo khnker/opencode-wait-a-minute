@@ -7,7 +7,7 @@ import {
   verifyTask,
   demoCommandSucceedsNotRequirementSatisfied,
   demoToolOutputExistsNotRequirementVerified,
-} from "../../src/action-evaluation.js";
+} from "../../src/execution/action-evaluation.js";
 
 // -- ActionResult tests --
 

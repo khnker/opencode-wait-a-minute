@@ -14,8 +14,8 @@ import { extractUsage, wamInputReduction } from "../telemetry/token-usage.mjs";
 import { latencyDelta } from "../telemetry/latency.mjs";
 import { outcomeMatches, classifyComparison, VALID, INVALID_COMPARISON } from "../telemetry/outcome.mjs";
 
-import { assembleContext } from "../../../src/assembly.js";
-import { buildRuntimeContextGraph } from "../../../src/runtime-context-graph.js";
+import { assembleContext } from "../../../src/context/assembly.js";
+import { buildRuntimeContextGraph } from "../../../src/context/runtime-context-graph.js";
 
 /** Build the baseline request: raw full context graph. */
 function buildBaselineRequest(turn) {

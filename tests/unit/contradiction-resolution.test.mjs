@@ -13,7 +13,7 @@ import {
   generateConflictReport,
   AUTHORITY_PRECEDENCE,
   BLOCKING_TYPES,
-} from "../../src/contradiction-resolution.js";
+} from "../../src/verification/contradiction-resolution.js";
 
 describe("AUTHORITY_PRECEDENCE", () => {
   it("defines precedence order", () => {

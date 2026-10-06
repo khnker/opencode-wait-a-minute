@@ -1,18 +1,18 @@
-import { analyze, getTaskState, persistTaskState, routeSkillsV2, loadSkillOnDemand, cavemanify, estimateTokens, buildAssumptions, escalateAssumptions, formatBacklog, findDuplicateTask } from "./src/engine.js";
-import { startExperiment, noteSuccess, noteFailure } from "./src/execution-engine.js";
-import { migrateLegacyCognition } from "./src/cognition-store.js";
-import { handleMessage } from "./runtime/message-handler.js";
+import { analyze, getTaskState, persistTaskState, routeSkillsV2, loadSkillOnDemand, cavemanify, estimateTokens, buildAssumptions, escalateAssumptions, formatBacklog, findDuplicateTask } from "./src/skills/engine.js";
+import { startExperiment, noteSuccess, noteFailure } from "./src/execution/execution-engine.js";
+import { migrateLegacyCognition } from "./src/cognition/cognition-store.js";
+import { handleMessage } from "./src/integration/message-handler.js";
 
-import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, updateLiveContext, compactDecisions } from "./src/memory.js";
-import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules } from "./src/context.js";
-import { assembleContext } from "./src/assembly.js";
-import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./src/verification.js";
-import { ContextDecisionTracer } from "./src/context-decision-audit.js";
-import { guardAction } from "./src/runtime-guards.js";
-import { WamPolicyBlock, evaluateAction } from "./src/risk-engine.js";
-import { classifyByCapabilities, buildCandidate } from "./policy/strategy-capabilities.js";
-import { getStatusReport } from "./src/execution-state.js";
-import { createSnapshot, checkContinuation, rebuildScope } from "./src/context-snapshot.js";
+import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
+import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules } from "./src/context/context.js";
+import { assembleContext } from "./src/context/assembly.js";
+import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./src/verification/verification.js";
+import { ContextDecisionTracer } from "./src/context/context-decision-audit.js";
+import { guardAction } from "./src/execution/runtime-guards.js";
+import { WamPolicyBlock, evaluateAction } from "./src/policy/risk-engine.js";
+import { classifyByCapabilities, buildCandidate } from "./src/policy/strategy-capabilities.js";
+import { getStatusReport } from "./src/execution/execution-state.js";
+import { createSnapshot, checkContinuation, rebuildScope } from "./src/context/context-snapshot.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -465,7 +465,7 @@ function classifyActionAgainstStrategy(action, tool, args, approvedStrategy) {
   const toCapability = (s) => { const str = String(s || "").trim(); const parts = str.split(/\s+/).filter(Boolean); if (parts.length === 0) return null; if (parts.length === 1) return { capability: "action.execute", action: parts[0] }; return { capability: "command.execute", executable: parts[0], argsPattern: parts.slice(1) }; };
   const allowedCaps = (approvedStrategy.allowedActions || []).map(toCapability).filter(Boolean);
   const prohibitedCaps = (approvedStrategy.prohibitedActions || []).map(toCapability).filter(Boolean);
-  // Canonical structured classifier (./policy/strategy-capabilities.js). In normal
+  // Canonical structured classifier (./src/policy/strategy-capabilities.js). In normal
   // module scope these are imported; when this function is extracted via `new Function`
   // (autonomy-behavior-suite.test.mjs) they are absent, so the `typeof` guards fall
   // through to the equivalent inline matcher below (kept self-contained on purpose).
@@ -486,7 +486,7 @@ function classifyActionAgainstStrategy(action, tool, args, approvedStrategy) {
 }
 
 // (Legacy substring-matching path removed. Strategy continuity is now evaluated
-//  against structured capabilities in ./policy/strategy-capabilities.js so that
+//  against structured capabilities in ./src/policy/strategy-capabilities.js so that
 //  "npm test" cannot accidentally cover "npm publish" or "npm install <pkg>".)
 
 /**
@@ -627,7 +627,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
     // is incompatible with opencode 1.18.26+, causing `N.config` TypeError).
 
     // Chat message hook — Persistence & Progress Gate.
-    // Slim adapter: delegates message processing to runtime/message-handler.js.
+    // Slim adapter: delegates message processing to src/integration/message-handler.js.
     "chat.message": (input, output) =>
       handleMessage(input, output, {
         bypassed,

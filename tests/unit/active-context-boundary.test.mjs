@@ -9,8 +9,8 @@ import {
   SUPPORTING_LIFECYCLES,
   EXCLUDED_LIFECYCLES,
   PURPOSE_MODES,
-} from "../../src/active-context-boundary.js";
-import { LIFECYCLE_STATES } from "../../src/context-lifecycle.js";
+} from "../../src/context/active-context-boundary.js";
+import { LIFECYCLE_STATES } from "../../src/context/context-lifecycle.js";
 
 function makeItem(lifecycle, overrides = {}) {
   return {

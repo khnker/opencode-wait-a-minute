@@ -10,7 +10,7 @@ import {
   normalizeScope,
   parentScope,
   scopeCovers,
-} from "../../src/context-scope.js";
+} from "../../src/context/context-scope.js";
 
 // -- SCOPE: GLOBAL ----------------------------------------------------------
 

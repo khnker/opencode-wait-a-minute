@@ -24,7 +24,7 @@ const MIN_SKILL_COUNT = 500;
 // Critical runtime files that MUST ship in the tarball.
 const REQUIRED_FILES = [
   "index.js",
-  "preflight/request-classifier.js",
+  "src/policy/request-classifier.js",
   "skills/registry.json",
 ];
 

@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { startExperiment, noteSuccess } from "../src/execution-engine.js";
-import { evaluateCompletion } from "../contract/completion-gate.js";
-import { getTaskState } from "../src/engine.js";
+import { startExperiment, noteSuccess } from "../src/execution/execution-engine.js";
+import { evaluateCompletion } from "../src/verification/completion-gate-simple.js";
+import { getTaskState } from "../src/skills/engine.js";
 
 test("E2E: Evidencia insuficiente bloquea DONE en VERIFYING", async () => {
   const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-evidence-fail-"));

@@ -5,7 +5,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { computeContextDelta } from "../../src/context-compaction.js";
+import { computeContextDelta } from "../../src/context/context-compaction.js";
 
 // --- Change 45: Original tests ---
 

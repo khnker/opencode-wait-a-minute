@@ -4,8 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import { startExperiment, noteSuccess } from "../../src/execution-engine.js";
-import { listObservations, listHypotheses, listExperiments } from "../../src/cognition-store.js";
+import { startExperiment, noteSuccess } from "../../src/execution/execution-engine.js";
+import { listObservations, listHypotheses, listExperiments } from "../../src/cognition/cognition-store.js";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-concurrency-"));
 const taskId = "concurrency-task";

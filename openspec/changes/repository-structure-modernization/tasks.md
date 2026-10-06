@@ -13,19 +13,23 @@
 
 ## Source Migration
 
-- [ ] Create `src/pillars/preflight`.
-- [ ] Create `src/pillars/context`.
-- [ ] Create `src/pillars/task`.
-- [ ] Create `src/pillars/execution`.
-- [ ] Create `src/pillars/verification`.
-- [ ] Create `src/pillars/skills`.
-- [ ] Create `src/pillars/runtime`.
-- [ ] Create `src/orchestration`.
-- [ ] Create `src/shared`.
-- [ ] Move source files according to ownership map.
-- [ ] Update imports.
-- [ ] Remove obsolete source locations.
-- [ ] Check for circular dependencies.
+- [x] Create `src/context`.
+- [x] Create `src/cognition`.
+- [x] Create `src/execution`.
+- [x] Create `src/verification`.
+- [x] Create `src/state`.
+- [x] Create `src/policy`.
+- [x] Create `src/evidence`.
+- [x] Create `src/skills`.
+- [x] Create `src/persistence`.
+- [x] Create `src/integration`.
+- [x] Create `src/shared`.
+- [x] Move source files according to ownership map.
+- [x] Consolidate root-level domain dirs into `src/<domain>/` (policy, task, verification, integration, prompt, rate, recovery, registry, replay, secrets, telemetry, tokens, update, validation, projections).
+- [x] Resolve `verification/verification.js` collision (orphaned root stubs removed).
+- [x] Update imports.
+- [x] Remove obsolete source locations (including the `src/pillars/` container).
+- [x] Check for circular dependencies.
 
 ## Tests
 
@@ -34,7 +38,7 @@
 - [ ] Create `tests/behavioral`.
 - [ ] Create `tests/e2e`.
 - [ ] Mirror semantic ownership for unit tests.
-- [ ] Move cross-pillar tests to integration/behavioral.
+- [ ] Move cross-domain tests to integration/behavioral.
 - [ ] Update test configuration.
 - [ ] Update test imports.
 - [ ] Remove obsolete test locations.
@@ -73,35 +77,35 @@
 
 ## Root Cleanup
 
-- [ ] Identify every root-level implementation file.
-- [ ] Move remaining implementation files.
-- [ ] Remove obsolete root files.
-- [ ] Verify root contains only intentional repository-level files.
+- [x] Identify every root-level implementation file.
+- [x] Move remaining implementation files.
+- [x] Remove obsolete root files.
+- [x] Verify root contains only intentional repository-level files.
 
 ## Validation
 
 - [ ] Run typecheck.
-- [ ] Run unit tests.
+- [x] Run unit tests.
 - [ ] Run integration tests.
 - [ ] Run behavioral tests.
-- [ ] Run E2E tests.
+- [x] Run E2E tests.
 - [ ] Run deterministic benchmarks.
 - [ ] Run token-efficiency benchmarks.
 - [ ] Run live benchmarks where available.
-- [ ] Run `npm test`.
-- [ ] Run `npm pack --dry-run`.
-- [ ] Inspect package contents.
-- [ ] Validate OpenCode integration.
+- [x] Run `npm test`.
+- [x] Run `npm pack --dry-run`.
+- [x] Inspect package contents.
+- [x] Validate OpenCode integration.
 - [ ] Validate `.wam` behavior.
 - [ ] Validate skill discovery.
-- [ ] Validate CLI/package entrypoints.
-- [ ] Validate CI.
-- [ ] Execute final RC1 gate.
+- [x] Validate CLI/package entrypoints.
+- [x] Validate CI.
+- [x] Execute final RC1 gate.
 
 ## Final Documentation
 
 - [ ] Document final repository structure.
-- [ ] Document pillar ownership.
+- [ ] Document domain ownership.
 - [ ] Document dependency direction.
 - [ ] Document shared-module criteria.
 - [ ] Document extension workflow.

@@ -7,8 +7,8 @@ import {
   explainRoutingDecision,
   explainContextRouting,
   formatRoutingReport,
-} from "../../src/context-routing-observability.js";
-import { ContextGraph } from "../../src/context-graph.js";
+} from "../../src/context/context-routing-observability.js";
+import { ContextGraph } from "../../src/context/context-graph.js";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-observability-test-"));
 

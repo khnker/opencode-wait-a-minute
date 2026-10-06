@@ -11,7 +11,7 @@ import {
   checkDependencies,
   routeWithConstraints,
   DEFAULT_CONSTRAINTS,
-} from "../../src/skill-routing.js";
+} from "../../src/skills/skill-routing.js";
 
 describe("detectLayer", () => {
   it("detects frontend layer for Angular component", () => {

@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { runEvaluation } from "../../src/context-routing-evaluation.js";
-import { getCurrentContextPack, getProposedContext, computeOverlap } from "../../src/context-routing-shadow.js";
-import { ContextGraph } from "../../src/context-graph.js";
+import { runEvaluation } from "../../src/context/context-routing-evaluation.js";
+import { getCurrentContextPack, getProposedContext, computeOverlap } from "../../src/context/context-routing-shadow.js";
+import { ContextGraph } from "../../src/context/context-graph.js";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-eval-test-"));
 

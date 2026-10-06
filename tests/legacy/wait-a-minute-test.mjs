@@ -115,7 +115,7 @@ test('Escenario 11: prompt multi-línea → procesado correctamente', async () =
 
 test('Escenario 12: contexto del engine — getTaskState disponible', async () => {
   // Verifica que el módulo expone getTaskState como API pública del engine.
-  const { getTaskState } = await import('../../src/engine.js');
+  const { getTaskState } = await import('../../src/skills/engine.js');
   assert.equal(typeof getTaskState, 'function', 'getTaskState debe ser función exportada');
 });
 

@@ -5,7 +5,7 @@ TBD - created by archiving change production-integrity-hardening. Update Purpose
 ## Requirements
 ### Requirement: Explicit task identity precedence
 
-An explicit `taskId` in the command payload MUST take precedence over `findDuplicateTask` suggestions. MUST be enforced in `runtime/message-handler.js` and `index.js`.
+An explicit `taskId` in the command payload MUST take precedence over `findDuplicateTask` suggestions. MUST be enforced in `src/integration/message-handler.js` and `index.js`.
 
 #### Scenario: Explicit taskId wins
 - **WHEN** a command provides `taskId` AND duplicate detection returns a different task

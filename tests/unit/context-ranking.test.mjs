@@ -10,7 +10,7 @@ import {
   WEIGHTS,
   LIFECYCLE_BOOST,
   PROVENANCE_BOOST,
-} from "../../src/context-ranking.js";
+} from "../../src/context/context-ranking.js";
 
 // --- Weight validation ---
 

@@ -6,7 +6,7 @@ import {
   OUTCOME_STATUS,
   isSatisfied,
   isRuntimeFailure,
-} from "../../src/tool-result-classifier.js";
+} from "../../src/execution/tool-result-classifier.js";
 
 test("tool-result: npm install OK but chromium missing → execution SUCCEEDED, outcome NOT_SATISFIED", () => {
   const r = classifyToolResult({

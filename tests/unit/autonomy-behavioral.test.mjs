@@ -28,7 +28,7 @@ import {
   listObservations,
   findRepeatedExperiment,
   buildCompactState,
-} from "../../src/cognition-store.js";
+} from "../../src/cognition/cognition-store.js";
 
 import {
   loadCognitiveState,
@@ -38,9 +38,9 @@ import {
   recordExperiment,
   recordObservation as recordCogObservation,
   compactCognitiveState,
-} from "../../src/cognitive-state.js";
+} from "../../src/cognition/cognitive-state.js";
 
-import { evaluateAction, WamPolicyBlock, RISK_LEVELS } from "../../src/risk-engine.js";
+import { evaluateAction, WamPolicyBlock, RISK_LEVELS } from "../../src/policy/risk-engine.js";
 
 // -- Setup helpers --
 

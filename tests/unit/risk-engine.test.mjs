@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { evaluateAction, RISK_LEVELS } from "../../src/risk-engine.js";
+import { evaluateAction, RISK_LEVELS } from "../../src/policy/risk-engine.js";
 
 test("Risk Engine: SAFE tools are allowed", () => {
   const r = evaluateAction("read", { path: "/home/user/file.txt" });

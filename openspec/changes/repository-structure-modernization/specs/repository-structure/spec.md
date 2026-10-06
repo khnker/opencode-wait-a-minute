@@ -3,11 +3,11 @@
 ## ADDED Requirements
 
 ### Requirement: Semantic Repository Layout
-Production code MUST live under `src/` organized by semantic ownership (`pillars/`, `orchestration/`, `shared/`); tests MUST be organized by responsibility (`unit/`, `integration/`, `behavioral/`, `e2e/`); benchmarks by measurement dimension; docs by reader purpose; and scripts separated from application code.
+Production code MUST live under `src/` organized by architectural domain (`context`, `cognition`, `execution`, `verification`, `state`, `policy`, `evidence`, `skills`, `persistence`, `integration`, `shared`) with no container folder (`pillars/`, `domains/`, or equivalent); tests MUST be organized by responsibility (`unit/`, `integration/`, `behavioral/`, `e2e/`); benchmarks by measurement dimension; docs by reader purpose; and scripts separated from application code.
 
 #### Scenario: Source organized by ownership
 - **WHEN** migration completes
-- **THEN** each production module resides under its owning pillar, orchestration, or shared directory
+- **THEN** each production module resides under its owning domain directory, or under `shared/` when it is a genuinely cross-cutting primitive
 
 #### Scenario: Root contains only repository-level files
 - **WHEN** migration completes

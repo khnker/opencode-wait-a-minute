@@ -19,7 +19,7 @@ Exit codes: `0` all required gates pass, `2` required pass but an optional gate 
 | 4 | Security Audit | `node scripts/verify-security.mjs` | no secrets/sensitive files in the packed tarball |
 | 5 | Migration E2E | `node tests/e2e/migration/run.mjs` | legacy state migrates cleanly |
 | 6 | Isolation E2E | `node tests/isolation/run.mjs` | runtime state stays out of the repo |
-| 7 | OpenCode Smoke E2E | `node tests/e2e/opencode/smoke.mjs` | plugin loads in a real OpenCode instance |
+| 7 | OpenCode Smoke E2E | `node tests/e2e/opencode/smoke.mjs` | plugin loads in a real OpenCode instance (required locally; skipped on GitHub Actions, which has no configured provider) |
 | 8 | Performance Sanity | `node scripts/performance-sanity.mjs` | *(optional)* budgets within thresholds |
 | 9 | Real Benchmark | `npm run benchmark:real` | *(only when `WAM_RC1_EVIDENCE=1`)* reproducible RC1 evidence |
 

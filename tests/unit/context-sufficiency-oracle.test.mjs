@@ -11,8 +11,8 @@ import {
   isSufficient,
   buildOracleGraph,
   ORACLE_CLOSURE_EDGE_TYPES,
-} from "../../src/context-sufficiency-oracle.js";
-import { EDGE_TYPES } from "../../src/context-graph.js";
+} from "../../src/context/context-sufficiency-oracle.js";
+import { EDGE_TYPES } from "../../src/context/context-graph.js";
 
 function graph(nodes, edges) {
   return buildOracleGraph({ nodes, edges });

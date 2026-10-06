@@ -5,43 +5,47 @@
 ```text
 .
 ├── src/
-│   ├── pillars/
-│   │   ├── preflight/
-│   │   ├── context/
-│   │   ├── task/
-│   │   ├── execution/
-│   │   ├── verification/
-│   │   ├── skills/
-│   │   └── runtime/
-│   ├── orchestration/
+│   ├── context/
+│   ├── cognition/
+│   ├── execution/
+│   ├── verification/
+│   ├── state/
+│   ├── policy/
+│   ├── evidence/
+│   ├── skills/
+│   ├── persistence/
+│   ├── integration/
 │   └── shared/
 ├── tests/
 │   ├── unit/
-│   │   ├── pillars/
-│   │   ├── orchestration/
-│   │   └── shared/
 │   ├── integration/
 │   ├── behavioral/
 │   └── e2e/
 ├── benchmarks/
-│   ├── context/
-│   ├── token-efficiency/
-│   ├── lifecycle/
-│   ├── live/
-│   └── deterministic/
 ├── docs/
-│   ├── architecture/
-│   ├── concepts/
-│   ├── development/
-│   └── benchmarks/
 ├── scripts/
 ├── skills/
 ├── .github/
 ├── .opencode/
 ├── .wam/
-├── package.json
-└── .
+├── index.js
+└── package.json
 ```
+
+## Domain Rules
+
+- Domain directories live **directly under `src/`**. No container folder
+  (`pillars/`, `domains/`, or equivalent) is permitted.
+- The directory name is the architectural domain: `context`, `cognition`,
+  `execution`, `verification`, `state`, `policy`, `evidence`, `skills`,
+  `persistence`, `integration`, `shared`.
+- `shared/` is not a functional domain: it holds only genuinely cross-cutting
+  primitives (formatting, logging, low-level helpers). It must not become a
+  catch-all.
+- Every module in `src/` (including previously root-level domain dirs such as
+  `policy/`, `task/`, `verification/`, `prompt/`, `tokens/`, `telemetry/`,
+  `recovery/`, `rate/`, `registry/`, `replay/`, `secrets/`, `update/`,
+  `validation/`, `projections/`) is owned by exactly one domain.
 
 ## Migration Order
 
@@ -68,7 +72,7 @@ A file belongs where its primary responsibility lives. Do not place files accord
 
 ## Tests
 
-Unit tests mirror implementation ownership. Integration and behavioral tests represent interactions between pillars. E2E tests represent externally observable WAM behavior.
+Unit tests mirror implementation ownership. Integration and behavioral tests represent interactions between domains. E2E tests represent externally observable WAM behavior.
 
 ## Benchmarks
 

@@ -13,7 +13,7 @@ import {
   invalidateOutput,
   getInvalidatedDependencies,
   detectContextGaps,
-} from "../../src/task-dependencies.js";
+} from "../../src/state/task-dependencies.js";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-dep-test-"));
 

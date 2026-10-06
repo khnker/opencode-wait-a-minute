@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { transitionVerification } from "../../src/verification-lifecycle.js";
-import { createEvidence, invalidateDependentEvidence } from "../../src/evidence-lineage.js";
+import { transitionVerification } from "../../src/verification/verification-lifecycle.js";
+import { createEvidence, invalidateDependentEvidence } from "../../src/evidence/evidence-lineage.js";
 
 test("Integration: VERIFIED → INVALIDATED → RE-VERIFYING", () => {
   const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-inval-"));

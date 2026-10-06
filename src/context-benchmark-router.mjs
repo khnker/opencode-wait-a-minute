@@ -3,9 +3,9 @@
  * Bridges benchmark scenarios to the canonical WAM Context Router.
  */
 
-import { ContextGraph, NODE_TYPES, EDGE_TYPES } from "./context-graph.js";
-import { resolveContext } from "./context-router.js";
-import { estimateTokens } from "./context-optimization-metrics.js";
+import { ContextGraph, NODE_TYPES, EDGE_TYPES } from "./context/context-graph.js";
+import { resolveContext } from "./context/context-router.js";
+import { estimateTokens } from "./context/context-optimization-metrics.js";
 
 /**
  * Build a ContextGraph instance from a benchmark scenario object.

@@ -8,7 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import fs from "node:fs";
-import { classifyUncertainty, buildUncertainties } from "../../src/engine.js";
+import { classifyUncertainty, buildUncertainties } from "../../src/skills/engine.js";
 import pluginDefault from "../../index.js";
 
 test("R1: tres clasificaciones", () => {

@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { ContextGraph } from "../../src/context-graph.js";
-import { resolveContext } from "../../src/context-router.js";
+import { ContextGraph } from "../../src/context/context-graph.js";
+import { resolveContext } from "../../src/context/context-router.js";
 
 function buildTestGraph() {
   const g = new ContextGraph();

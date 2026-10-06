@@ -9,10 +9,10 @@ import {
   shadowRoute,
   hasRequiredContext,
   computeOverlap,
-} from "../../src/context-routing-shadow.js";
-import { ContextGraph } from "../../src/context-graph.js";
-import { registerOutput, addDependency, invalidateOutput } from "../../src/task-dependencies.js";
-import { persistTaskState } from "../../src/engine.js";
+} from "../../src/context/context-routing-shadow.js";
+import { ContextGraph } from "../../src/context/context-graph.js";
+import { registerOutput, addDependency, invalidateOutput } from "../../src/state/task-dependencies.js";
+import { persistTaskState } from "../../src/skills/engine.js";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-shadow-test-"));
 let taskCounter = 0;

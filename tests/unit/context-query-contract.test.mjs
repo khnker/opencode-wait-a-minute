@@ -6,8 +6,8 @@ import {
   scoreRelevance,
   retrieveRelevantContext,
   CONTEXT_PURPOSE,
-} from "../../src/context-query-contract.js";
-import { LIFECYCLE_STATES } from "../../src/context-lifecycle.js";
+} from "../../src/context/context-query-contract.js";
+import { LIFECYCLE_STATES } from "../../src/context/context-lifecycle.js";
 
 function makeItem(overrides = {}) {
   return {

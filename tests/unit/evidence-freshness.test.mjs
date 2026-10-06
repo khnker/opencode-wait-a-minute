@@ -9,15 +9,15 @@ import {
   isDoneAllowed,
   captureEnvironment,
   fingerprintArtifacts,
-} from "../../src/evidence-freshness.js";
+} from "../../src/evidence/evidence-freshness.js";
 import {
   createEvidence,
   linkEvidenceToRequirement,
   verifyEvidence,
   getEvidence,
   invalidateEvidence as invalidateEvidenceFn,
-} from "../../src/evidence-lineage.js";
-import { getTaskState } from "../../src/engine.js";
+} from "../../src/evidence/evidence-lineage.js";
+import { getTaskState } from "../../src/skills/engine.js";
 
 /**
  * Build a minimal task layout under a temporary root, seed requirements,

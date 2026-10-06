@@ -12,12 +12,19 @@ const BOUNDARIES = {
 
 test("Architecture Boundary: Domain should not import Runtime", () => {
   const root = process.cwd();
-  const domainFiles = ["evidence/evidence.js", "verification/verification.js", "src/cognition-store.js"];
+  const domainFiles = ["src/evidence/evidence.js", "src/verification/verification.js", "src/cognition/cognition-store.js"];
   
+  const SPEC_RE =
+    /(?:import|export)[^"']*from\s*["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']|require\s*\(\s*["']([^"']+)["']/g;
+
   for (const file of domainFiles) {
     const content = fs.readFileSync(path.join(root, file), "utf-8");
+    const specs = [...content.matchAll(SPEC_RE)].map((m) => m[1] || m[2] || m[3]);
     for (const forbidden of BOUNDARIES["domain"]) {
-      assert.ok(!content.includes(forbidden), `File ${file} should not import ${forbidden}`);
+      const imported = specs.some(
+        (s) => s === forbidden || s.endsWith("/" + forbidden)
+      );
+      assert.ok(!imported, `File ${file} should not import ${forbidden}`);
     }
   }
 });

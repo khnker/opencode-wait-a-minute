@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 const ROOT = resolve(fileURLToPath(new URL("../../", import.meta.url)));
-const REQUIRED_RUNTIME = ["index.js", "src/engine.js", "preflight/request-classifier.js", "skills/registry.json"];
+const REQUIRED_RUNTIME = ["index.js", "src/skills/engine.js", "src/policy/request-classifier.js", "skills/registry.json"];
 
 let cachedPaths = null;
 function packedPaths() {

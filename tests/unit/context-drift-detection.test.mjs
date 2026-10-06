@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import {
   detectContextDrift,
   trackDriftPattern,
-} from "../../src/context-drift-detection.js";
+} from "../../src/context/context-drift-detection.js";
 
 // -- detectContextDrift --------------------------------------------------------
 

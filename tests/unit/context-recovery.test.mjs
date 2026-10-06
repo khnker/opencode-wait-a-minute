@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import {
   reconstructMinimumCorrectiveContext,
   detectActionDrift,
-} from "../../src/context-recovery.js";
+} from "../../src/context/context-recovery.js";
 
 // -- reconstructMinimumCorrectiveContext --------------------------------------
 

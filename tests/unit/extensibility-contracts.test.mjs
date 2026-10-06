@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import fs from "node:fs";
 import path from "node:path";
-import { buildRegistry, routeSkillsV2 } from "../../src/engine.js";
+import { buildRegistry, routeSkillsV2 } from "../../src/skills/engine.js";
 
 const NEW_CAPABILITY = {
   "fixture-capability": {

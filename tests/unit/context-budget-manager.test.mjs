@@ -5,7 +5,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ContextBudgetManager, DEFAULT_BUDGETS, MINIMUM_BUDGETS, LAYER_ORDER } from "../../src/context-budget-manager.js";
+import { ContextBudgetManager, DEFAULT_BUDGETS, MINIMUM_BUDGETS, LAYER_ORDER } from "../../src/context/context-budget-manager.js";
 
 // --- Defaults ---
 

@@ -3,7 +3,7 @@
  *
  * Verifies that scripts/run-tests.mjs recursively discovers *.test.mjs
  * files anywhere under the project root, including nested suites like
- * `diagnosis/diagnostic-engine.test.mjs`.
+ * `src/verification/diagnostic-engine.test.mjs`.
  *
  * The contract under test:
  *   1. The runner exposes a pure `collectTests(root)` function.
@@ -48,12 +48,12 @@ describe("test-discovery", () => {
     );
   });
 
-  it("recursively discovers nested suites (diagnosis/diagnostic-engine.test.mjs)", () => {
+  it("recursively discovers nested suites (src/verification/diagnostic-engine.test.mjs)", () => {
     const files = collectTests(ROOT);
     const rels = files.map((p) => path.relative(ROOT, p));
     // The canonical nested fixture that exercises the recursive walker.
     assert.ok(
-      rels.includes(path.join("diagnosis", "diagnostic-engine.test.mjs")),
+      rels.includes(path.join("src", "verification", "diagnostic-engine.test.mjs")),
       `expected nested suite under diagnosis/, found: ${rels.filter((r) => r.includes("diagnosis")).join(", ") || "<none>"}`
     );
     // Stronger invariant: at least one nested (depth ≥ 1) suite is discovered,
@@ -88,7 +88,7 @@ describe("test-discovery", () => {
     // the suite under inspection is small. To keep this test fast and
     // deterministic, we instead verify via `collectTests` directly plus
     // a banner probe by reading the runner's first 30 lines of output
-    // and confirming `diagnosis/diagnostic-engine.test.mjs` appears.
+    // and confirming `src/verification/diagnostic-engine.test.mjs` appears.
     //
     // Banner probe: spawn the runner against a tiny temporary root
     // containing one nested suite, then assert the banner printed it.

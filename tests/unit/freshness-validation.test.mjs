@@ -9,7 +9,7 @@ import {
   findAffectedNodes,
   markStaleOnInvalidation,
   generateFreshnessReport,
-} from "../../src/freshness-validation.js";
+} from "../../src/evidence/freshness-validation.js";
 
 describe("deriveVerification", () => {
   it("returns false for null node", () => {

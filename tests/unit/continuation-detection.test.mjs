@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 // Import the functions we need to test
 // Since they're not exported, we test via the module's public API
-import { analyze, classifyUncertainty, buildAssumptions, escalateAssumptions } from "../../src/engine.js";
+import { analyze, classifyUncertainty, buildAssumptions, escalateAssumptions } from "../../src/skills/engine.js";
 
 describe("classifyMessage (continuation detection)", () => {
   // We test the logic indirectly via the contract flow

@@ -4,9 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import { startExperiment, noteSuccess, noteFailure } from "../../src/execution-engine.js";
-import { classifyToolResult, EXECUTION_STATUS, OUTCOME_STATUS } from "../../src/tool-result-classifier.js";
-import { listObservations, listHypotheses, listExperiments, HYPOTHESIS_STATUS } from "../../src/cognition-store.js";
+import { startExperiment, noteSuccess, noteFailure } from "../../src/execution/execution-engine.js";
+import { classifyToolResult, EXECUTION_STATUS, OUTCOME_STATUS } from "../../src/execution/tool-result-classifier.js";
+import { listObservations, listHypotheses, listExperiments, HYPOTHESIS_STATUS } from "../../src/cognition/cognition-store.js";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-replan-"));
 const taskId = "replan-task";

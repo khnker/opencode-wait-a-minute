@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import {
   EVIDENCE_VOLATILITY,
   getEvidenceVolatility,
-} from "../../src/evidence.js";
+} from "../../src/evidence/evidence.js";
 
 describe("EVIDENCE_VOLATILITY", () => {
   it("exports all four levels", () => {

@@ -12,38 +12,27 @@ Organize the repository around explicit boundaries:
 
 ```text
 src/
-├── pillars/
-│   ├── preflight/
-│   ├── context/
-│   ├── task/
-│   ├── execution/
-│   ├── verification/
-│   ├── skills/
-│   └── runtime/
-├── orchestration/
+├── context/
+├── cognition/
+├── execution/
+├── verification/
+├── state/
+├── policy/
+├── evidence/
+├── skills/
+├── persistence/
+├── integration/
 └── shared/
 
 tests/
 ├── unit/
-│   ├── pillars/
-│   ├── orchestration/
-│   └── shared/
 ├── integration/
 ├── behavioral/
 └── e2e/
 
 benchmarks/
-├── context/
-├── token-efficiency/
-├── lifecycle/
-├── live/
-└── deterministic/
 
 docs/
-├── architecture/
-├── concepts/
-├── development/
-└── benchmarks/
 
 scripts/
 ```
@@ -54,7 +43,7 @@ Repository-specific operational directories such as `.github/`, `.opencode/`, `.
 
 - Source code belongs under `src/`.
 - Tests mirror semantic ownership.
-- Cross-pillar behavior belongs in `integration/` and `behavioral/` tests.
+- Cross-domain behavior belongs in `integration/` and `behavioral/` tests.
 - Benchmarks are organized by what they measure, not by source location.
 - Documentation is organized by reader purpose.
 - Scripts are separated from application code.

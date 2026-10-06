@@ -5,7 +5,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeContextItem, normalizeContextItems } from "../../src/context-normalization.js";
+import { normalizeContextItem, normalizeContextItems } from "../../src/context/context-normalization.js";
 
 // -- Basic normalization -------------------------------------------------
 

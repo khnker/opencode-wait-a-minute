@@ -24,7 +24,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-# OpenCode Smoke E2E runs against a real provider and is executed outside CI.
+      # OpenCode Smoke E2E is skipped on GitHub Actions (no configured provider);
+      # the release gate enforces it only where a real provider is available.
       - name: Run unified RC1 release gate
         run: npm run gate
 

@@ -7,9 +7,9 @@ import {
   getHistoricalCandidates,
   selectHistoricalContext,
   getRelevanceRankingExplanation,
-} from "../../src/context-history-relevance.js";
-import { startRun, closeRun, addObservation, addDecision, addEvidence } from "../../src/task-runs.js";
-import { persistTaskState } from "../../src/engine.js";
+} from "../../src/context/context-history-relevance.js";
+import { startRun, closeRun, addObservation, addDecision, addEvidence } from "../../src/state/task-runs.js";
+import { persistTaskState } from "../../src/skills/engine.js";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-history-rel-test-"));
 let taskCounter = 0;

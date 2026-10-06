@@ -9,7 +9,7 @@ import {
   createLoopDetector,
   ContextLoopDetector,
   quickLoopCheck,
-} from "../../src/context-loop-prevention.js";
+} from "../../src/context/context-loop-prevention.js";
 
 // -- ContextLoopDetector: record -----------------------------------------------
 
@@ -189,7 +189,7 @@ test("recordQuery: returns detection result", () => {
 });
 
 // -- detectStrategyRepetition --------------------------------------------------
-import { detectStrategyRepetition, sameStrategyIdentity } from "../../src/context-loop-prevention.js";
+import { detectStrategyRepetition, sameStrategyIdentity } from "../../src/context/context-loop-prevention.js";
 
 const strategySnap = (overrides = {}) => ({
   strategy: "Modernizar escrapper-eltarro",

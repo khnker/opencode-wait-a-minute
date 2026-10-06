@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { enforceGovernance } from "../../src/governance-enforcement.js";
-import { WamPolicyBlock } from "../../src/risk-engine.js";
+import { enforceGovernance } from "../../src/policy/governance-enforcement.js";
+import { WamPolicyBlock } from "../../src/policy/risk-engine.js";
 
 test("Governance: mutating tool with APPROVED contract passes", () => {
   assert.doesNotThrow(() =>

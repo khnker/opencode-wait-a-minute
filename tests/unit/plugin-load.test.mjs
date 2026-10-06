@@ -17,9 +17,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import pluginDefault from "../../index.js";
-import { updateProjectMemo } from "../../src/memory.js";
-import { getTaskState } from "../../src/engine.js";
-import { routeSkillsV2 } from "../../src/engine.js";
+import { updateProjectMemo } from "../../src/persistence/memory.js";
+import { getTaskState } from "../../src/skills/engine.js";
+import { routeSkillsV2 } from "../../src/skills/engine.js";
 
 // Aislamiento: los tests NO deben escribir .wam en el repo del plugin
 process.chdir(fs.mkdtempSync(path.join(os.tmpdir(), "wam-pl-iso-")));

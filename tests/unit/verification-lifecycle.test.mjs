@@ -12,7 +12,7 @@ import {
   canComplete,
   verifyRequirement,
   failRequirement,
-} from "../../src/verification-lifecycle.js";
+} from "../../src/verification/verification-lifecycle.js";
 
 test("isValidVerificationState accepts all valid states", () => {
   assert.ok(isValidVerificationState("UNVERIFIED"));

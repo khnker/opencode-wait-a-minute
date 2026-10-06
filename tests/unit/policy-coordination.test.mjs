@@ -9,7 +9,7 @@ import {
   selectMinimalVerification,
   validatePolicyFlow,
   getNextPolicy,
-} from "../../src/verification-policy.js";
+} from "../../src/verification/verification-policy.js";
 
 describe("validatePolicyFlow", () => {
   it("validates correct transitions", () => {

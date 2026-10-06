@@ -24,7 +24,7 @@ import {
   fullSelector,
   requiredOnlySelector,
 } from "../../benchmarks/context-benchmark.mjs";
-import { record } from "../../src/context-optimization-metrics.js";
+import { record } from "../../src/context/context-optimization-metrics.js";
 
 const sampleScenario = {
   name: "cwr-regression",

@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assessObservation, createAssessment, AssessmentResult } from "../../src/assessment-engine.js";
-import { compareValues } from "../../assessment/compare-values.js";
-import { compareObject } from "../../assessment/compare-object.js";
-import { compareArray } from "../../assessment/compare-array.js";
+import { assessObservation, createAssessment, AssessmentResult } from "../../src/policy/assessment-engine.js";
+import { compareValues } from "../../src/context/compare-values.js";
+import { compareObject } from "../../src/context/compare-object.js";
+import { compareArray } from "../../src/context/compare-array.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Existing assessObservation contract (regression coverage)

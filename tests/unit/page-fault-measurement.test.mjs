@@ -10,7 +10,7 @@ import {
   FAULT_REASONS,
   aggregateByReason,
   measurePageFaults,
-} from "../../src/page-fault-tracker.js";
+} from "../../src/context/page-fault-tracker.js";
 
 test("tracker: empty snapshot has zero counts", () => {
   const t = createPageFaultTracker();

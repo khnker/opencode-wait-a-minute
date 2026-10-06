@@ -12,8 +12,8 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import waitAMinute from "../../index.js";
-import { evaluateAction } from "../../src/risk-engine.js";
-import { findRepeatedExperiment } from "../../src/cognition-store.js";
+import { evaluateAction } from "../../src/policy/risk-engine.js";
+import { findRepeatedExperiment } from "../../src/cognition/cognition-store.js";
 
 // ---------- Harness ----------
 

@@ -5,7 +5,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { executeCheck, createEvidence } from "../../src/verification.js";
+import { executeCheck, createEvidence } from "../../src/verification/verification.js";
 
 test("service check con URL válida → PASS cuando responde 200", async () => {
   const check = { id: "svc-1", requirement_id: "R1", type: "service", url: "https://httpbin.org/status/200" };
@@ -41,7 +41,7 @@ test("e2e check genera resultado con selectors", async () => {
 });
 
 test("validateCheck acepta service y e2e types", async () => {
-  const { validateCheck } = await import("../../src/verification.js");
+  const { validateCheck } = await import("../../src/verification/verification.js");
   
   const serviceCheck = { type: "service", url: "https://example.com" };
   assert.equal(validateCheck(serviceCheck), null, "service check válido");

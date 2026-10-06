@@ -13,7 +13,7 @@ import {
   migrateRunEventIds,
   getEventType,
   getRunIdFromEvent,
-} from "../../src/run-event-identity.js";
+} from "../../src/state/run-event-identity.js";
 
 describe("generateEventId", () => {
   it("generates scoped event ID", () => {

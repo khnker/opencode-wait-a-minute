@@ -17,9 +17,9 @@ import {
   getPreviousDecisions,
   getResumeContext,
   needsNewExecution,
-} from "../../src/task-execution.js";
-import { persistTaskState } from "../../src/engine.js";
-import { getRuns } from "../../src/task-runs.js";
+} from "../../src/state/task-execution.js";
+import { persistTaskState } from "../../src/skills/engine.js";
+import { getRuns } from "../../src/state/task-runs.js";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-exec-test-"));
 let taskCounter = 0;

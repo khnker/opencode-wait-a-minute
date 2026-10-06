@@ -12,9 +12,9 @@ import {
   parseLog,
   SCHEMA,
   _resetTelemetry,
-} from "../../src/context-telemetry.js";
-import { ADMISSION } from "../../src/context-router.js";
-import { SUFFICIENCY_LEVEL, SUFFICIENCY_DECISIONS } from "../../src/context-sufficiency-gate.js";
+} from "../../src/context/context-telemetry.js";
+import { ADMISSION } from "../../src/context/context-router.js";
+import { SUFFICIENCY_LEVEL, SUFFICIENCY_DECISIONS } from "../../src/context/context-sufficiency-gate.js";
 
 test.beforeEach(() => _resetTelemetry());
 

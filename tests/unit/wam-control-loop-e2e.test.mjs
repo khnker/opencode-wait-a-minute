@@ -4,9 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import { startExperiment, noteSuccess, noteFailure } from "../../src/execution-engine.js";
-import { getTaskState } from "../../src/engine.js";
-import { transitionVerification, canComplete } from "../../src/verification-lifecycle.js";
+import { startExperiment, noteSuccess, noteFailure } from "../../src/execution/execution-engine.js";
+import { getTaskState } from "../../src/skills/engine.js";
+import { transitionVerification, canComplete } from "../../src/verification/verification-lifecycle.js";
 
 test("WAM Control Loop E2E: Full cognitive cycle leads to DONE", async () => {
   const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-e2e-"));

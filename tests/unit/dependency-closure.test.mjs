@@ -9,7 +9,7 @@ import {
   traverseDownstream,
   computeDependencyClosure,
   checkTraversalSafety,
-} from "../../src/dependency-closure.js";
+} from "../../src/context/dependency-closure.js";
 
 // Mock graph for testing
 function createMockGraph(nodes, edges = []) {

@@ -10,7 +10,7 @@ import {
   filterByPolicy,
   typePolicyRule,
   scopePolicyRule,
-} from "../../src/context-output-policy.js";
+} from "../../src/context/context-output-policy.js";
 
 // -- applyOutputPolicy -------------------------------------------------------
 

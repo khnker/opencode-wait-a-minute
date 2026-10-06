@@ -9,9 +9,9 @@ import {
   resolveExperimentContext,
   deriveDefaultFacts,
   recordRawObservation,
-} from "../../src/observation-engine.js";
-import { AssessmentResult } from "../../src/assessment-engine.js";
-import { createExperiment, createHypothesis, listObservations } from "../../src/cognition-store.js";
+} from "../../src/cognition/observation-engine.js";
+import { AssessmentResult } from "../../src/policy/assessment-engine.js";
+import { createExperiment, createHypothesis, listObservations } from "../../src/cognition/cognition-store.js";
 
 function setup() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "wam-obs-"));

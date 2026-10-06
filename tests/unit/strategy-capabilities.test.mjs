@@ -22,7 +22,7 @@ import {
   matchesCapability,
   classifyByCapabilities,
   buildCandidate,
-} from "../../policy/strategy-capabilities.js";
+} from "../../src/policy/strategy-capabilities.js";
 
 // ---------- pure-module tests ----------
 

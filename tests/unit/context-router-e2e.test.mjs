@@ -12,12 +12,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 // Import all modules for E2E testing
-import { deriveOperationalState, canPerformAction } from "../../src/operational-state.js";
-import { deriveVerification, markStaleOnInvalidation } from "../../src/freshness-validation.js";
-import { createConflict, resolveConflict } from "../../src/contradiction-resolution.js";
-import { generateContract, evaluateContract } from "../../src/sufficiency-contract.js";
-import { generateEventId, parseEventId, createScopedEvent } from "../../src/run-event-identity.js";
-import { createEvidence } from "../../src/evidence-lineage.js";
+import { deriveOperationalState, canPerformAction } from "../../src/state/operational-state.js";
+import { deriveVerification, markStaleOnInvalidation } from "../../src/evidence/freshness-validation.js";
+import { createConflict, resolveConflict } from "../../src/verification/contradiction-resolution.js";
+import { generateContract, evaluateContract } from "../../src/context/sufficiency-contract.js";
+import { generateEventId, parseEventId, createScopedEvent } from "../../src/state/run-event-identity.js";
+import { createEvidence } from "../../src/evidence/evidence-lineage.js";
 
 const TEST_ROOT = path.join(process.cwd(), ".wam-test-e2e");
 

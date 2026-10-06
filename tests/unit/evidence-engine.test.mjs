@@ -13,8 +13,8 @@ import {
   resolveRequirementId,
   EVIDENCE_TYPE_TOOL_OUTPUT,
   EVIDENCE_SOURCE_EXECUTION,
-} from "../../src/evidence-engine.js";
-import { getEvidence } from "../../src/evidence-lineage.js";
+} from "../../src/evidence/evidence-engine.js";
+import { getEvidence } from "../../src/evidence/evidence-lineage.js";
 
 function setup() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "wam-evd-"));

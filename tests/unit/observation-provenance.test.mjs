@@ -12,7 +12,7 @@ import {
   getProvenanceSummary,
   VALID_PROVENANCE,
   DEFAULT_CONFIDENCE,
-} from "../../src/observation-provenance.js";
+} from "../../src/cognition/observation-provenance.js";
 
 describe("VALID_PROVENANCE", () => {
   it("defines valid provenance types", () => {

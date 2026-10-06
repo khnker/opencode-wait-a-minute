@@ -21,7 +21,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { checkContinuation, createSnapshot, rebuildScope } from "../../src/context-snapshot.js";
+import { checkContinuation, createSnapshot, rebuildScope } from "../../src/context/context-snapshot.js";
 import { createCollector } from "../instrumentation/collector.mjs";
 import {
   SNAPSHOT_MATRIX,

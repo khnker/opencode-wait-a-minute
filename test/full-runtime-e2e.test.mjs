@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { startExperiment, noteSuccess, noteFailure } from "../src/execution-engine.js";
-import { getTaskState } from "../src/engine.js";
-import { evaluateCompletion } from "../contract/completion-gate.js";
+import { startExperiment, noteSuccess, noteFailure } from "../src/execution/execution-engine.js";
+import { getTaskState } from "../src/skills/engine.js";
+import { evaluateCompletion } from "../src/verification/completion-gate-simple.js";
 
 /** Helper: create task with 1 pending requirement */
 function createTaskRoot(TMP, taskId) {

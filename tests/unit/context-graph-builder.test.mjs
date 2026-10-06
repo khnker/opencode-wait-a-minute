@@ -6,7 +6,7 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildContextGraph } from "../../src/context-graph-builder.js";
+import { buildContextGraph } from "../../src/context/context-graph-builder.js";
 
 function assertHasGraphMethods(g) {
   for (const m of ["addNode", "addEdge", "getNode", "getNodes", "getEdgesFrom"]) {

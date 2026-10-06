@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import {
   createFeedbackLoop,
   FeedbackLoop,
-} from "../../src/context-feedback-loop.js";
+} from "../../src/context/context-feedback-loop.js";
 
 // -- createFeedbackLoop ------------------------------------------------------
 

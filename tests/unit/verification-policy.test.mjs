@@ -4,9 +4,9 @@ import {
   VERIFICATION_STRATEGY,
   selectMinimalVerification,
   evaluateCompletionGate,
-} from "../../src/verification-policy.js";
-import { detectEvidenceGaps } from "../../src/evidence-gap.js";
-import { createEvidence, EVIDENCE_STRENGTH } from "../../src/evidence.js";
+} from "../../src/verification/verification-policy.js";
+import { detectEvidenceGaps } from "../../src/evidence/evidence-gap.js";
+import { createEvidence, EVIDENCE_STRENGTH } from "../../src/evidence/evidence.js";
 
 describe("selectMinimalVerification", () => {
   it("prefere existing_test cuando existe test disponible", () => {

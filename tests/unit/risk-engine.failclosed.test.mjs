@@ -16,15 +16,15 @@ import nodeFs from "node:fs";
 import nodePath from "node:path";
 import nodeOs from "node:os";
 
-import { evaluateAction, isMutatingTool, RISK_LEVELS } from "../../src/risk-engine.js";
-import { guardAction } from "../../src/runtime-guards.js";
+import { evaluateAction, isMutatingTool, RISK_LEVELS } from "../../src/policy/risk-engine.js";
+import { guardAction } from "../../src/execution/runtime-guards.js";
 import {
   CAPABILITY_LEVELS,
   getCapability,
   getEffectiveCapability,
   isMutatingCapability,
   ACTION_CAPABILITIES,
-} from "../../policy/action-capabilities.js";
+} from "../../src/policy/action-capabilities.js";
 
 // ===========================================================================
 // Fixtures: directorio temporal con estructura controlada.

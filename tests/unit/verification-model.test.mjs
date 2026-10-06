@@ -8,7 +8,7 @@ import {
   VALID_TRANSITIONS,
   canTransition,
   transitionRequirement
-} from "../../src/verification-model.js";
+} from "../../src/verification/verification-model.js";
 
 describe("REQUIREMENT_STATES", () => {
   it("defines all expected states", () => {

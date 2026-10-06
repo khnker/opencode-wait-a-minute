@@ -21,25 +21,25 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import { persistTaskState, getTaskState } from "../../src/engine.js";
+import { persistTaskState, getTaskState } from "../../src/skills/engine.js";
 import pluginDefault from "../../index.js";
 import {
   startExperiment,
   noteSuccess,
   noteFailure,
-} from "../../src/execution-engine.js";
+} from "../../src/execution/execution-engine.js";
 import {
   transitionVerification,
   canComplete,
   isVerified,
   createEvidence,
   isValidVerificationState,
-} from "../../src/verification-lifecycle.js";
+} from "../../src/verification/verification-lifecycle.js";
 import {
   interceptAgentClaim,
   createClaim,
   validateClaim,
-} from "../../src/claim-interception.js";
+} from "../../src/execution/claim-interception.js";
 import {
   listHypotheses,
   listExperiments,
@@ -47,7 +47,7 @@ import {
   getActiveHypotheses,
   HYPOTHESIS_STATUS,
   EXPERIMENT_STATUS,
-} from "../../src/cognition-store.js";
+} from "../../src/cognition/cognition-store.js";
 
 function cleanup(taskId, tmpRoot) {
   try {

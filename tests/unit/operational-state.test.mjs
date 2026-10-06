@@ -9,7 +9,7 @@ import {
   canPerformAction,
   generateOperationalReport,
   OPERATIONAL_STATES,
-} from "../../src/operational-state.js";
+} from "../../src/state/operational-state.js";
 
 describe("OPERATIONAL_STATES", () => {
   it("defines all operational states", () => {

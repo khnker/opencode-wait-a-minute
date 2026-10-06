@@ -2,7 +2,7 @@ import {
   createVerificationInvalidation,
   checkVerificationDependencies,
   shouldInvalidate
-} from "../../src/verification-context.js";
+} from "../../src/verification/verification-context.js";
 
 let passed = 0;
 let failed = 0;

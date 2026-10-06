@@ -3,15 +3,15 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { canComplete, isCompletionAllowed } from "../../src/completion-gate.js";
-import { REQUIREMENT_STATES } from "../../src/requirement-state.js";
+import { canComplete, isCompletionAllowed } from "../../src/verification/completion-gate.js";
+import { REQUIREMENT_STATES } from "../../src/state/requirement-state.js";
 import {
   persistTaskState,
-} from "../../src/engine.js";
+} from "../../src/skills/engine.js";
 import {
   createEvidence,
   linkEvidenceToRequirement,
-} from "../../src/evidence-lineage.js";
+} from "../../src/evidence/evidence-lineage.js";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-completion-gate-"));
 let counter = 0;

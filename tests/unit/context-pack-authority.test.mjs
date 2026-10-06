@@ -10,7 +10,7 @@ import {
   recordDecision,
   resolveAuthorityConflict,
   generateAuthorityReport,
-} from "../../src/context-pack-authority.js";
+} from "../../src/context/context-pack-authority.js";
 
 describe("RESPONSIBILITIES", () => {
   it("defines all components", () => {

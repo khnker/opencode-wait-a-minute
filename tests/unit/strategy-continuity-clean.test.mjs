@@ -3,7 +3,7 @@
 // Regression test for the ESM `require()` bug in the Strategy Continuity path.
 //
 // Before the fix, index.js resolved structured capabilities via a runtime
-// `require("../../policy/strategy-capabilities.js")` inside an ESM module. That
+// `require("../../src/policy/strategy-capabilities.js")` inside an ESM module. That
 // throws `ReferenceError: require is not defined` the moment an approved
 // strategy reaches capability loading, which meant strategy continuity was
 // silently dead and, once activated, could surface module-loader errors.

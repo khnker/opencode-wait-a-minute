@@ -4,9 +4,9 @@ import {
   assembleContextWithQuery,
   CONTEXT_ASSEMBLY_STATUS,
   assembleContext,
-} from "../../src/context-assembly-contract.js";
-import { CONTEXT_PURPOSE } from "../../src/context-query-contract.js";
-import { SUFFICIENCY_LEVEL } from "../../src/context-sufficiency-gate.js";
+} from "../../src/context/context-assembly-contract.js";
+import { CONTEXT_PURPOSE } from "../../src/context/context-query-contract.js";
+import { SUFFICIENCY_LEVEL } from "../../src/context/context-sufficiency-gate.js";
 
 test("contract: CONTEXT_ASSEMBLY_STATUS has expected values", () => {
   assert.ok(CONTEXT_ASSEMBLY_STATUS.PROCEED);

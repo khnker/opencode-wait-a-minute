@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { startExperiment, noteSuccess, noteFailure } from "../src/execution-engine.js";
-import { getTaskState } from "../src/engine.js";
-import { listHypotheses, HYPOTHESIS_STATUS } from "../src/cognition-store.js";
+import { startExperiment, noteSuccess, noteFailure } from "../src/execution/execution-engine.js";
+import { getTaskState } from "../src/skills/engine.js";
+import { listHypotheses, HYPOTHESIS_STATUS } from "../src/cognition/cognition-store.js";
 
 test("E2E: Hipótesis incorrecta rechazada → H2 nueva generada", async () => {
   const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-hypo-fail-"));

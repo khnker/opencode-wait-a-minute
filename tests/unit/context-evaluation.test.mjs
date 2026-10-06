@@ -6,9 +6,9 @@ import {
   SCENARIOS,
   runScenario,
   runAllScenarios,
-} from "../../src/context-evaluation.js";
-import { ContextGraph } from "../../src/context-graph.js";
-import { resolveContext } from "../../src/context-router.js";
+} from "../../src/context/context-evaluation.js";
+import { ContextGraph } from "../../src/context/context-graph.js";
+import { resolveContext } from "../../src/context/context-router.js";
 
 function buildTestGraph() {
   const g = new ContextGraph();

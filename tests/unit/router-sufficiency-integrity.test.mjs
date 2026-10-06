@@ -4,7 +4,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { resolveContext, ADMISSION } from "../../src/context-router.js";
+import { resolveContext, ADMISSION } from "../../src/context/context-router.js";
 
 // Minimal mock graph for testing
 function createMockGraph(nodes, edges = []) {

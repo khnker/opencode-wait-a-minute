@@ -19,7 +19,7 @@ import {
   buildCompactState,
   HYPOTHESIS_STATUS,
   EXPERIMENT_STATUS,
-} from "../../src/cognition-store.js";
+} from "../../src/cognition/cognition-store.js";
 
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "wam-cog-"));
 const taskId = "test-task";

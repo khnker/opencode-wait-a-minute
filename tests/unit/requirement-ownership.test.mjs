@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import {
   verifyRequirementOwnership,
   assertCanVerify,
-} from "../../src/requirement-ownership.js";
+} from "../../src/state/requirement-ownership.js";
 
 describe("verifyRequirementOwnership", () => {
   it("confirms ownership when owner matches", () => {

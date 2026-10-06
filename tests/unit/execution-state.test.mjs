@@ -7,14 +7,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import pluginDefault from "../../index.js";
-import { getTaskState } from "../../src/engine.js";
+import { getTaskState } from "../../src/skills/engine.js";
 import {
   isValidState,
   migrateLegacyPhase,
   validateState,
   transition,
   getStatusReport,
-} from "../../src/execution-state.js";
+} from "../../src/execution/execution-state.js";
 
 const CWD = process.cwd();
 const cleanup = (taskId) => {

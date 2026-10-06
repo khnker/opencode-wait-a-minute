@@ -4,7 +4,7 @@
 
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { resolveConflict } from "../../src/evidence.js";
+import { resolveConflict } from "../../src/evidence/evidence.js";
 
 describe("resolveConflict", () => {
   it("returns null when either evidence is missing", () => {

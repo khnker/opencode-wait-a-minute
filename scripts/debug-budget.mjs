@@ -1,6 +1,6 @@
 import fs from "node:fs";
-import { assembleContext } from "../src/assembly.js";
-import { initMemory, updateContext } from "../src/memory.js";
+import { assembleContext } from "../src/context/assembly.js";
+import { initMemory, updateContext } from "../src/persistence/memory.js";
 
 const tmp = fs.mkdtempSync("/tmp/wam-bug-");
 initMemory(tmp);

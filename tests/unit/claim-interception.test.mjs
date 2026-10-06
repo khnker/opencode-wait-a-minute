@@ -4,7 +4,7 @@ import {
   interceptAgentClaim,
   createClaim,
   validateClaim
-} from "../../src/claim-interception.js";
+} from "../../src/execution/claim-interception.js";
 
 describe("interceptAgentClaim", () => {
   it("detecta claims FACT", () => {

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeContextItem } from "../../src/context-event-normalization.js";
-import { CONTEXT_EVENT_TYPES } from "../../src/context-event-ingress.js";
+import { normalizeContextItem } from "../../src/context/context-event-normalization.js";
+import { CONTEXT_EVENT_TYPES } from "../../src/context/context-event-ingress.js";
 
 test("normalization: tool_started event has required fields", () => {
   const item = normalizeContextItem({

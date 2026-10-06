@@ -1,7 +1,7 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { demoteItem } from "../../src/context-demotion.js";
-import { LIFECYCLE_STATES } from "../../src/context-lifecycle.js";
+import { demoteItem } from "../../src/context/context-demotion.js";
+import { LIFECYCLE_STATES } from "../../src/context/context-lifecycle.js";
 
 const now = 1700000000000;
 
