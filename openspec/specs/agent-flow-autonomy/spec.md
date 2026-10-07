@@ -1,7 +1,12 @@
-## ADDED Requirements
+# Agent Flow Autonomy
+
+## Purpose
+Define how WAM detects continuation messages, displays contracts, gates completion claims, and minimizes injection for trivial tasks.
+
+## Requirements
 
 ### Requirement: Continuation detection
-WAM SHALL detect continuation messages and apply轻量级 injection instead of full pre-flight analysis.
+WAM SHALL detect continuation messages and apply lightweight injection instead of full pre-flight analysis.
 
 #### Scenario: Approved task continuation
 - **WHEN** a message arrives AND contract status is APPROVED AND message does NOT contain done/finish/complete keywords AND message is NOT a /wam command
