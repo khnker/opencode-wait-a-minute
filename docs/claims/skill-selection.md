@@ -1,36 +1,57 @@
-# Relevant Skill Loading
+# Skill Selection
 
 ## Claim
 
-WAM loads only skills relevant to the current task, reducing overhead and avoiding conflicts.
+WAM selects task-relevant skills as part of context enrichment.
 
-## What this means
+## Expected behavior
 
-Without WAM, agents might:
-- Load all available skills
-- Experience skill conflicts
-- Waste initialization time
+Given:
 
-WAM selects skills based on task type and evidence from the pre-flight.
+```text
+task
++
+available skills
+```
 
-## How WAM does it
+WAM should select skills whose capabilities are relevant to the task.
 
-WAM's skill selection:
-- Analyzes the task type (exploration, implementation, etc.)
-- Matches against skill metadata (tags, capabilities)
-- Loads only the top-scoring skills
-- Caches skill selections for similar tasks
+## Mechanism
 
-## Evidence
+Selection is deterministic and lexical (no embeddings):
 
-- Implementation: `src/skills/engine.js`
-- Unit tests: `tests/unit/skill-routing.test.mjs`
+- `discoverSkills` (`src/policy/skill-routing.js`) discovers skills by
+  filesystem precedence (project-local → user-global → bundled);
+- `scoreSkill` (`src/skills/engine.js:648`) sums weighted matches against the
+  prompt:
 
-## Limitations
+  ```js
+  { name: 5, capability: 4, keyword: 3, description: 2, domain: 1 }
+  ```
 
-WAM's skill selection relies on accurate skill metadata. Poorly tagged skills may not be selected when needed.
+- `routeSkillsV2` (`src/skills/engine.js:715`) filters by approval status, always
+  includes base skills (`writing_for_agents`, `codebase_design`) that bypass
+  scoring, keeps candidates with `score > 0`, sorts by score, and applies a
+  top-N limit: `MINIMAL → 0`, `STANDARD → 3`, `RIGOROUS → 5`.
 
-## Related documentation
+## Validation
 
-- [Less Guessing](less-guessing.md)
-- [Task State](task-state.md)
+Controlled fixtures should test:
+
+- relevant skill available → selected;
+- unrelated skill available → not selected;
+- relevant skill removed → selection changes appropriately;
+- metadata changes → ranking/selection changes appropriately.
+
+## Tests
+
+- `tests/unit/skill-routing.test.mjs`
+- `tests/unit/skill-loading.test.mjs`
+- `tests/unit/skill-injection.test.mjs`
+
+**Status: Implemented, Tested.**
+
+## See also
+
+- [Context Enrichment](../concepts/context-enrichment.md)
+- [Context Management](context-management.md)

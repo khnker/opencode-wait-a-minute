@@ -2,38 +2,45 @@
 
 ## Claim
 
-WAM helps the agent identify important decisions that should be clarified instead of silently invented.
+WAM makes relevant uncertainty and assumptions explicit before decisions that
+depend on them.
 
-## What this means
+## Mechanism
 
-An agent given a task typically makes hidden assumptions about:
-- Repository structure
-- User intent
-- Available dependencies
-- Configuration expectations
+The uncertainty and assumption mechanisms live in `src/policy/uncertainty.js`:
 
-WAM surfaces these assumptions before execution begins.
+- `classifyUncertainty(item)` — classifies a statement as known/unknown;
+- `buildUncertainties(assumed, unknown)` — assembles uncertainties;
+- `classifyAssumption(statement)` — classifies an assumption;
+- `buildAssumptions(assumed)` — builds the assumption list;
+- `escalateAssumptions(state, taskText)` — escalates significant assumptions
+  into a gate.
 
-## How WAM does it
+These are surfaced by the assumption gate, blocking-questions and
+clarification-gate policies before execution proceeds.
 
-WAM's pre-flight hook analyzes the user prompt and asks:
-1. What is the user actually asking for?
-2. What is already known vs. assumed?
-3. What remains unknown?
-4. What type of task is this?
+## Validation
 
-If assumptions are significant, the agent asks clarifying questions before proceeding.
+Test at least:
 
-## Evidence
+- known information;
+- explicit unknown;
+- significant assumption;
+- clarification required;
+- clarification provided.
 
-- Implementation: `src/policy/uncertainty.js`, `src/skills/engine.js`
-- Unit tests: `tests/unit/assumption-gate.test.mjs`, `tests/unit/clarification-gate.test.mjs`, `tests/unit/blocking-questions.test.mjs`
+## Tests
 
-## Limitations
+- `tests/unit/assumption-gate.test.mjs`
+- `tests/unit/assumption-tracking.test.mjs`
+- `tests/unit/blocking-questions.test.mjs`
+- `tests/unit/clarification-gate.test.mjs`
 
-WAM can only surface assumptions it is programmed to recognize. Novel domain scenarios may not be caught.
+**Status: Implemented, Tested** for the implemented uncertainty policies. The
+broader outcome ("less guessing" in agent behavior) is a **Design target** and is
+not measured by the current benchmark suite.
 
-## Related documentation
+## See also
 
-- [Task State](task-state.md)
-- [Context Management](context-management.md)
+- [Context Enrichment](../concepts/context-enrichment.md)
+- [Verification](verification.md)

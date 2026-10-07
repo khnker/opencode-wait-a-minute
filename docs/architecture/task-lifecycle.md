@@ -1,34 +1,58 @@
 # Task Lifecycle
 
+The authoritative lifecycle is the formal execution state machine in
+`src/execution/execution-state.js`. This document mirrors that implementation.
+
 ## States
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Unknown
-    Unknown --> Understanding: User prompt
-    Understanding --> Asking: Significant assumptions
-    Understanding --> Implementing: Clear task
-    Asking --> Implementing: Clarification received
-    Implementing --> Verifying: Implementation complete
-    Verifying --> Implementing: Issues found
-    Verifying --> Done: Verified complete
-    Done --> [*]: Task closed
-    Understanding --> [*]: Cancelled
-    Implementing --> [*]: Cancelled
-    Verifying --> [*]: Cancelled
+    [*] --> INITIALIZING
+    INITIALIZING --> INVESTIGATING
+    INITIALIZING --> BLOCKED
+    INVESTIGATING --> EXECUTING
+    INVESTIGATING --> WAITING_AUTHORIZATION
+    INVESTIGATING --> BLOCKED
+    EXECUTING --> VERIFYING
+    EXECUTING --> BLOCKED
+    EXECUTING --> FAILED
+    VERIFYING --> COMPLETED
+    VERIFYING --> EXECUTING
+    VERIFYING --> FAILED
+    WAITING_AUTHORIZATION --> EXECUTING
+    WAITING_AUTHORIZATION --> BLOCKED
+    BLOCKED --> INVESTIGATING
+    BLOCKED --> EXECUTING
+    FAILED --> INVESTIGATING
+    COMPLETED --> [*]
 ```
 
-## Transitions
+## Legal transitions
 
-Each transition requires specific evidence:
-- Unknown → Understanding: Repository inspection
-- Understanding → Asking: Assumption analysis
-- Asking → Implementing: User clarification
-- Implementing → Verifying: Implementation signal
-- Verifying → Done: Verification pass
-- Verifying → Implementing: Verification failure
+Anything not listed throws:
+
+| From | To |
+| --- | --- |
+| `INITIALIZING` | `INVESTIGATING`, `BLOCKED` |
+| `INVESTIGATING` | `EXECUTING`, `WAITING_AUTHORIZATION`, `BLOCKED` |
+| `EXECUTING` | `VERIFYING`, `BLOCKED`, `FAILED` |
+| `VERIFYING` | `COMPLETED`, `EXECUTING`, `FAILED` |
+| `WAITING_AUTHORIZATION` | `EXECUTING`, `BLOCKED` |
+| `BLOCKED` | `INVESTIGATING`, `EXECUTING` |
+| `FAILED` | `INVESTIGATING` |
+| `COMPLETED` | _(terminal — none)_ |
+
+## Invariants
+
+- `COMPLETED` is terminal.
+- `transition()` to `COMPLETED` throws while `hasOutstandingWork(taskState)` is
+  true (unverified requirements or pending backlog). Fail-closed.
+- Invalid state strings throw (`validateState`).
+- Legacy phases map via `migrateLegacyPhase`; unknown phases default to
+  `INITIALIZING`.
 
 ## Related documentation
 
 - [Architecture Overview](overview.md)
 - [Context Selection](context-selection.md)
+- [Evidence](../concepts/evidence-driven-state.md)

@@ -2,35 +2,47 @@
 
 ## Claim
 
-WAM isolates task state to prevent cross-task contamination.
+WAM isolates task-specific state so unrelated task state does not become active
+context.
 
-## What this means
+## Example
 
-Without WAM, agents might:
-- Carry over assumptions from previous tasks
-- Use incorrect context for a new task
-- Mix evidence from unrelated work
+```text
+Task A:
+Fix payment timeout
 
-WAM resets task state between distinct user requests.
+Task B:
+Update README
+```
 
-## How WAM does it
+Task B should derive its context from Task B state and relevant repository
+information rather than inheriting Task A's payment-specific context.
 
-WAM:
-- Creates a new task instance for each top-level user request
-- Clears context and state when a task is done or cancelled
-- Uses namespaced storage for task-specific data
+## Required evidence
 
-## Evidence
+- task identity — task ids namespace state under `.wam/tasks/<taskId>/`
+  (`src/state/task-store.js`);
+- task storage namespace — per-task directories;
+- active-task selection — `retrieveActiveContext(items, purpose)`
+  (`src/context/active-context-boundary.js`);
+- context boundary — session identity scoped to `(root, OpenCode sessionID)`
+  (`getSessionId`, `src/context/context.js`);
+- task completion behavior — a completed task is terminal
+  (`src/execution/execution-state.js`);
+- task cancellation behavior — handled by the lifecycle manager
+  (`src/state/lifecycle-manager.js`).
 
-- Implementation: `src/state/task-store.js`, `src/state/state-store.js`
-- Unit tests: `tests/unit/state-store.test.mjs`, `tests/unit/active-context-boundary.test.mjs`
-- E2E scenarios: `tests/isolation/run.mjs`
+## Tests
 
-## Limitations
+- `tests/isolation/run.mjs` — Task A reaches `completed`, then a new prompt
+  starts Task B fresh (`status: "active"`, no `completedAt` inherited);
+- `tests/runtime-state-isolation.test.mjs` — `.wam` is runtime-only: ignored by
+  git, never tracked, never published;
+- `tests/unit/active-context-boundary.test.mjs` — active-context filtering.
 
-WAM assumes task boundaries are clear from user prompts. Ambiguous requests may require manual intervention.
+**Status: Implemented, Tested.**
 
-## Related documentation
+## See also
 
-- [Less Guessing](less-guessing.md)
+- [Context Separation](../concepts/context-separation.md)
 - [Task State](task-state.md)

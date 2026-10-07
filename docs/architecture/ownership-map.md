@@ -9,7 +9,7 @@ All 124 production modules in `src/` are assigned exactly one owner.
 
 | Pillar | Modules |
 |---|---|
-| `preflight` | 9 |
+| `policy` | 9 |
 | `context` | 54 |
 | `task` | 21 |
 | `execution` | 13 |
@@ -20,7 +20,7 @@ All 124 production modules in `src/` are assigned exactly one owner.
 | `shared` | 3 |
 | **total** | **124** |
 
-## preflight (9)
+## policy (9)
 
 - `src/policy/assessment-engine.js`
 - `src/policy/assumption-tracking.js`
@@ -181,13 +181,13 @@ Reclassifications made to reach 0 violations:
 - `formatting.js` was tentatively `shared` but re-exports `getStatusReport` from
   `execution-state.js` → moved to **execution** (not domain-neutral).
 - `state-machine.js` was tentatively `shared` but imports `assessment-engine.js`
-  (preflight) and `cognition-store.js` (task) → moved to **task** (domain logic).
+  (policy) and `cognition-store.js` (task) → moved to **task** (domain logic).
 
 ## Cross-Pillar Imports (monitored, same layer)
 
 | From | Owner | Imports | Owner |
 |---|---|---|---|
-| `src/execution/action-evaluation.js` | execution | `src/policy/assessment-engine.js` | preflight |
+| `src/execution/action-evaluation.js` | execution | `src/policy/assessment-engine.js` | policy |
 | `src/context/assembly.js` | context | `src/cognition/cognitive-state.js` | task |
 | `src/context/assembly.js` | context | `src/persistence/memory.js` | task |
 | `src/execution/claim-interception.js` | execution | `src/verification/false-completion-prevention.js` | verification |
@@ -207,7 +207,7 @@ Reclassifications made to reach 0 violations:
 | `src/evidence/evidence-freshness.js` | verification | `src/skills/engine.js` | skills |
 | `src/evidence/evidence-lineage.js` | verification | `src/skills/engine.js` | skills |
 | `src/evidence/evidence-lineage.js` | verification | `src/state/task-runs.js` | task |
-| `src/execution/execution-engine.js` | execution | `src/policy/assessment-engine.js` | preflight |
+| `src/execution/execution-engine.js` | execution | `src/policy/assessment-engine.js` | policy |
 | `src/execution/execution-engine.js` | execution | `src/cognition/cognition-store.js` | task |
 | `src/execution/execution-engine.js` | execution | `src/cognition/cognitive-state.js` | task |
 | `src/execution/execution-engine.js` | execution | `src/skills/engine.js` | skills |
@@ -219,10 +219,10 @@ Reclassifications made to reach 0 violations:
 | `src/cognition/hypothesis-manager.js` | task | `src/skills/engine.js` | skills |
 | `src/cognition/hypothesis-manager.js` | task | `src/evidence/evidence-lineage.js` | verification |
 | `src/persistence/memory.js` | task | `src/skills/engine.js` | skills |
-| `src/cognition/observation-engine.js` | task | `src/policy/assessment-engine.js` | preflight |
+| `src/cognition/observation-engine.js` | task | `src/policy/assessment-engine.js` | policy |
 | `src/execution/runtime-guards.js` | execution | `src/cognition/cognition-store.js` | task |
-| `src/execution/runtime-guards.js` | execution | `src/policy/risk-engine.js` | preflight |
-| `src/state/state-machine.js` | task | `src/policy/assessment-engine.js` | preflight |
+| `src/execution/runtime-guards.js` | execution | `src/policy/risk-engine.js` | policy |
+| `src/state/state-machine.js` | task | `src/policy/assessment-engine.js` | policy |
 | `src/state/task-dependencies.js` | task | `src/context/context-graph.js` | context |
 | `src/state/task-dependencies.js` | task | `src/skills/engine.js` | skills |
 | `src/state/task-execution.js` | task | `src/skills/engine.js` | skills |

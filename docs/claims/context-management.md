@@ -2,37 +2,75 @@
 
 ## Claim
 
-WAM reduces unnecessary context by loading only relevant information for the current task.
+WAM reconstructs task-relevant model context from task state instead of
+continuously accumulating the full conversational context.
 
-## What this means
+## Mechanism
 
-Without WAM, agents might:
-- Load entire repository context
-- Include irrelevant files
-- Waste tokens on unrelated code
+Context selection considers the information required for the current task state.
+The mechanism lives in:
 
-WAM selects context based on task type, current turn, and relevant skills.
+- `src/context/context.js` — context capsules (`.wam/capsules/`), session
+  identity (`.wam/session.json`), deterministic selection under a budget, and
+  retrieval by relevance (closed alias set, no embeddings);
+- `src/context/assembly.js` — context pack builder (levels N0/N1/N2; `context.js`
+  handles N3);
+- `src/context/context-budget-manager.js`, `src/context/context-cache.js` — budget
+  and caching.
 
-## How WAM does it
+## Primary outcome
 
-WAM's context selection considers:
-- Task state (what we know so far)
-- Current user prompt
-- Available skills
-- Repository structure
+The quantitative outcome is:
 
-It loads only the minimal context needed for the next step.
+```text
+context reduction
+=
+baseline model context
+-
+WAM model context
+```
 
-## Evidence
+This is a context measurement. It is not automatically a provider-cost
+measurement. See [Benchmark Methodology](../benchmarks/methodology.md).
 
-- Implementation: `src/context/`
-- Unit tests: `tests/unit/context-manager.test.mjs`, `tests/unit/context-assembly.test.mjs`, `tests/unit/context-budget-manager.test.mjs`
+## Benchmark evidence
 
-## Limitations
+`benchmarks/reports/rc1/metrics.json` reports two separate classes:
 
-WAM's context selection is heuristic-based. Edge cases may load too much or too little context.
+- **Internal deterministic** — `totalReductionPct: 69.6` on a snapshot harness
+  (no provider, no network);
+- **Empirical real (dry-run)** — `contextReduction: -225`,
+  `netInputSavings: -225`, i.e. WAM input exceeds baseline input under the
+  shipped dry-run configuration.
 
-## Related documentation
+The 69.6% figure is not a real-model saving. The negative dry-run result is
+reported as-is and is not combined with the deterministic figure.
 
-- [Less Guessing](less-guessing.md)
-- [Task State](task-state.md)
+## Validation
+
+The benchmark must identify:
+
+- baseline context;
+- WAM context;
+- WAM overhead;
+- measurement method;
+- scenario;
+- number of turns.
+
+## Tests
+
+- `tests/unit/context-assembly.test.mjs`
+- `tests/unit/context-budget-manager.test.mjs`
+- `tests/unit/context-minimality.test.mjs`
+- `tests/unit/context-snapshot.test.mjs`
+- `tests/unit/context-retrieval.test.mjs`
+
+**Status: Measured** (deterministic harness) and **Observed** (dry-run). The
+60% release threshold requires a reproducible benchmark that measures
+task-relevant model context with equivalent accounting on both sides; that
+remains a **Design target**.
+
+## See also
+
+- [Context Selection](../architecture/context-selection.md)
+- [Benchmark Results](../benchmarks/results.md)

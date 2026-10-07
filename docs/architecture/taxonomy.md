@@ -9,7 +9,7 @@ Source of truth for where code belongs. Derived from the 124 production modules 
 
 | Pillar | Responsibility |
 |---|---|
-| `preflight` | Decides whether/how execution may begin: assessment, diagnosis, assumptions, risk, scope, governance, pre-execution policy, authorization. |
+| `policy` | Decides whether/how execution may begin: assessment, diagnosis, assumptions, risk, scope, governance, pre-execution policy, authorization. |
 | `context` | Owns context: classification, capture, routing, assembly, budgeting, compression, freshness, sufficiency, levels N0-N3. |
 | `task` | Owns task identity and lifecycle: state, persistence, recovery, requirements, runs, cognition store, observations, hypotheses. |
 | `execution` | Owns execution control: interception, guards, safety layers, execution state, action evaluation, tool-result classification. |
@@ -26,7 +26,7 @@ runtime adapters
       ↓
 orchestration
       ↓
-pillars (preflight/context/task/execution/verification/skills)
+pillars (policy/context/task/execution/verification/skills)
       ↓
 shared
 ```

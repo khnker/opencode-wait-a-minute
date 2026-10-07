@@ -2,34 +2,55 @@
 
 ## Claim
 
-WAM prevents lost work by tracking verified progress and blocking premature completion.
+WAM maintains explicit task state so verified progress can persist across model
+interactions.
 
-## What this means
+## State
 
-Without WAM, an agent might:
-- Lose context between turns
-- Repeat work already done
-- Mark a task as done without verifying completion
+Task state represents the current lifecycle and verified knowledge required to
+determine what happens next. It is created and normalized in
+`src/state/task-state.js`, persisted under `.wam/tasks/<taskId>/` by
+`src/state/task-store.js`, and written durably (atomic write + replay) by
+`src/state/state-store.js`.
 
-WAM maintains a task state that evolves only with verified evidence.
-
-## How WAM does it
-
-WAM uses a state machine:
-- Unknown → Understanding → Asking → Implementing → Verifying → Done
-Each transition requires specific evidence.
-Completion control blocks the Done state until verification is complete.
+The authoritative lifecycle is the formal execution state machine in
+`src/execution/execution-state.js` (see
+[Task Lifecycle](../architecture/task-lifecycle.md)). Lifecycle transitions are
+centralized in `src/state/state-machine.js`.
 
 ## Evidence
 
-- Implementation: `src/state/task-state.js`, `src/state/state-machine.js`, `src/state/task-lifecycle.js`
-- Unit tests: `tests/unit/state-machine.test.mjs`, `tests/unit/decision-persistence.test.mjs`
+- task-state implementation — `src/state/task-state.js`;
+- state machine — `src/state/state-machine.js`,
+  `src/execution/execution-state.js`;
+- persistence mechanism — `src/state/state-store.js`,
+  `src/state/task-store.js`;
+- lifecycle handling — `src/state/task-lifecycle.js`,
+  `src/state/lifecycle-manager.js`.
 
-## Limitations
+## Required validation
 
-WAM's task state is specific to the OpenCode agent lifecycle. External workflows may not be tracked.
+At minimum:
 
-## Related documentation
+1. state survives a subsequent interaction;
+2. verified progress is recoverable;
+3. invalid transitions are rejected;
+4. completion requires the appropriate verification state.
 
-- [Less Guessing](less-guessing.md)
+## Tests
+
+- `src/state/lifecycle-manager.test.mjs`
+- `src/state/persistence-restart.test.mjs`
+- `src/state/replay-engine.test.mjs`
+- `tests/unit/state-machine.test.mjs`
+- `tests/unit/verification-persistence.test.mjs`
+- `tests/unit/task-runs.test.mjs`
+- `tests/unit/wam-state.test.mjs`
+- `tests/e2e/lifecycle/run.mjs`
+
+**Status: Implemented, Tested.**
+
+## See also
+
 - [Verification](verification.md)
+- [Task Isolation](task-isolation.md)

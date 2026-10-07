@@ -60,7 +60,7 @@ and the extension workflow.
 
 ### EP5 — Policy state machine
 
-- **Owner**: preflight/policy (`src/policy/policy-state-machine.js`).
+- **Owner**: policy pillar (`src/policy/policy-state-machine.js`).
 - **Input**: current policy state + event.
 - **Output**: next state or rejection.
 - **Failure**: illegal transition is rejected.

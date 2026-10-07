@@ -4,11 +4,13 @@ This document defines the strict functional boundaries and change envelope for *
 
 ## IN SCOPE (RC1 Release Envelope)
 
-1. **Core Pre-flight & Classification**
+1. **Core Policy & Classification**
    - Prompt interception and risk/impact assessment.
    - Classification rules (Global, Project, Task, Requirement, Action, Session, Turn).
 2. **Task Lifecycle & State Management**
-   - States: `PROPOSED` → `IMPLEMENTING` → `VERIFYING` → `DONE`.
+   - States: `INITIALIZING` → `INVESTIGATING` → `EXECUTING` → `VERIFYING` →
+     `COMPLETED` (legacy RC1 phases `PROPOSED`/`IMPLEMENTING`/`DONE` map onto
+     these via `migrateLegacyPhase`).
    - Persistence and recovery in `.wam/`.
    - Task isolation across sessions and projects.
 3. **Assumptions & Completion Contracts**
