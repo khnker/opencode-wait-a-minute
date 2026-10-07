@@ -30,8 +30,8 @@ WAM separates **persistent task state** from **transient model context**.
 | | Persistent | Transient |
 |---|---|---|
 | **Where it lives** | WAM state store | Model context window |
-| **Lives across** | Tasks, sessions, resumes | Single decision |
-| **What it holds** | Everything the task needs | Only what's relevant *now* |
+| **Lives across** | Model turns; recoverable across sessions/resumes | Single decision |
+| **What it holds** | Task state, requirements, evidence, decisions and recovery information | Only what's relevant *now* |
 
 > **Context is derived from task state, not accumulated from conversation
 > history.**
@@ -68,6 +68,45 @@ while only a small part of that information is relevant to its next decision.
 WAM maintains the broader task state and reconstructs the context needed for the
 current state. That allows the system to preserve knowledge without continuously
 sending all of that knowledge back to the model.
+
+WAM can reduce task-relevant model input by reconstructing only the context
+required for the current decision. Quantitative results and methodology live in
+[docs/benchmarks](docs/benchmarks).
+
+---
+
+## What WAM actually changes
+
+| Without WAM | With WAM |
+|-------------|----------|
+| Conversation is the main continuity mechanism | Task state is persisted explicitly |
+| Context tends to accumulate | Context is reconstructed |
+| Skills may be broadly available | Skills are routed to the task |
+| Completion can rely on model judgment | Completion is tied to verification state |
+| Next action comes from conversation | Next action is derived from task state + evidence |
+| Context boundaries are implicit | Tasks have explicit state boundaries |
+
+---
+
+## How WAM works
+
+On each prompt, WAM classifies the request, persists task state, reconstructs
+context, and gates completion on verification. Policy, uncertainty, and risk
+gate the decision; execution guards gate actions; completion follows from
+verified state rather than model judgment.
+
+```mermaid
+flowchart TD
+    R[User Request] --> T[Task / State]
+    T --> P[Policy + Uncertainty + Risk]
+    P --> C[Context + Skills]
+    C --> M[Model Decision]
+    M --> G[Execution Guard]
+    G --> O[Observation]
+    O --> E[Evidence]
+    E --> V[Verified State]
+    V --> N[Next Action]
+```
 
 ---
 
@@ -168,8 +207,34 @@ npm install wait-a-minute
 # }
 ```
 
-WAM intercepts prompts before skill resolution and agent execution. No
-configuration required for basic use — it just works.
+WAM intercepts prompts before skill resolution and agent execution. It
+integrates with OpenCode through its plugin interface and applies its control
+and state-management flow automatically once installed.
+
+---
+
+## Validation
+
+WAM's claims are independently documented and validated through:
+
+- deterministic behavioral fixtures;
+- state reconstruction tests;
+- task-isolation tests;
+- context-selection tests;
+- skill-routing tests;
+- verification/completion tests;
+- paired baseline/WAM benchmark runs.
+
+See [docs/validation/premise.md](docs/validation/premise.md),
+[docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md), and
+[docs/claims](docs/claims).
+
+---
+
+## Benchmarks & evidence
+
+Quantitative results and methodology live in
+[docs/benchmarks](docs/benchmarks) and [benchmarks](benchmarks).
 
 ---
 
@@ -180,7 +245,26 @@ configuration required for basic use — it just works.
 | Architecture | [docs/architecture](docs/architecture) |
 | Concepts | [docs/concepts](docs/concepts) |
 | Claims | [docs/claims](docs/claims) |
-| Benchmarks | [benchmarks](benchmarks) |
+| Validation | [docs/validation](docs/validation) |
+| Benchmarks | [docs/benchmarks](docs/benchmarks) |
+| Development | [docs/development](docs/development) |
+
+---
+
+## Development & testing
+
+```bash
+npm test                  # full suite (scripts/run-tests.mjs)
+npm run test:validation   # validation tests (benchmarks/validation)
+npm run test:isolation    # task-isolation tests
+npm run test:e2e:opencode # OpenCode end-to-end smoke
+npm run benchmark         # dry-run benchmark
+npm run benchmark:real    # real provider run
+npm run gate              # release gate
+```
+
+See [docs/development/testing.md](docs/development/testing.md) and
+[docs/development/contributing.md](docs/development/contributing.md).
 
 ---
 
