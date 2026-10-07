@@ -2,6 +2,7 @@ import { analyze, getTaskState, persistTaskState, routeSkillsV2, loadSkillOnDema
 import { startExperiment, noteSuccess, noteFailure } from "./src/execution/execution-engine.js";
 import { migrateLegacyCognition } from "./src/cognition/cognition-store.js";
 import { handleMessage } from "./src/integration/message-handler.js";
+import { injectWamParts } from "./src/integration/part-provenance.js";
 
 import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
 import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules } from "./src/context/context.js";
@@ -161,15 +162,10 @@ function emitTextPart(output, text, meta = {}) {
     id: genPartId(),
     type: "text",
     text,
-    synthetic: true,
     ...(meta.sessionID ? { sessionID: meta.sessionID } : {}),
     ...(meta.messageID ? { messageID: meta.messageID } : {}),
   };
-  if (Array.isArray(output.parts)) {
-    output.parts.unshift(part);
-  } else if (output.system) {
-    output.system.unshift(part);
-  }
+  injectWamParts(output, [part], { messageID: meta.messageID, phase: "emit", idFactory: genPartId, position: "prepend" });
 }
 
 // -- v1-enforcement: estado durable, contrato y progreso --------
@@ -360,19 +356,6 @@ function projectState(analysis) {
   };
 }
 
-function extractPrompt(input, output) {
-  const srcParts = output?.parts?.length
-    ? output.parts
-    : input?.message?.parts || output?.message?.parts || input?.parts;
-  if (srcParts && srcParts.length > 0) {
-    const textPart = srcParts.find(
-      (p) => p.type === "text" && typeof p.text === "string"
-    );
-    return textPart?.text || "";
-  }
-  if (input?.text && typeof input.text === "string") return input.text;
-  return "";
-}
 
 function applyCompletionGate(state, promptText, taskId, waitAMinute, persistTaskState, nextActionFrom, root) {
   const gate = waitAMinute.evaluateCompletionGate(state, promptText);
@@ -588,6 +571,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
   // consultamos vía client.session.get para no depender del cwd del proceso.
   const sessionRoots = new Map();
   const sessionParents = new Map(); // sessionID → parentID (subagentes Task tienen parent)
+  const processedMessages = new Map(); // messageID+kind → processed (chat.message idempotency)
   const sessionTasks = new Map(); // sessionID → taskId activo visto en chat.message
   const client = pluginInput?.client;
 
@@ -643,6 +627,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
         effectiveTaskId,
         genPartId,
         emitTextPart,
+        processedMessages,
         readActiveTaskIdFresh,
         writeActiveTaskId,
         waitAMinute,

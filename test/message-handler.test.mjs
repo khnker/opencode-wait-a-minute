@@ -128,10 +128,10 @@ test("extractPrompt: lee prompt desde input.message.parts (formato 1.18.25)", ()
   assert.equal(extractPrompt(input, output), "hola mundo");
 });
 
-test("extractPrompt: lee prompt desde output.parts si tiene contenido", () => {
+test("extractPrompt: ignora output.parts y usa input.message.parts", () => {
   const input = { message: { parts: [{ type: "text", text: "viejo" }] } };
   const output = { parts: [{ type: "text", text: "nuevo" }] };
-  assert.equal(extractPrompt(input, output), "nuevo");
+  assert.equal(extractPrompt(input, output), "viejo");
 });
 
 test("extractPrompt: fallback a input.parts (API legacy)", () => {

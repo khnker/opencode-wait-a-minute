@@ -15,6 +15,47 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { hasWamMarkerFor, isWamSynthetic } from "./part-provenance.js";
+
+// Idempotency guard: a chat.message invocation must be processed at most once
+// per message id + kind. The store is normally owned by the plugin instance
+// (deps.processedMessages); the module-level fallback keeps direct callers and
+// tests working. Bounded so a long session cannot grow unbounded.
+const PROCESSED_MESSAGE_LIMIT = 1000;
+const fallbackProcessedMessages = new Map();
+
+function markProcessed(key, store = fallbackProcessedMessages) {
+  store.set(key, true);
+  if (store.size > PROCESSED_MESSAGE_LIMIT) {
+    const oldest = store.keys().next().value;
+    if (oldest !== undefined) store.delete(oldest);
+  }
+}
+
+export function _resetProcessedMessages(store = fallbackProcessedMessages) {
+  store.clear();
+}
+
+/**
+ * Pure predicate: true when this message was already handled by WAM.
+ * Serves as the runtime guard and as a testable unit.
+ *
+ * @param {Object} input
+ * @param {Object} output
+ * @param {Map} [store]
+ * @returns {boolean}
+ */
+export function isMessageAlreadyProcessed(input, output, store = fallbackProcessedMessages) {
+  const messageId = input?.messageID || output?.message?.id || input?.message?.id || null;
+  if (!messageId) return false;
+  const key = `${messageId}:${input?.tool ? "tool" : "prompt"}`;
+  return (
+    store.has(key) ||
+    hasWamMarkerFor(output?.parts, messageId) ||
+    hasWamMarkerFor(input?.message?.parts, messageId)
+  );
+}
+
 // Generic/new task ids must never be treated as explicit task identity.
 // Kept in sync with index.js GENERIC_TASK.
 const GENERIC_TASK = /^(default-task|task|general|)$/;
@@ -42,6 +83,7 @@ const ASKING_CMD_RE = /^(answer|resolve|contract|progress|task|skills|assumption
  * @property {Function} ensureWamMemory
  * @property {Function} effectiveTaskId
  * @property {Function} genPartId
+ * @property {Map}      [processedMessages]
  * @property {Function} emitTextPart
  * @property {Function} readActiveTaskIdFresh
  * @property {Function} writeActiveTaskId
@@ -132,6 +174,17 @@ export async function handleMessage(input, output, deps) {
 
   try {
     if (bypassed) return;
+
+    // Idempotency: never process the same message twice. WAM injects synthetic
+    // parts into `output`; without this guard a re-invocation (retry/replay)
+    // would read its own injection as a fresh prompt and loop indefinitely.
+    const processedStore = deps.processedMessages || fallbackProcessedMessages;
+    if (isMessageAlreadyProcessed(input, output, processedStore)) return;
+    {
+      const messageId = input?.messageID || output?.message?.id || input?.message?.id || null;
+      if (messageId) markProcessed(`${messageId}:${input?.tool ? "tool" : "prompt"}`, processedStore);
+    }
+
     const promptText = extractPrompt(input, output);
     if (!promptText.trim()) return;
 
@@ -543,12 +596,13 @@ export async function handleMessage(input, output, deps) {
  * @returns {string}
  */
 export function extractPrompt(input, output) {
-  const srcParts = output?.parts?.length
-    ? output.parts
-    : input?.message?.parts || output?.message?.parts || input?.parts;
-  if (srcParts && srcParts.length > 0) {
+  // Read ONLY from the user's own message. Never from `output.parts`:
+  // WAM writes synthetic injections there, so reading them back is the
+  // self-consumption bug that caused the re-entrancy loop.
+  const srcParts = input?.message?.parts || input?.parts || [];
+  if (srcParts.length > 0) {
     const textPart = srcParts.find(
-      (p) => p.type === "text" && typeof p.text === "string",
+      (p) => p.type === "text" && typeof p.text === "string" && !isWamSynthetic(p),
     );
     return textPart?.text || "";
   }
