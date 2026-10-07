@@ -23,6 +23,29 @@ evidence, and verified state to determine what should happen next.
 
 ---
 
+## Quick start
+
+Install the plugin and enable it in OpenCode. No further configuration is required.
+
+```bash
+npm install wait-a-minute
+```
+
+```jsonc
+// opencode.jsonc
+{
+  "plugins": ["wait-a-minute"]
+}
+```
+
+WAM intercepts prompts before skill resolution and agent execution. Once
+installed, its control and state-management flow applies automatically.
+
+**Requirements:** Node `>=20` · OpenCode `>=1.18.0` — tested on Ubuntu 24.04,
+Node 24.16.0, OpenCode 1.18.33 ([docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md)).
+
+---
+
 ## The core idea
 
 WAM separates **persistent task state** from **transient model context**.
@@ -194,25 +217,6 @@ With evidence, the next action follows from verified state, not from guessing.
 
 ---
 
-## Quick start
-
-```bash
-# Install
-npm install wait-a-minute
-
-# Configure OpenCode
-# Add to your opencode.jsonc:
-# {
-#   "plugins": ["wait-a-minute"]
-# }
-```
-
-WAM intercepts prompts before skill resolution and agent execution. It
-integrates with OpenCode through its plugin interface and applies its control
-and state-management flow automatically once installed.
-
----
-
 ## Validation
 
 WAM's claims are independently documented and validated through:
@@ -233,8 +237,47 @@ See [docs/validation/premise.md](docs/validation/premise.md),
 
 ## Benchmarks & evidence
 
-Quantitative results and methodology live in
-[docs/benchmarks](docs/benchmarks) and [benchmarks](benchmarks).
+WAM reports **three evidence classes separately** — they are never merged into a
+single number. Reproduce the committed bundle with `npm run report:rc1` (writes
+`benchmarks/reports/rc1/`).
+
+### A. Internal deterministic (no network)
+
+Source: `benchmarks/run-validation.mjs`
+
+| Metric | Result |
+|--------|--------|
+| Snapshot correctness | 10 / 10 passed |
+| Fast-path count | 34 |
+| Context rebuilds | 8 (5 full · 3 partial) |
+| Deterministic accounting | 8 scenarios · 42 turns · **69.6% total reduction** |
+
+### B. Empirical real (dry-run · mock provider · no network)
+
+Source: `benchmarks/run-real.mjs` (`runDryRun`)
+
+| Metric | Result |
+|--------|--------|
+| Input tokens — baseline | 195 |
+| Input tokens — WAM | 420 |
+| Rebuilds | 30 |
+| State equivalent | true |
+| Net input savings | **-225** |
+
+> The two sections measure different things on different harnesses: the internal
+> deterministic suite shows a **69.6%** reduction, while the dry-run mock
+> provider shows WAM overhead exceeding baseline (**net savings -225**). They do
+> not contradict each other, and **no single net-savings number is claimed**.
+> `outcomeMatch` (0 / 30) compares stochastic text and is not a correctness
+> signal.
+
+### C. External evidence
+
+Source: `benchmarks/evidence/sources.json` — 6 sources (2 provider · 2 academic ·
+2 open-source). Provider-side cache savings are reported separately from WAM's
+internal metrics.
+
+Full methodology: [docs/benchmarks/RC1.md](docs/benchmarks/RC1.md) · bundle: [benchmarks/reports/rc1](benchmarks/reports/rc1).
 
 ---
 
@@ -260,6 +303,7 @@ npm run test:isolation    # task-isolation tests
 npm run test:e2e:opencode # OpenCode end-to-end smoke
 npm run benchmark         # dry-run benchmark
 npm run benchmark:real    # real provider run
+npm run report:rc1         # RC1 evidence report
 npm run gate              # release gate
 ```
 
