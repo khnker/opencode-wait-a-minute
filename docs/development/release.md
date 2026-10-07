@@ -41,10 +41,11 @@ Before the first publish, configure an npm Automation token for the package:
 1. Go to **[npmjs.com/package/wait-a-minute → Settings → Access Tokens → Create token](https://www.npmjs.com/settings/khnker/tokens/new)**
 2. Call it something like "gh-release" and assign full access.
 3. Go to **Settings → Secrets and variables → Actions → New repository secret**
-4. Name: `NPM_TOKEN`
+4. Name: `NPM_SECRET`
 5. Value: the token string you just created.
 
-The workflow will read `$NPM_TOKEN` and write it to npm config (`npm config set
+The workflow will read `$NPM_TOKEN` (populated from the `NPM_SECRET` secret) and
+write it to npm config (`npm config set
 //registry.npmjs.org/:_authToken "${NPM_TOKEN}"`). No long-lived credentials are
 stored in code; they are only needed once.
 

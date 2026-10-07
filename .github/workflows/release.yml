@@ -23,6 +23,7 @@ concurrency:
 
 env:
   PACKAGE_NAME: wait-a-minute
+  NPM_TOKEN: ${{ secrets.NPM_SECRET }}
 
 jobs:
   release:
