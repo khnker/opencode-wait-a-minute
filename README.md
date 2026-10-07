@@ -1,3 +1,5 @@
+<img src="assets/logo.svg" alt="Wait a Minute" width="480">
+
 # Wait a Minute
 
 > **WAM keeps more state than it sends.**
