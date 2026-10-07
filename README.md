@@ -7,9 +7,9 @@
 
 <div align="center">
 
-[![npm](https://img.shields.io/npm/v/wait-a-minute.svg)](https://www.npmjs.com/package/wait-a-minute)
-[![node](https://img.shields.io/node/wait-a-minute.svg)](https://nodejs.org/)
-[![license](https://img.shields.io/github/license/khnker/wait-a-minute-plugin.svg)](./LICENSE)
+[![npm](https://img.shields.io/badge/npm-local-1.1.0-007acc)](https://nodejs.org/)
+[![node](https://img.shields.io/badge/node->=20-339933)](https://nodejs.org/)
+[![license](https://img.shields.io/badge/license-MIT-007acc)](./LICENSE)
 
 </div>
 
