@@ -18,7 +18,8 @@ assert.strictEqual(result.items[0].id, '1');
 assert.strictEqual(result.items[0].isPromoted, true);
 
 // Test provenance
-assert.ok(result.provenance.timestamp <= now);
+assert.ok(typeof result.provenance.timestamp === 'number');
+assert.ok(result.provenance.timestamp <= Date.now());
 assert.strictEqual(result.provenance.method, 'build');
 
 console.log("context-builder.test.mjs passed");

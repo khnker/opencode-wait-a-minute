@@ -18,6 +18,38 @@ import { normalizeStateFile, validateStateFile } from "../src/state/task-state-f
 const ROOT = process.cwd();
 const STATE_PATH = path.join(ROOT, ".wam", "task-state.json");
 
+// Hermetic fixture: `.wam/` is gitignored, so a clean checkout (e.g. CI) has no
+// state file. Seed a minimal valid state and remove it on exit if we created it,
+// so these tests never depend on developer-local state.
+if (!fs.existsSync(STATE_PATH)) {
+  fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
+  fs.writeFileSync(
+    STATE_PATH,
+    JSON.stringify(
+      {
+        version: "1",
+        tasks: Object.fromEntries(
+          ["TASK-06", "TASK-07", "TASK-08", "TASK-09"].map((id) => [
+            id,
+            { id, status: "PENDING", createdAt: "2026-10-06T13:00:00.000Z" },
+          ]),
+        ),
+      },
+      null,
+      2,
+    ),
+  );
+  process.on("exit", () => {
+    const dir = path.dirname(STATE_PATH);
+    try {
+      if (fs.existsSync(dir)) fs.chmodSync(dir, 0o755);
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // best-effort cleanup; never mask test results
+    }
+  });
+}
+
 function backupState() {
   const backupPath = STATE_PATH + ".backup";
   if (fs.existsSync(STATE_PATH)) {
