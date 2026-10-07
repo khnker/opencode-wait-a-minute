@@ -432,6 +432,13 @@ const DEFAULT_SCORING_WEIGHTS = {
   domain: 1,
 };
 
+// Base skills (loadStrategy: "base") bypass scoring and are always selected
+// First level of guarantee: they appear even if the prompt doesn’t match anything.
+const BASE_SKILL_DEFAULTS = {
+  writing_for_agents: { "loadStrategy": "base" },
+  codebase_design: { "loadStrategy": "base" },
+};
+
 /**
  * Asegura la estructura del corpus local .wam/skills/
  */
@@ -720,12 +727,32 @@ export function routeSkillsV2(prompt, projectInfo, registry, mode, options = {})
   const lower = prompt.toLowerCase();
   const candidates = [];
   const rejected = [];
+  const baseSkills = []; // always-selected skills (loadStrategy: "base")
 
   for (const [id, skill] of Object.entries(registry)) {
     if (!APPROVED_STATUSES.includes(skill.status)) {
       rejected.push({ name: skill.name || id, reason: `estado ${skill.status} — requiere approval` });
       continue;
     }
+
+    // Base skills bypass scoring: always included, even if no prompt match
+    if (skill.loadStrategy === "base") {
+      baseSkills.push({
+        id,
+        name: skill.name || id,
+        score: 0,
+        matchingKeywords: [],
+        matchingCapabilities: [],
+        risk: skill.risk,
+        source: skill.source?.id || "local",
+        base: true,
+      });
+      tracer.logSelectionDecision(id, 0, {
+        reason: `Skill base (loadStrategy: "base") — siempre seleccionada`
+      });
+      continue;
+    }
+
     const score = scoreSkill(skill, lower, options.weights);
     if (score > 0) {
       candidates.push({
@@ -742,13 +769,16 @@ export function routeSkillsV2(prompt, projectInfo, registry, mode, options = {})
 
 candidates.sort((a, b) => b.score - a.score);
    const limit = rigor === "MINIMAL" ? 0 : rigor === "RIGOROUS" ? 5 : 3;
-   const selected = candidates.slice(0, limit);
-   const overflow = candidates.slice(limit);
+   // Base skills always selected; on-demand candidates fill remaining slots
+   const selected = [...baseSkills, ...candidates.slice(0, limit)];
+   const overflow = candidates.slice(Math.max(0, limit - baseSkills.length));
 
    // Log selection decisions
    selected.forEach(skill => {
      tracer.logSelectionDecision(skill.id, skill.score, {
-       reason: `Seleccionado por score ${skill.score} y keywords: ${skill.matchingKeywords.join(', ')}`
+       reason: skill.base
+         ? `Skill base (loadStrategy: "base") — siempre seleccionada`
+         : `Seleccionado por score ${skill.score} y keywords: ${skill.matchingKeywords.join(', ')}`
      });
    });
 
@@ -770,19 +800,22 @@ candidates.sort((a, b) => b.score - a.score);
       id: c.id,
       name: c.name,
       relevance: c.score,
-      reason: `score ${c.score} (${c.matchingCapabilities.join(",") || c.matchingKeywords.join(",")})`,
+      reason: c.base
+        ? `Skill base (loadStrategy: "base")`
+        : `score ${c.score} (${c.matchingCapabilities.join(",") || c.matchingKeywords.join(",")})`,
       capabilities: c.matchingCapabilities,
       keywords: c.matchingKeywords,
       risk: c.risk,
       source: c.source,
       hasContent: !!(registry[c.id]?.content || "").trim(),
       loaded: !!(registry[c.id]?.content || "").trim(),
+      base: !!c.base,
     })),
     rejected: rejected.map((r) => r.name),
     exceeded: overflow.map((c) => c.name),
-    counts: { selected: selected.length, limit, total: candidates.length },
+    counts: { selected: selected.length, limit, total: candidates.length, base: baseSkills.length },
     explain: () =>
-      selected.map((c) => `  ${c.name}: score ${c.score} | caps: ${c.matchingCapabilities.join(",") || "-"} | kw: ${c.matchingKeywords.join(",") || "-"} | risk: ${c.risk} | src: ${c.source}`).join("\n"),
+      selected.map((c) => `  ${c.name}: score ${c.score} | caps: ${c.matchingCapabilities.join(",") || "-"} | kw: ${c.matchingKeywords.join(",") || "-"} | risk: ${c.risk} | src: ${c.source}${c.base ? " | BASE" : ""}`).join("\n"),
   };
 }
 
@@ -816,6 +849,15 @@ function buildSkillRegistry(availableSkills) {
     "bailian-gen": { capabilities: ["ai", "bailian", "generation"], triggers: ["generar", "imagen", "video", "tts", "bailian"], risk: "low" },
     "bailian-managed-agent": { capabilities: ["ai", "bailian", "agent"], triggers: ["agent", "bailian", "managed-agent"], risk: "low" },
     "bailian-protocol": { capabilities: ["ai", "bailian", "protocol"], triggers: ["bailian", "protocol"], risk: "low" },
+    // mattpocock/skills — MIT licensed, vendored into skills/
+    "writing-for-agents": { capabilities: ["context", "prompt", "agent"], triggers: ["escribir skill", "editar skill", "AGENTS.md", "CLAUDE.md", "writing for agents"], risk: "low", loadStrategy: "base" },
+    "codebase-design": { capabilities: ["architecture", "deep-module"], triggers: ["deep module", "arquitectura de modulo", "seam", "testable", "interface"], risk: "low", loadStrategy: "base" },
+    "diagnosing-bugs": { capabilities: ["debug", "diagnosis"], triggers: ["debug", "diagnose", "broken", "throwing", "failing", "slow", "regression"], risk: "high" },
+    "tdd": { capabilities: ["test", "tdd"], triggers: ["test", "TDD", "test-first", "red-green-refactor", "integration test"], risk: "low" },
+    "handoff": { capabilities: ["context", "handoff"], triggers: ["handoff", "hand-off", "continuar despues", "next agent", "pasar la pelota"], risk: "low" },
+    "wizard": { capabilities: ["setup", "infra", "credentials"], triggers: ["setup", "configurar", "credenciales", "one-shot", "migracion", "cutover"], risk: "medium" },
+    "prototype": { capabilities: ["design", "ui", "state"], triggers: ["prototype", "sanity-check", "state model", "validar disenio"], risk: "medium" },
+    "improve-codebase-architecture": { capabilities: ["architecture", "deepening"], triggers: ["deepening", "arquitectura", "scan", "friction", "AI-navigable"], risk: "medium" },
   };
 
   for (const [name, info] of Object.entries(availableSkills || {})) {
@@ -824,16 +866,18 @@ function buildSkillRegistry(availableSkills) {
       triggers: [],
       risk: "low",
     };
-    // Extension contract: an entry MAY carry explicit routing metadata under
-    // `metadata`. Injected metadata wins over builtins so a new capability can
-    // be registered without editing this module. Entries without `metadata`
-    // behave exactly as before.
-    const ext = info?.metadata || {};
-    const meta = {
-      capabilities: ext.capabilities ?? base.capabilities,
-      triggers: ext.triggers ?? base.triggers,
-      risk: ext.risk ?? base.risk,
-    };
+      // Extension contract: an entry MAY carry explicit routing metadata under
+      // `metadata`. Injected metadata wins over builtins so a new capability can
+      // be registered without editing this module. Entries without `metadata`
+      // behave exactly as before.
+      const ext = info?.metadata || {};
+      const baseLoad = base.loadStrategy ?? "ondemand";
+      const meta = {
+        capabilities: ext.capabilities ?? base.capabilities,
+        triggers: ext.triggers ?? base.triggers,
+        risk: ext.risk ?? base.risk,
+        loadStrategy: ext.loadStrategy ?? baseLoad,
+      };
     // Skills locales ya presentes -> marcadas APPROVED (confianza local)
     registry[name] = {
       id: name,
@@ -842,6 +886,7 @@ function buildSkillRegistry(availableSkills) {
       capabilities: meta.capabilities,
       triggers: meta.triggers,
       risk: meta.risk,
+      loadStrategy: meta.loadStrategy,
       compatibility: { opencode: true },
       status: "APPROVED",
       cache: false,

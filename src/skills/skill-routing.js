@@ -65,6 +65,55 @@ const DEFAULT_CONSTRAINTS = {
     conflicts: [],
     reason: "Governance skill, can review any layer",
   },
+  // mattpocock/skills — MIT licensed, vendored into skills/
+  "writing-for-agents": {
+    allowedLayers: ["shared"],
+    dependsOn: [],
+    conflicts: [],
+    reason: "Meta-skill for writing agent documents and skills",
+  },
+  "codebase-design": {
+    allowedLayers: ["shared"],
+    dependsOn: [],
+    conflicts: [],
+    reason: "Deep module design vocabulary",
+  },
+  "diagnosing-bugs": {
+    allowedLayers: ["shared"],
+    dependsOn: [],
+    conflicts: [],
+    reason: "Bug diagnosis loop for hard bugs",
+  },
+  "tdd": {
+    allowedLayers: ["shared"],
+    dependsOn: [],
+    conflicts: [],
+    reason: "Test-driven development (TDD) reference",
+  },
+  "handoff": {
+    allowedLayers: ["shared"],
+    dependsOn: [],
+    conflicts: [],
+    reason: "Compact conversation for agent handoff",
+  },
+  "wizard": {
+    allowedLayers: ["shared"],
+    dependsOn: [],
+    conflicts: [],
+    reason: "Interactive bash wizard for manual tasks",
+  },
+  "prototype": {
+    allowedLayers: ["shared"],
+    dependsOn: [],
+    conflicts: [],
+    reason: "Throwaway prototype for design questions",
+  },
+  "improve-codebase-architecture": {
+    allowedLayers: ["shared"],
+    dependsOn: [],
+    conflicts: [],
+    reason: "Scan for deepening opportunities in architecture",
+  },
 };
 
 /**
