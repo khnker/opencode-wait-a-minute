@@ -51,11 +51,11 @@ test("breaker: closes on success after failures", async () => {
 });
 
 test("breaker: half-open transitions to open on probe failure", async () => {
-  const cb = createCircuitBreaker({ threshold: 1, timeout: 1 });
+  const cb = createCircuitBreaker({ threshold: 1, timeout: 100 });
   await assert.rejects(() => cb.execute(async () => { throw new Error("x"); }));
   assert.equal(cb.getState(), "open");
   // wait past timeout
-  await new Promise((r) => setTimeout(r, 10));
+  await new Promise((r) => setTimeout(r, 150));
   assert.equal(cb.getState(), "half-open");
   await assert.rejects(() => cb.execute(async () => { throw new Error("x"); }));
   assert.equal(cb.getState(), "open");
