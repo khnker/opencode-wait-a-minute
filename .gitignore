@@ -18,6 +18,7 @@ node_modules/
 
 # Generated benchmark evidence (not source)
 /benchmarks/results/
+/benchmarks/validation/audit.json
 
 # Local benchmark secrets/credentials
 .env
