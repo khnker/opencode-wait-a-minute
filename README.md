@@ -188,4 +188,4 @@ configuration required for basic use — it just works.
 
 | License | Copyright |
 |---------|-----------|
-| [MIT](./LICENSE) | © 2026 Nicolas Khnker |
+| [MIT](./LICENSE) | © 2026 khnker |
