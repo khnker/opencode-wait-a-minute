@@ -15,9 +15,9 @@ Compatibility claims must be precise and testable, not implied by a single insta
 Compatibility is explicitly documented and exercised by the E2E fixture.
 
 ## Validation
-- [ ] Matrix documented.
-- [ ] Fixture/config drives E2E.
-- [ ] Unsupported versions fail fast.
+- [x] Matrix documented.
+- [x] Fixture/config drives E2E.
+- [x] Unsupported versions fail fast.
 
 ## Program
 - RC1 item: RC1-14 (D)

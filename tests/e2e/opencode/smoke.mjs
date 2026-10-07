@@ -36,11 +36,26 @@ import {
   readdirSync,
   rmSync,
   writeFileSync,
+  readFileSync,
 } from "node:fs";
+
+// Compatibility fail-fast check
+const matrixConfig = JSON.parse(readFileSync(new URL("./matrix-config.json", import.meta.url), "utf8"));
+if (process.versions.node < matrixConfig.minNode) {
+  console.error(`Incompatible Node version: ${process.versions.node}. Required: >=${matrixConfig.minNode}`);
+  process.exit(1);
+}
+import {
+  assertSupportedNode,
+} from "./compatibility-matrix.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "../../..");
+
+// Fail fast on an unsupported Node runtime. The supported range lives in the
+// machine-readable matrix (compatibility-matrix.mjs), never in this file.
+assertSupportedNode(process.versions.node);
 
 const START_TIMEOUT_MS = 60000; // 60s for opencode to start and load plugin
 const EVENT_TIMEOUT_MS = 30000; // 30s to observe a plugin event

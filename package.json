@@ -34,6 +34,7 @@
     "verify:package": "node scripts/verify-package.mjs",
     "verify:version": "node scripts/verify-version-parity.mjs",
     "verify:security": "node scripts/verify-security.mjs",
+    "verify:compat": "node scripts/check-compatibility.mjs",
     "verify:published": "node scripts/verify-published-package.mjs",
     "smoke": "node -e \"import('./index.js').then(m => console.log('WAM plugin loaded successfully'))\"",
     "test": "node scripts/run-tests.mjs",
