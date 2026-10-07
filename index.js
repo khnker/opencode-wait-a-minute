@@ -17,7 +17,6 @@ import fs from "node:fs";
 import path from "node:path";
 
 const sessionExecutions = new Map();
-export { sessionExecutions };
 
 const SAFE_READ_TOOLS = new Set(["read", "read_file", "list_directory", "list_files", "get_file"]);
 

@@ -17,6 +17,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import pluginDefault from "../../index.js";
+import * as pluginNamespace from "../../index.js";
 import { updateProjectMemo } from "../../src/persistence/memory.js";
 import { getTaskState } from "../../src/skills/engine.js";
 import { routeSkillsV2 } from "../../src/skills/engine.js";
@@ -26,6 +27,18 @@ process.chdir(fs.mkdtempSync(path.join(os.tmpdir(), "wam-pl-iso-")));
 
 test("default export es una función (Plugin factory)", () => {
   assert.equal(typeof pluginDefault, "function");
+});
+
+test("module namespace expone solo funciones (contrato del loader legacy de opencode)", () => {
+  const entries = Object.entries(pluginNamespace);
+  assert.ok(entries.length > 0, "debe existir al menos el default export");
+  for (const [name, value] of entries) {
+    assert.equal(
+      typeof value,
+      "function",
+      `export "${name}" debe ser función; opencode lanza "Plugin export is not a function" con exports no-funcionales`,
+    );
+  }
 });
 
 test("factory retorna objeto de hooks (no usa ctx.on / ctx.system / ctx.command)", async () => {
