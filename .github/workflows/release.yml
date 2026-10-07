@@ -15,7 +15,6 @@ on:
         default: ""
 
 permissions:
-  id-token: write
   contents: read
 
 concurrency:
@@ -38,12 +37,12 @@ jobs:
           cache: "npm"
           registry-url: "https://registry.npmjs.org"
 
-      # Trusted Publishing (OIDC) requires npm >= 11.5.1; Node 20 ships npm 10.
-      - name: Upgrade npm for Trusted Publishing
-        run: npm install -g npm@latest
-
-      - name: Install dependencies
-        run: npm ci
+      # Configure npm with the Automation token so that `npm publish`
+      # works on Node 20 (npm 10.x) which does not support Trusted Publishing/OIDC.
+      - name: Configure npm with NPM_TOKEN
+        run: |
+          npm config set //registry.npmjs.org/:_authToken "${NPM_TOKEN}"
+          npm whoami
 
       # OpenCode Smoke E2E is skipped on GitHub Actions (no configured provider);
       # the release gate enforces it only where a real provider is available.
@@ -81,8 +80,8 @@ jobs:
       - name: Sync package.json version to the release version
         run: npm version "${VERSION}" --no-git-tag-version --allow-same-version
 
-      - name: Publish to npm (Trusted Publishing / OIDC)
-        run: npm publish --provenance --access public --tag "${DIST_TAG}"
+      - name: Publish to npm (Automation token)
+        run: npm publish --access public --tag "${DIST_TAG}"
 
       - name: Wait for registry to serve the published version
         run: |

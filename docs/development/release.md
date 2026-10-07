@@ -31,20 +31,22 @@ Publishing is automated by [`.github/workflows/release.yml`](../../.github/workf
 - **Dist-tag:** selected automatically — prereleases (any `-` suffix) publish under
   `next`; stable versions publish under `latest`. Override with the `dist_tag`
   input on a manual run.
-- **Auth:** npm Trusted Publishing (OIDC) with provenance — no long-lived token.
+- **Auth:** npm Automation token (`NPM_TOKEN`) set as a repository secret and
+  injected into npm config via `npm config set`.
 
 ### One-time npm setup
 
-Before the first publish, configure Trusted Publishing for the package on
-npmjs.com:
+Before the first publish, configure an npm Automation token for the package:
 
-1. Package → **Settings** → **Trusted Publisher** → **GitHub Actions**
-2. Organization/user: `khnker`
-3. Repository: `wait-a-minute-plugin`
-4. Workflow filename: `release.yml`
+1. Go to **[npmjs.com/package/wait-a-minute → Settings → Access Tokens → Create token](https://www.npmjs.com/settings/khnker/tokens/new)**
+2. Call it something like "gh-release" and assign full access.
+3. Go to **Settings → Secrets and variables → Actions → New repository secret**
+4. Name: `NPM_TOKEN`
+5. Value: the token string you just created.
 
-Alternatively, add an `NPM_TOKEN` repository secret (npm Automation token) and
-set `NODE_AUTH_TOKEN` on the publish step.
+The workflow will read `$NPM_TOKEN` and write it to npm config (`npm config set
+//registry.npmjs.org/:_authToken "${NPM_TOKEN}"`). No long-lived credentials are
+stored in code; they are only needed once.
 
 ## Release steps
 
