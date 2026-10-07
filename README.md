@@ -1,4 +1,9 @@
-<img src="assets/logo.svg" alt="Wait a Minute" width="480">
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/logo.svg" alt="Wait a Minute" width="280">
+  </picture>
+</p>
 
 # Wait a Minute
 
