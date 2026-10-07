@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "gate": "node scripts/release-gate.mjs",
-    "rc1": "node scripts/rc1-gate.mjs",
+    "rc1": "node scripts/release-gate.mjs",
     "docs:check": "node scripts/docs-check.mjs",
     "validate": "node scripts/release-gate.mjs",
     "production:gate": "node scripts/release-gate.mjs",

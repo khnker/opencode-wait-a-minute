@@ -28,6 +28,30 @@ Legal transitions (strict; anything else throws):
 
 Invariants:
 - `COMPLETED` is terminal.
+- Transitioning to `COMPLETED` throws while `hasOutstandingWork(taskState)` is true (unverified requirements or pending backlog). Fail-closed.
+- Invalid state strings throw (`validateState`).
+- Legacy phases map via `migrateLegacyPhase`; unknown phases default to `INITIALIZING`.
+
+Source: `src/execution/execution-state.js`.
+
+States: `INITIALIZING`, `INVESTIGATING`, `EXECUTING`, `VERIFYING`, `COMPLETED`,
+`BLOCKED`, `WAITING_AUTHORIZATION`, `FAILED`.
+
+Legal transitions (strict; anything else throws):
+
+| From | To |
+|---|---|
+| INITIALIZING | INVESTIGATING, BLOCKED |
+| INVESTIGATING | EXECUTING, WAITING_AUTHORIZATION, BLOCKED |
+| EXECUTING | VERIFYING, BLOCKED, FAILED |
+| VERIFYING | COMPLETED, EXECUTING, FAILED |
+| WAITING_AUTHORIZATION | EXECUTING, BLOCKED |
+| BLOCKED | INVESTIGATING, EXECUTING |
+| FAILED | INVESTIGATING |
+| COMPLETED | (terminal — none) |
+
+Invariants:
+- `COMPLETED` is terminal.
 - Transitioning to `COMPLETED` throws while `hasOutstandingWork(taskState)` is true
   (unverified requirements or pending backlog). Fail-closed.
 - Invalid state strings throw (`validateState`).
