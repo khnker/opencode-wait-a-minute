@@ -186,4 +186,6 @@ configuration required for basic use — it just works.
 
 ## License
 
-MIT
+| License | Copyright |
+|---------|-----------|
+| [MIT](./LICENSE) | © 2026 Nicolas Khnker |
