@@ -11,7 +11,9 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { collectTests } from "../scripts/run-tests.mjs";
-import { saveState } from "../scripts/autonomous-task-runner.mjs";
+import { saveState, getTaskMapping } from "../scripts/autonomous-task-runner.mjs";
+import { normalizeStatus, countByStatus, getNextPendingTask } from "../src/state/task-status.js";
+import { normalizeStateFile, validateStateFile } from "../src/state/task-state-file.js";
 
 const ROOT = process.cwd();
 const STATE_PATH = path.join(ROOT, ".wam", "task-state.json");
@@ -145,4 +147,90 @@ test("autonomous-task-runner does not overwrite state on corrupted write", () =>
     fs.chmodSync(path.dirname(STATE_PATH), 0o755);
     restore();
   }
+});
+
+// ─── Regression: status normalization & completion semantics ───────────────
+// These lock in the fix for the "reports completed while tasks are still
+// PENDING" bug (case-sensitive status comparison + schema drift).
+
+test("normalizeStatus accepts any casing and rejects unknown values", () => {
+  assert.equal(normalizeStatus("PENDING"), "pending");
+  assert.equal(normalizeStatus("Completed"), "completed");
+  assert.equal(normalizeStatus(" running "), "running");
+  assert.equal(normalizeStatus("bogus"), null);
+  assert.equal(normalizeStatus(undefined), null);
+  assert.equal(normalizeStatus(42), null);
+});
+
+test("a PENDING task is treated as pending, not as completed", () => {
+  const tasks = {
+    "TASK-06": { id: "TASK-06", status: "PENDING", createdAt: "x" },
+  };
+  assert.equal(getNextPendingTask(tasks), "TASK-06");
+  assert.deepEqual(countByStatus(tasks), {
+    pending: 1,
+    running: 0,
+    completed: 0,
+    failed: 0,
+    total: 1,
+  });
+});
+
+test("countByStatus distinguishes 'no tasks' from 'all completed'", () => {
+  const empty = countByStatus({});
+  assert.equal(empty.total, 0);
+  assert.equal(empty.pending, 0);
+
+  const done = countByStatus({
+    "TASK-06": { status: "completed" },
+    "TASK-07": { status: "COMPLETED" },
+  });
+  assert.equal(done.pending, 0);
+  assert.equal(done.total, 2);
+  assert.equal(done.completed, 2);
+});
+
+test("normalizeStateFile canonicalizes status and fills missing validations", () => {
+  const file = {
+    version: "1",
+    tasks: {
+      "TASK-06": {
+        id: "TASK-06",
+        status: "PENDING",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    },
+  };
+  const normalized = normalizeStateFile(file);
+  assert.equal(normalized.tasks["TASK-06"].status, "pending");
+  assert.deepEqual(normalized.tasks["TASK-06"].validations, []);
+});
+
+test("normalizeStateFile rejects unknown status instead of silently completing", () => {
+  const file = {
+    version: "1",
+    tasks: {
+      "TASK-06": { id: "TASK-06", status: "DONE_ISH", createdAt: "x" },
+    },
+  };
+  assert.throws(() => normalizeStateFile(file), /invalid status/i);
+});
+
+test("validateStateFile flags an invalid status", () => {
+  const check = validateStateFile({
+    tasks: { "TASK-06": { status: "NOPE", createdAt: "x" } },
+  });
+  assert.equal(check.valid, false);
+});
+
+test("getTaskMapping resolves existing tests/unit files for known tasks", () => {
+  const files = getTaskMapping("TASK-06");
+  assert.ok(files.length > 0, "TASK-06 should map to at least one file");
+  for (const f of files) {
+    assert.ok(fs.existsSync(f), `${f} should exist on disk`);
+  }
+});
+
+test("getTaskMapping returns empty for unknown task", () => {
+  assert.deepEqual(getTaskMapping("TASK-999"), []);
 });
