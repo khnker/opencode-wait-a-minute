@@ -77,7 +77,7 @@ const ASKING_CMD_RE = /^(answer|resolve|contract|progress|task|skills|assumption
  */
 
 /**
- * Handles the chat.message hook: pre-flight cognitive analysis of user messages.
+ * Handles the chat.message hook: deterministic task-state and context analysis of user messages.
  *
  * @param {Object} input  - OpenCode chat.message input
  * @param {Object} output - OpenCode chat.message output (mutated in place)

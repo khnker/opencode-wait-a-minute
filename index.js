@@ -122,11 +122,15 @@ async function bridgeExecution({ taskId, taskRoot, state, tool, args, callID, se
 }
 
 /**
- * Wait a Minute plugin for OpenCode — Pre-Flight Cognitive Layer.
+ * Wait a Minute plugin for OpenCode.
+ *
+ * Adds deterministic control, task-state management, context enrichment, and
+ * token optimization to OpenCode agents by correlating tasks, skills, context,
+ * evidence, and verified state to determine what should happen next.
  *
  * Intercepts the prompt via chat.message hook before skill resolution and
- * agent execution. Runs pre-flight cognitive analysis classifying the request,
- * inspecting the project, detecting assumptions, and selecting relevant skills.
+ * agent execution. Classifies the request, inspects the project, detects
+ * assumptions, and selects relevant skills.
  *
  * The analysis results are stored in the session and can be accessed by the
  * main agent before proceeding with implementation.
@@ -1205,7 +1209,7 @@ async function wamCli(args, cfg = {}, root = process.cwd(), taskId = readActiveT
 }
 
 /**
- * Wait a Minute — Pre-Flight Cognitive Layer public API.
+ * Wait a Minute — deterministic task-state management and context reconstruction API.
  */
 const waitAMinute = {
   name: "wait-a-minute",

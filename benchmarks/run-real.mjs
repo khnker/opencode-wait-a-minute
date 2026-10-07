@@ -156,7 +156,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 
   const provider = resolveProvider();
 
-  const suite = await runRealSuite({ provider });
+  let suite;
+  try {
+    suite = await runRealSuite({ provider });
+  } catch (error) {
+    console.error(`[run-real] ERROR: benchmark run failed: ${error?.message ?? error}`);
+    process.exit(1);
+  }
   const iso = new Date().toISOString().replace(/:/g, "-");
   const dir = outDir
     ? path.resolve(outDir)
@@ -171,7 +177,17 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   });
   report.evaluations = suite.evaluations;
   report.metrics = suite.metrics;
-  fs.writeFileSync(path.join(dir, "real-report.json"), JSON.stringify(report, null, 2));
+  report.statistics = buildStatistics(suite, provider.model, "openai-compatible");
+  const reportPath = path.join(dir, "real-report.json");
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  const manifest = buildEvidenceManifest({
+    report,
+    suite,
+    reportPath,
+    repoCommit: getRepoCommit(),
+    generatedAt: report.timestamp
+  });
+  fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2));
 
   console.log("Metrics:", suite.metrics);
 }

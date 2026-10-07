@@ -1,6 +1,6 @@
 {
   "name": "wait-a-minute",
-  "description": "Cognitive pre-flight and execution control for OpenCode agents: less guessing, less lost work, evidence-backed completion",
+  "description": "WAM keeps more state than it sends: deterministic task-state, context reconstruction, and evidence-backed completion for OpenCode agents.",
   "version": "1.1.0",
   "main": "index.js",
   "engines": {
@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "gate": "node scripts/release-gate.mjs",
-    "rc1": "node scripts/release-gate.mjs",
+    "rc1": "WAM_RC1_EVIDENCE=1 node scripts/release-gate.mjs",
     "docs:check": "node scripts/docs-check.mjs",
     "validate": "node scripts/release-gate.mjs",
     "production:gate": "node scripts/release-gate.mjs",

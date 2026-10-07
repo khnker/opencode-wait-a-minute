@@ -1,6 +1,6 @@
 ---
 name: wait-a-minute
-description: Capa de pre-flight cognitivo para OpenCode que analiza peticiones antes de ejecutar, detecta supuestos, clasifica tareas y selecciona skills pertinentes
+description: WAM adds deterministic control, task-state management, context enrichment, and token optimization to OpenCode agents by correlating tasks, skills, context, evidence, and verified state to determine what should happen next
 license: MIT
 compatibility: opencode
 triggers:
@@ -11,7 +11,7 @@ metadata:
   prompt_hook: true
 ---
 
-# Wait a Minute — Pre-Flight Cognitive Layer
+# Wait a Minute
 
 ## Philosophy
 

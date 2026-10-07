@@ -127,7 +127,7 @@ async function buildPhases() {
     {
       name: "preflight",
       run() {
-        // Real pre-flight cognitive analysis: request classification + stack detection.
+        // Real request classification + stack detection analysis.
         classifyRequest(samplePrompt);
         detectStack(REPO_ROOT);
       },

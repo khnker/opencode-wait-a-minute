@@ -1,6 +1,13 @@
 # Changelog
 
-## [RC1]
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.1.0] - 2026-10-07
+
+> Codename: RC1. First release published to npm with provenance.
 
 ### Added
 - `docs/OPENCODE_COMPATIBILITY.md` — Defines OpenCode plugin contract (hooks used, API surface, Node.js engine requirement).
@@ -32,6 +39,18 @@
 
 ### Performance
 - Deterministic runtime baseline from `npm run perf:sanity` (30 trials/phase, 210 measured calls): overall median 0.045 ms, p95 1.58 ms, p99 2.06 ms. Soft sanity check, not a regression threshold.
+
+### Documentation
+- `README.md` — Rewritten around the core model ("WAM keeps more state than it sends"): architecture diagram (Mermaid), installation, and benchmark framing that keeps measured results separate from design targets.
+- `docs/concepts/`, `docs/claims/`, `docs/architecture/`, `docs/validation/`, `docs/benchmarks/` — Documentation set aligned with the implementation: concepts, evidence-graded claims (`Implemented` / `Tested` / `Measured` / `Observed` / `Design target`), task-lifecycle state machine, context selection, state persistence, and benchmark methodology / results / limitations.
+- `docs/claims/deterministic-control.md` — New claim documenting deterministic decision control.
+- `docs/AGENT_INSTRUCTIONS.md` — Agent-facing usage and contract notes.
+- `assets/logo.svg`, `assets/logo-dark.svg` — Theme-adaptive README logo via `prefers-color-scheme`.
+- `docs/validation/` — Premise and causal decision matrix (8 rows) tying decisions to evidence.
+- Migrated terminology `preflight` → `policy` across the documentation set.
+- The 60% context-reduction figure is documented as a **design target**, not a measured result; the deterministic 69.6% context reduction and the negative dry-run are reported separately and visibly, with no fabricated threshold.
+- Real-provider benchmark evidence recorded (2026-10-07, `benchmarks/results/2026-10-07T19-55-09.328Z/`, provider `openai-compatible`, model `cost-saver`, 39 turns): net input savings **60,745 tokens** (32.6% of baseline) in a single trial. `SuccessRate`/`EquivalenceRate` are unverifiable (no verification signal) and documented as such. Surfaced in `docs/benchmarks/results.md` (B2), `README.md`, `docs/benchmarks/limitations.md` and `docs/benchmarks/methodology.md`.
+- Real-provider benchmark evidence recorded (2026-10-07, `benchmarks/results/2026-10-07T19-55-09.328Z/`, provider `openai-compatible`, model `cost-saver`, 39 turns): net input savings **60,745 tokens** (32.6% of baseline) in a single trial; `SuccessRate`/`EquivalenceRate` unverifiable (no verification signal). Surfaced in `docs/benchmarks/results.md` (B2), `README.md` and `docs/benchmarks/limitations.md`.
 
 ### Validation
 Run the unified RC1 release gate (also available as `npm run rc1` / `npm run validate`):

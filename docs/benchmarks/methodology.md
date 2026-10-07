@@ -58,7 +58,7 @@ is produced.
 | Class | Source | What it measures |
 | --- | --- | --- |
 | `internalDeterministic` | `benchmarks/validation/*` | Snapshot equivalence, fast-path count, context rebuilds on a deterministic harness. |
-| `empiricalReal` | `benchmarks/run-real.mjs` (dry-run by default) | Real-harness token counts, WAM overhead, net input savings. May be negative. |
+| `empiricalReal` | `benchmarks/run-real.mjs` (dry-run by default; a credentialed run uses the OpenAI-compatible provider) | Real-harness token counts, WAM overhead, net input savings. May be negative (dry-run) or positive (real provider). |
 | `externalEvidence` | External corpus metadata | Third-party evidence, reported separately and never combined. |
 
 ## Token accounting

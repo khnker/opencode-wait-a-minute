@@ -13,7 +13,11 @@ before quoting any figure from `benchmarks/reports/rc1/`.
 - A credentialed run through `runRealSuite()` is a separate operation, is not
   invoked by the CLI, and is not reproduced in CI. Its results depend on the
   provider, the model version, and pricing at run time — none of which are
-  pinned in the artifact.
+  pinned in the artifact. One such run was performed on 2026-10-07
+  (`benchmarks/results/2026-10-07T19-55-09.328Z/`, provider `openai-compatible`,
+  model `cost-saver`); its numbers are reported in
+  [results.md](./results.md) (section B2) and carry the same caveats, including a
+  missing verification signal for task-success metrics.
 - **Provider pricing is never applied.** Only token counts are reported. Any
   currency figure quoted downstream is the reader's own calculation using their
   own price table.

@@ -175,8 +175,11 @@ The benchmark separates:
 The current evidence is reported as-is in
 [Benchmark Results](docs/benchmarks/results.md): the deterministic validation
 harness reports a 69.6% total reduction, while the shipped dry-run configuration
-reports **negative** net input savings. Both are kept separate and neither is
-quoted as a real-model token saving. See
+reports **negative** net input savings. A credentialed real-provider run
+(2026-10-07, model `cost-saver`, 39 turns) reported **60,745 tokens** of net
+input savings (32.6% of baseline) in a single trial, with task-success metrics
+unverifiable (no verification signal). The three figures are kept separate, none
+is merged, and the real-run number is not reproduced in CI. See
 [Benchmark Methodology](docs/benchmarks/methodology.md) for the accounting rules.
 
 ## How WAM works

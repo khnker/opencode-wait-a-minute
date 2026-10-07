@@ -6,7 +6,7 @@ export function createProvider(cfg = {}) {
   const model = cfg.model ?? process.env.WAM_BENCH_MODEL;
   const fetchImpl = cfg.fetchImpl ?? globalThis.fetch;
   const providerName = "openai-compatible";
-  const timeoutMs = cfg.timeoutMs ?? Number(process.env.WAM_BENCH_TIMEOUT_MS ?? 60000);
+  const timeoutMs = cfg.timeoutMs ?? Number(process.env.WAM_BENCH_TIMEOUT_MS ?? 120000);
 
   const estimateTokens = (text = "") => Math.ceil(String(text).length / 4);
 
