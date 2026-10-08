@@ -1,5 +1,13 @@
 <div align="center">
 
+  <p align="center">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+      <img src="assets/logo.svg" alt="Wait a Minute" width="200">
+    </picture>
+  </p>
+
+</div>
 
 # Wait a Minute (WAM)
 
