@@ -19,80 +19,81 @@ Instead of carrying everything through conversation history, WAM keeps more stat
 [![License](https://img.shields.io/badge/license-MIT-007acc)](./LICENSE)
 [![OpenCode compatibility](https://img.shields.io/badge/OpenCode-%3E%3D1.18.0-007acc)](docs/OPENCODE_COMPATIBILITY.md)
 
-## Qué cambia WAM
+## What WAM changes
 
-| Flujo del agente | Tradicional | Con WAM |
+| Agent workflow | Traditional | With WAM |
 |---|---|---|
-| Continuidad de la tarea | Historial de conversación | Estado explícito de la tarea |
-| Contexto | Se acumula | Se reconstruye desde fuentes relevantes |
-| Habilidades | Disponibles ampliamente | Enrutadas a la tarea según requerimientos |
-| Supuestos | Implositos | Clasificados (known/inferred/assumed/unknown) |
-| Evidencia | A menudo transitoria | Persistida con el estado de la tarea |
-| Finalización | Afirmación del modelo | Estado verificado |
-| Próxima acción | Impulsada por conversación | Estado de tarea + evidencia |
+| Task continuity | Conversation history | Explicit task state |
+| Context | Accumulates | Reconstructed |
+| Skills | Available broadly | Routed to task |
+| Assumptions | Implicit | Classified |
+| Evidence | Often transient | Persisted with task |
+| Completion | Model assertion | Verification state |
+| Next action | Conversation-driven | State + evidence |
 
-## La idea central
+## The core idea
 
-### WAM mantiene más estado del que envía
+### WAM keeps more state than it sends
 
-Un agente no necesita todo el estado disponible en cada llamada al modelo.
+An agent does not need all available state in every model call.
 
-WAM mantiene el estado de la tarea por separado del contexto transitorio del modelo y reconstruye el contexto más útil para la decisión actual.
+WAM maintains task state separately from transient model context and reconstructs
+the smallest useful context for the current decision.
 
 ```mermaid
 flowchart LR
-    S[Estado de la tarea] --> C[Ensamblaje de contexto]
-    K[Habilidades relevantes] --> C
-    E[Evidencia] --> C
-    C --> M[Modelo]
-    M --> O[Observación]
+    S[Task State] --> C[Context Assembly]
+    K[Relevant Skills] --> C
+    E[Evidence] --> C
+    C --> M[Model]
+    M --> O[Observation]
     O --> E
     E --> S
 ```
 
-El modelo ve lo que necesita para la decisión actual.  
-WAM conserva el estado necesario para continuar la tarea.
+The model sees what it needs for the current decision.
+WAM retains the state needed to continue the task.
 
-## Cómo funciona WAM
+## How WAM works
 
-En cada petición, WAM:
-1. **Clasifica** la solicitud (tipo de tarea, dominio, etc.)
-2. **Inspecciona** el estado actual de la tarea (requisitos, supuestos, evidencia)
-3. **Establece** el estado necesario para esta iteración (actualiza conocidos/inciertos)
-4. **Selecciona** habilidades y contexto relevante para la tarea
-5. **Ejecuta** el agente con el contexto y habilidades preparados
-6. **Observa** la salida y cualquier efecto
-7. **Verifica** la evidencia contra criterios de finalización
-8. **Determina** la siguiente acción basada en el estado verificado
+On each request, WAM:
+1. **Classifies** the request (task type, domain, etc.)
+2. **Inspects** the current task state (requirements, assumptions, evidence)
+3. **Establishes** the necessary state for this iteration (updates known/unknown)
+4. **Selects** relevant skills and context for the task
+5. **Executes** the agent with the prepared context and skills
+6. **Observes** the output and any effects
+7. **Verifies** evidence against completion criteria
+8. **Determines** the next action based on verified state
 
-La toma de decisiones de control (qué hacer después) se basa explícitamente en el estado de la tarea y la evidencia verificada, no en lo que quede accidentalmente en el historial de conversación.
+Control decisions (what to do next) are based explicitly on task state and verified evidence, not on what remains accidentally in conversation history.
 
-## Por qué WAM
+## Why WAM
 
-Los agentes de IA modernos tratan el historial de conversación como su mecanismo primario de estado, lo que crea problemas reales:
+Modern AI agents treat conversation history as their primary state mechanism, creating real problems:
 
-- **Historial contaminado**: Detalles irrelevantes de conversaciones previas (por ejemplo, discusiones sobre UI, temas no relacionados) quedan en la ventana de contexto y pueden influir inadecuadamente en decisiones técnicas.
-- **Falta de determinismo**: La misma solicitud puede producir resultados diferentes según el historial accidental de la conversación, lo que hace que el comportamiento sea impredecible para flujos de trabajo de ingeniería.
-- **Ventana de contexto limitada**: El historial consume tokens sin importar su relevancia, reduciendo el espacio disponible para la tarea actual y forzando truncamientos o pérdida de información.
-- **Dificultad de auditoría**: Cuando un agente no puede rastrear una decisión a un estado y evidencia explícitos, resulta imposible validar o reproducir su comportamiento de forma confiable.
+- **Context pollution**: Irrelevant details from prior conversations (e.g., UI discussions, unrelated topics) accumulate in the context window and can inappropriately influence technical decisions.
+- **Non-deterministic behavior**: Identical requests can yield different results depending on accidental conversation history, making agents unpredictable for engineering workflows.
+- **Context window exhaustion**: Conversation history consumes tokens regardless of relevance, reducing space for the current task and forcing truncation or information loss.
+- **Audit difficulty**: When agents cannot trace decisions to explicit state and evidence, validation and reproducible behavior become impossible.
 
-WAM trata esto como un problema de gestión de estado, no como un problema de conversación. Al hacer que el estado de la tarea sea la fuente de verdad:
-- El contexto se enfoca en información relevante para la tarea actual.
-- El flujo de control se vuelve explícito y rastreable.
-- La ventana de contexto se utiliza eficientemente para lo necesario en el momento.
-- Cada decisión se puede vincular a estado y evidencia verificables.
+WAM treats this as a state management problem, not a conversation problem. By making task state the source of truth:
+- Context focuses on task-relevant information.
+- Control flow becomes explicit and traceable.
+- Context window is used efficiently for immediate needs only.
+- Every decision links to verifiable state and evidence.
 
-## Primeros pasos
+## Getting started
 
-### Instalar
+### Install
 
 ```bash
 npm install wait-a-minute
 ```
 
-El paquete de npm es `wait-a-minute`; el repositorio es `opencode-wait-a-minute`.
+The npm package is `wait-a-minute`; the repository is `opencode-wait-a-minute`.
 
-### Habilitar en OpenCode
+### Enable in OpenCode
 
 ```jsonc
 // opencode.jsonc
@@ -101,91 +102,91 @@ El paquete de npm es `wait-a-minute`; el repositorio es `opencode-wait-a-minute`
 }
 ```
 
-Una vez instalado, WAM intercepta las peticiones antes de la resolución de habilidades y la ejecución del agente. Su flujo de control y gestión de estado se aplica automáticamente.
+Once installed, WAM intercepts requests before skill resolution and agent execution. Its control and state-management flow applies automatically.
 
-**Requisitos:** Node `>=20` · OpenCode `>=1.18.0` — probado en Ubuntu 24.04, Node 24.16.0, OpenCode 1.18.33 ([docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md)).
+**Requirements:** Node `>=20` · OpenCode `>=1.18.0` — tested on Ubuntu 24.04, Node 24.16.0, OpenCode 1.18.33 ([docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md)).
 
-## Dónde encaja WAM
+## Where WAM fits
 
-WAM opera en el límite entre el planteamiento (prompt) y el agente, mejorando el plano de control sin reemplazar las capas existentes:
+WAM operates at the boundary between prompting and agent execution, enhancing the control plane without replacing existing layers:
 
 ```
 OpenCode
-  ├── Agentes
-  ├── Habilidades
-  ├── Herramientas
+  ├── Agents
+  ├── Skills
+  ├── Tools
   └── Plugins
          ↑
         WAM
         │
-        ├─ Estado de tarea
-        ├─ Reconstrucción de contexto
-        ├─ Enrutamiento de habilidades
-        ├─ Gestión de supuestos/incertidumbre
-        ├─ Evidencia
-        └─ Verificación y recuperación
+        ├─ Task state
+        ├─ Context reconstruction
+        ├─ Skill routing
+        ├─ Assumption/uncertainty handling
+        ├─ Evidence
+        └─ Verification/recovery
 ```
 
-- **OpenSpec** gestiona especificaciones y flujos de trabajo de cambios estructurados.
-- **Superpowers / Habilidades** proporcionan metodología de desarrollo y procedimientos reutilizables.
-- **WAM** proporciona el plano de control + estado de tarea + orquestación de contexto/evidencia.
+- **OpenSpec** manages task/change specification and structured change workflows.
+- **Superpowers / Skills** provide development methodology and reusable procedures.
+- **WAM** provides the control plane + task state + context/evidence orchestration.
 
-## Capacidades
+## Capabilities
 
-- **Estado de tarea persistente**: Mantiene requisitos, supuestos, evidencia y decisiones entre vueltas del modelo.
-- **Reconstrucción de contexto**: Ensambla el contexto mínimo útil desde archivos, habilidades y evidencia verificados.
-- **Enrutamiento de habilidades**: Selecciona y provee únicamente las habilidades relevantes para la tarea actual.
-- **Gestión de supuestos e incertidumbre**: Clasifica la información como conocida, inferida, asumida o desconocida para guiar la exploración.
-- **Orquestación de evidencia**: Trata la evidencia observada como ciudadano de primera clase que actualiza el estado y gatea la finalización.
-- **Verificación basada en estado**: La finalización depende del estado verificado, no del juicio del modelo.
-- **Aislamiento y recuperación**: El estado de cada tarea permanece asociado a ella y no contamina otras tareas.
+- **Persistent task state**: Maintains requirements, assumptions, evidence, and decisions across model turns.
+- **Context reconstruction**: Assembles minimal useful context from verified files, skills, and evidence.
+- **Skill routing**: Selects and provides only skills relevant to the current task.
+- **Assumption and uncertainty management**: Classifies information as known, inferred, assumed, or unknown to guide exploration.
+- **Evidence orchestration**: Treats observed evidence as first-class citizen that updates state and gates completion.
+- **State-based verification**: Completion depends on verified state, not model judgment.
+- **Isolation and recovery**: Each task's state remains associated with it and does not contaminate other tasks.
 
-## Validación
+## Validation
 
-WAM se verifica mediante:
-- **Pruebas unitarias e de integración**: Lógica central, ensamblaje de estado, selección de habilidades y gates de verificación.
-- **Pruebas de extremo a extremo con OpenCode**: Flujos de trabajo completos desde la petición hasta la observación.
-- **Medición de benchmarks**: Uso de tokens, eficiencia de reconstrucción de contexto y comportamiento determinista del flujo de control.
-- **Validación de aislamiento**: Garantiza que el estado de una tarea no afecta a otra.
+WAM is verified through:
+- **Unit and integration tests**: Core logic, state assembly, skill selection, and verification gates.
+- **End-to-end tests with OpenCode**: Complete workflows from request to observation.
+- **Benchmark measurements**: Token usage, context reconstruction efficiency, and control flow determinism.
+- **Isolation validation**: Ensures one task's state does not affect another.
 
-Ver [docs/claims/](docs/claims/) para documentación detallada de claims y evidencia.
+See [docs/claims/](docs/claims/) for detailed claims and evidence documentation.
 
-## Documentación
+## Documentation
 
-| Tema | Documentación |
+| Topic | Documentation |
 |---|---|
-| Arquitectura | [docs/architecture/](docs/architecture/) |
-| Conceptos | [docs/concepts/](docs/concepts/) |
-| Claims y validación | [docs/claims/](docs/claims/) |
-| Compatibilidad con OpenCode | [docs/OPENCODE_COMPATIBILITY.md](docs/OPENCODE_COMPATIBILITY.md) |
-| Validación RC1 | [docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md) |
-| Alcance de la release RC1 | [docs/RC1_SCOPE.md](docs/RC1_SCOPE.md) |
+| Architecture | [docs/architecture/](docs/architecture/) |
+| Concepts | [docs/concepts/](docs/concepts/) |
+| Claims and validation | [docs/claims/](docs/claims/) |
+| OpenCode compatibility | [docs/OPENCODE_COMPATIBILITY.md](docs/OPENCODE_COMPATIBILITY.md) |
+| RC1 validation | [docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md) |
+| RC1 release scope | [docs/RC1_SCOPE.md](docs/RC1_SCOPE.md) |
 
-## Fuentes e influencias
+## Sources and influences
 
-WAM se basa en y se integra con trabajos existentes en el ecosistema de agentes:
+WAM builds on and integrates with existing work in the agent ecosystem:
 
-- **OpenSpec** — especificación de tareas/cambios y flujos de trabajo estructurados de cambios.
-- **OpenCode** — tiempo de ejecución de plugin, agente, habilidad y herramienta.
-- **Superpowers** — habilidades componibles y flujos de trabajo de desarrollo de software agente.
-- **Fuentes de habilidades de WAM** — repositorios upstream de habilidades curadas utilizadas para construir el registro embebido.
+- **OpenSpec** — task/change specification and structured change workflows
+- **OpenCode** — plugin, agent, skill, and tool runtime
+- **Superpowers** — composable skills and agentic software-development workflows
+- **WAM skill sources** — curated upstream skill repositories used to build the embedded registry
 
-Véase [docs/sources.md](docs/sources.md) para los repositorios, versiones exactas y lo que WAM adopta de cada uno.
+See [docs/sources.md](docs/sources.md) for exact repositories, versions, and what WAM adopts from each.
 
-## Desarrollo y pruebas
+## Development and testing
 
 ```bash
-# Ejecutar suite de pruebas
+# Run test suite
 npm test
 
-# Ejecutar puerta de validación (si está configurada)
+# Run validation gate (if configured)
 npm run gate
 ```
 
-## Licencia
+## License
 
-| Licencia | Copyright |
+| License | Copyright |
 |---|---|
-| MIT | 2024 Nicolás Dev |
+| MIT | 2026 Khnker |
 
-[Licencia MIT](LICENSE)
+[MIT License](LICENSE)
