@@ -3,7 +3,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-/** Returns newest subdirectory under root containing raw.json, or null. */
+/** True when raw.json is a validation-format artifact (has composition), not trace-replay. */
+export function isValidationRaw(rawPath) {
+  try {
+    const raw = JSON.parse(fs.readFileSync(rawPath, "utf8"));
+    return Boolean(raw && typeof raw === "object" && raw.composition);
+  } catch (_) { return false; }
+}
+
+/** Returns newest subdirectory under root with a validation-format raw.json, or null. */
 export function latestResultsDir(root = path.resolve("benchmarks/results")) {
   try {
     const dirs = fs.readdirSync(root, { withFileTypes: true })
@@ -11,8 +19,10 @@ export function latestResultsDir(root = path.resolve("benchmarks/results")) {
       .map(d => d.name)
       .sort();
     for (let i = dirs.length - 1; i >= 0; i--) {
-      const d = path.join(root, dirs[i], "raw.json");
-      if (fs.existsSync(d)) return path.join(root, dirs[i]);
+      const raw = path.join(root, dirs[i], "raw.json");
+      if (!fs.existsSync(raw)) continue;
+      if (!isValidationRaw(raw)) continue;
+      return path.join(root, dirs[i]);
     }
   } catch (_) { return null; }
   return null;
@@ -26,6 +36,12 @@ export function gitProvenance() {
   try { sha = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(); } catch (_) { sha = null; }
   try { dirty = Boolean(execFileSync("git", ["status", "--porcelain"], { encoding: "utf8" }).trim()); } catch (_) { }
   return { gitSha: sha, dirty, resolvedAt };
+}
+
+/** Non-empty commit for evidence; falls back to "unknown" outside a git checkout. */
+export function resolveCommit(provenance) {
+  const sha = provenance && provenance.gitSha;
+  return sha ? String(sha) : "unknown";
 }
 
 /** One scenario result object. */
@@ -117,7 +133,7 @@ function buildAudit(resultsDir) {
       const id = scenarioIds[i];
       const s = raw.causal?.scenarios?.[id] || {};
       results.push(buildResult(
-        provenance.gitSha,
+        resolveCommit(provenance),
         id,
         s.baselineTotalTokens,
         s.totalTokens,

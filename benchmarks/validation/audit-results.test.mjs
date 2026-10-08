@@ -1,5 +1,8 @@
 // Test file for audit-results.mjs
 import { strict as assert } from "node:assert";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, it } from "node:test";
 import * as mod from "./audit-results.mjs";
 
@@ -90,5 +93,58 @@ describe("audit-results", () => {
       validation.errors[0],
       /result\[0\]: metrics.baselineTotalTokens present and !== baseline|result\[0\]: metrics.totalTokens present and !== WAM/
     );
+  });
+});
+
+describe("audit-results latestResultsDir", () => {
+  it("skips newer trace-replay dirs and returns the newest validation dir", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "wam-audit-"));
+    try {
+      const older = path.join(root, "2026-01-01T00-00-00.000Z");
+      fs.mkdirSync(older);
+      fs.writeFileSync(path.join(older, "raw.json"), JSON.stringify({
+        validationVersion: "1.0.0",
+        composition: { scenarioIds: ["local-1"] },
+        causal: { scenarios: { "local-1": { baselineTotalTokens: 1, totalTokens: 2, verification: "success" } } }
+      }));
+      const newer = path.join(root, "2026-01-02T00-00-00.000Z");
+      fs.mkdirSync(newer);
+      fs.writeFileSync(path.join(newer, "raw.json"), JSON.stringify({
+        benchmark: "token-savings-evidence",
+        mode: "trace-replay",
+        results: [{ scenarioId: "S1" }]
+      }));
+      assert.equal(mod.latestResultsDir(root), older);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("returns null when no validation-format dir exists", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "wam-audit-"));
+    try {
+      const d = path.join(root, "x");
+      fs.mkdirSync(d);
+      fs.writeFileSync(path.join(d, "raw.json"), JSON.stringify({ results: [] }));
+      assert.equal(mod.latestResultsDir(root), null);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("returns null for a missing root", () => {
+    assert.equal(mod.latestResultsDir(path.join(os.tmpdir(), "does-not-exist-wam-audit")), null);
+  });
+});
+
+describe("audit-results resolveCommit", () => {
+  it("falls back to 'unknown' when git provenance is unavailable", () => {
+    assert.equal(mod.resolveCommit({ gitSha: null }), "unknown");
+    assert.equal(mod.resolveCommit({}), "unknown");
+    assert.equal(mod.resolveCommit(null), "unknown");
+  });
+
+  it("uses gitSha when present", () => {
+    assert.equal(mod.resolveCommit({ gitSha: "abc123" }), "abc123");
   });
 });
