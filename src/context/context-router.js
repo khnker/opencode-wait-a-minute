@@ -30,7 +30,13 @@ export const ADMISSION = {
 /**
  * @typedef {Object} ResolveContextOptions
  * @property {string} taskId - The task to resolve context for
- * @property {number} [maxTokens=4000] - Maximum token budget
+ * @property {number} [maxTokens=16000] - Maximum token budget
+ * @property {string[]} [promptTokens] - Tokenized user prompt, used to make
+ *   category-node admission prompt-aware. When provided, only category
+ *   nodes whose text references the prompt (or whose type is named in the
+ *   prompt) are admitted. When omitted/absent, category admission falls
+ *   back to the conservative behavior (none admitted) so savings are
+ *   never silently blown by callers that did not opt in.
  */
 
 /**
@@ -89,7 +95,15 @@ function getAdmissionClass(node, taskNode, graph) {
   // If it's required for the task to proceed, it's MANDATORY
   const edgesToTask = graph.getEdgesTo(taskNode?.id);
   const isDirectDep = edgesToTask.some(e => e.from === node.id || e.to === node.id);
-  if (isDirectDep) return ADMISSION.MANDATORY;
+  // Category nodes (evidence/decision/constraint/observation) are admitted
+  // as CONDITIONAL even when directly connected to the task — they are
+  // prompt-relevant but must remain subject to the budget cap to preserve
+  // the token-saving contract. This is the explicit invariant: category
+  // nodes are NEVER upgraded to MANDATORY purely because they touch the
+  // task via supports/related_to edges.
+  if (isDirectDep && !["evidence", "decision", "constraint", "observation"].includes(node.type)) {
+    return ADMISSION.MANDATORY;
+  }
 
   // 3. Conditional: Evidence/Decisions for verification
   if (node.type === "evidence" || node.type === "decision" || node.type === "constraint") {
@@ -184,7 +198,7 @@ export function getExecutableRequirements(graph) {
  * @returns {ResolvedContext}
  */
 export function resolveContext(graph, options) {
-  const { taskId, maxTokens = 4000 } = options;
+  const { taskId, maxTokens = 16000, promptTokens = null } = options;
 
   const taskNode = graph.getNode(taskId);
   if (!taskNode) {
@@ -248,6 +262,123 @@ export function resolveContext(graph, options) {
     for (const edge of producing) {
       required.add(edge.to);
     }
+  }
+
+  // Phase 2.5: Collect category nodes (evidence / decision / constraint /
+  // observation) directly attached to the task. These are wired via
+  // `supports` and `related_to` edges by runtime-context-graph.js, which
+  // getDependencies() does not traverse (those are causal-only). The
+  // existing getAdmissionClass() maps these types to CONDITIONAL, so they
+  // remain subject to the budget cap in Phase 6b — token savings are
+  // preserved, but the prompt-relevant nodes are no longer silently dropped
+  // before selection. Bounded by node type so unrelated supports sources
+  // are not pulled in. Capped at MAX_CATEGORY_NODES per category type so a
+  // task with hundreds of evidence entries does not blow the budget.
+  //
+  // PROMPT-AWARE GATE: when `promptTokens` is provided by the caller
+  // (assembly.js tokenizes the user prompt and threads it down here),
+  // only category nodes that are prompt-relevant are admitted. A node is
+  // prompt-relevant when EITHER the prompt mentions its type name
+  // (singular or plural, e.g. "decision" / "evidence") OR the node's
+  // text shares at least one significant token (length >= 3, not a
+  // stopword) with the prompt tokens. When `promptTokens` is null/
+  // empty, no category nodes are admitted — this is the conservative
+  // fallback that keeps savings intact for callers that do not opt in.
+  const categoryNodeTypes = new Set([
+    "evidence",
+    "decision",
+    "constraint",
+    "observation",
+  ]);
+  const MAX_CATEGORY_NODES_PER_TYPE = 5;
+  const promptTokenArr = promptTokens == null
+    ? null
+    : Array.isArray(promptTokens)
+      ? promptTokens
+      : (typeof promptTokens.size === "number"
+          ? Array.from(promptTokens)
+          : Array.from(promptTokens || []));
+  const promptAwareEnabled = promptTokenArr != null && promptTokenArr.length > 0;
+  const promptTokenSet = promptAwareEnabled
+    ? new Set(promptTokenArr.map((t) => String(t).toLowerCase()))
+    : null;
+  const typeNameMatchesPrompt = (nodeType) => {
+    if (!promptTokenSet) return false;
+    const singular = nodeType;
+    const plural = nodeType.endsWith("s") ? nodeType : nodeType + "s";
+    return promptTokenSet.has(singular) || promptTokenSet.has(plural);
+  };
+  const STOPWORDS = new Set([
+    "the","and","for","with","that","this","from","into","over","your","you","are",
+    "not","but","was","were","they","them","his","her","its","our","any","all",
+    "can","may","use","via","per","via","has","have","had","will","would","could",
+    "should","than","then","when","where","what","which","who","how","why","because",
+    "about","after","before","between","during","each","few","more","most","other",
+    "some","such","only","own","same","too","very","just","also",
+  ]);
+  const significantPromptTokens = promptAwareEnabled
+    ? [...promptTokenSet].filter((t) => t.length >= 3 && !STOPWORDS.has(t))
+    : [];
+  const significantPromptTokenSet = new Set(significantPromptTokens);
+  const nodeTextTokensOverlap = (node) => {
+    if (!significantPromptTokenSet || significantPromptTokenSet.size === 0) return false;
+    const haystack = [
+      node.content || "",
+      node.summary || "",
+      node.description || "",
+      node.title || "",
+    ].join(" ").toLowerCase();
+    if (!haystack) return false;
+    // Cheap tokenizer: split on non-letters/digits and length>=3.
+    // Capped at MAX_NODE_TEXT_TOKENS so a giant node.content can't blow
+    // the comparison budget.
+    const MAX_NODE_TEXT_TOKENS = 200;
+    let count = 0;
+    for (const m of haystack.match(/[a-z0-9]+/g) || []) {
+      if (count >= MAX_NODE_TEXT_TOKENS) break;
+      count += 1;
+      if (significantPromptTokenSet.has(m)) return true;
+    }
+    return false;
+  };
+  const isPromptRelevant = (node) => {
+    if (!promptAwareEnabled) return false;
+    return typeNameMatchesPrompt(node.type) || nodeTextTokensOverlap(node);
+  };
+  const attachedCategoryIds = new Set();
+  if (promptAwareEnabled) {
+    // Inbound supports to task (evidence, decision) and inbound/outbound
+    // related_to involving task (constraint, observation).
+    const byType = new Map();
+    const collectOfType = (node) => {
+      if (!byType.has(node.type)) byType.set(node.type, []);
+      byType.get(node.type).push(node);
+    };
+    for (const edge of graph.getEdgesTo(taskId)) {
+      const fromNode = graph.getNode(edge.from);
+      if (fromNode && categoryNodeTypes.has(fromNode.type) && isPromptRelevant(fromNode)) {
+        collectOfType(fromNode);
+      }
+    }
+    for (const edge of graph.getEdgesFrom(taskId)) {
+      if (edge.type === "related_to") {
+        const toNode = graph.getNode(edge.to);
+        if (toNode && categoryNodeTypes.has(toNode.type) && isPromptRelevant(toNode)) {
+          collectOfType(toNode);
+        }
+      }
+    }
+    for (const nodes of byType.values()) {
+      // Sort by createdAt asc then id asc (deterministic) so the bound is
+      // stable across runs.
+      nodes.sort((a, b) => (a.createdAt - b.createdAt) || a.id.localeCompare(b.id));
+      for (const n of nodes.slice(0, MAX_CATEGORY_NODES_PER_TYPE)) {
+        attachedCategoryIds.add(n.id);
+      }
+    }
+  }
+  for (const id of attachedCategoryIds) {
+    required.add(id);
   }
 
   // Phase 3: Collect supporting evidence for required outputs

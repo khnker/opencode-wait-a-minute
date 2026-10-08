@@ -11,13 +11,28 @@
 
 # Wait a Minute (WAM)
 
-**WAM gives OpenCode agents a persistent task state, focused context, skill routing, and evidence-based completion.**  
-Instead of carrying everything through conversation history, WAM keeps more state than it sends: it tracks what the task is, what is known, what is uncertain, which skills matter, what has been observed, and what has been verified.
+### Deterministic control and state management for OpenCode agents
 
-[![npm version](https://img.shields.io/npm/v/wait-a-minute.svg)](https://www.npmjs.com/package/wait-a-minute)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933)](https://nodejs.org/)
-[![License](https://img.shields.io/badge/license-MIT-007acc)](./LICENSE)
-[![OpenCode compatibility](https://img.shields.io/badge/OpenCode-%3E%3D1.18.0-007acc)](docs/OPENCODE_COMPATIBILITY.md)
+WAM keeps more state than it sends.
+
+WAM adds deterministic control, task-state management, context reconstruction, skill routing, and evidence-backed verification to OpenCode agents. It correlates task state, skills, context, evidence, and verification to determine what should happen next.
+
+[Install](#install) [Documentation](#documentation)
+
+PROVEN IN RC1
+
+| Evidence                       |                  Result | Meaning                                                                     |
+| ------------------------------ | ----------------------: | --------------------------------------------------------------------------- |
+| OpenCode Hook                  | Prompt-level integration | Intercepts requests before skill resolution and agent execution. [docs/architecture/overview.md](docs/architecture/overview.md) |
+| Persistent State               | Per-task / per-session isolation | Task state is persisted and scoped instead of relying on conversation history alone. [docs/claims/task-isolation.md](docs/claims/task-isolation.md) |
+| Fail-Closed Verification       | Unverified completion is blocked | Tasks cannot transition to completion while supported outstanding work remains. [docs/claims/verification.md](docs/claims/verification.md) |
+| Deterministic Validation       | 10/10 cases passed      | RC1 snapshot harness: 10 cases passed, 0 failed. [docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md) |
+| Context Reduction              | 69.6%                   | Measured on the deterministic RC1 snapshot harness. [docs/benchmarks/results.md](docs/benchmarks/results.md) |
+| Net Input Savings              | 32.6%                   | Observed in one credentialed real-provider run. [docs/benchmarks/results.md](docs/benchmarks/results.md) |
+
+> WAM separates implementation guarantees from empirical measurements. Claims in this README are backed by implementation, tests, deterministic benchmarks, or explicitly labeled observations.
+> 
+> The 32.6% result is an observed single-provider run, not a general token-reduction claim. WAM reports deterministic, dry-run, and real-provider measurements separately because they are not directly comparable.
 
 ## What WAM changes
 
@@ -166,12 +181,10 @@ See [docs/claims/](docs/claims/) for detailed claims and evidence documentation.
 
 WAM builds on and integrates with existing work in the agent ecosystem:
 
-- **OpenSpec** — task/change specification and structured change workflows
-- **OpenCode** — plugin, agent, skill, and tool runtime
-- **Superpowers** — composable skills and agentic software-development workflows
-- **WAM skill sources** — curated upstream skill repositories used to build the embedded registry
-
-See [docs/sources.md](docs/sources.md) for exact repositories, versions, and what WAM adopts from each.
+- **OpenCode** — host/runtime and plugin/skill environment
+- **OpenSpec** — structured task/change workflow
+- **Superpowers** — composable software-development methodology
+- **WAM's own implementation and benchmark evidence**
 
 ## Development and testing
 

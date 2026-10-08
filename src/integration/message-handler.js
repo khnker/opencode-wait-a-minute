@@ -500,7 +500,7 @@ export async function handleMessage(input, output, deps) {
         classification: analysis.intent?.classification,
         mode: analysis.strategy,
         projectPath: wamRoot,
-        budget: cfg.contextBudget || 4000,
+        budget: cfg.contextBudget || 16000,
         taskState: updatedState,
         skillRegistry: cfg.skills === false ? {} : (analysis.skillRegistryMap || waitAMinute.loadBundledRegistry()),
         selectedSkills: analysis.skills?.selected || [],

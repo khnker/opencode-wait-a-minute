@@ -18,7 +18,7 @@ const artifacts = (n, prefix) =>
 const observations = (n, prefix) =>
   Array.from({ length: n }, (_, i) => ({ id: `${prefix}O${i}`, content: filler(`${prefix}-observation`, i) }));
 
-function context({
+export function context({
   taskId,
   objective,
   reqs = 0,

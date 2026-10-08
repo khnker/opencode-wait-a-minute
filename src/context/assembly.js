@@ -107,7 +107,7 @@ export function assembleContext({
   mode = "NORMAL",
   continuation = false,
   projectPath = process.cwd(),
-  budget = 4000,
+  budget = 16000,
   taskState = null,
   runState = null,
   evidenceLineage = [],
@@ -307,6 +307,7 @@ if (!isTrivial) {
         taskId: effectiveTaskState?.taskId,
         budget: flex,
         root: projectPath,
+        promptTokens: taskTokens,
       });
 
       // C02: Router is canonical authority. Legacy only if explicitly requested.

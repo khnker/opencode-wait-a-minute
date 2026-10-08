@@ -11,22 +11,37 @@
 
 # Wait a Minute (WAM)
 
-**WAM le da a los agentes de OpenCode un estado persistente de tarea, contexto enfocado, enrutamiento de habilidades y finalización basada en evidencia.**  
-En lugar de llevar todo a través del historial de conversación, WAM mantiene más estado del que envía: rastrea qué es la tarea, qué se sabe, qué es incierto, qué habilidades importan, qué se ha observado y qué se ha verificado.
+### Gestión determinista y estado para agentes de OpenCode
 
-[![npm version](https://img.shields.io/npm/v/wait-a-minute.svg)](https://www.npmjs.com/package/wait-a-minute)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933)](https://nodejs.org/)
-[![License](https://img.shields.io/badge/license-MIT-007acc)](./LICENSE)
-[![OpenCode compatibility](https://img.shields.io/badge/OpenCode-%3E%3D1.18.0-007acc)](docs/OPENCODE_COMPATIBILITY.md)
+WAM mantiene más estado del que envía.
+
+WAM agrega control determinista, gestión de estado de tarea, reconstrucción de contexto, enrutamiento de habilidades y verificación basada en evidencia a los agentes de OpenCode. Correlaciona el estado de la tarea, habilidades, contexto, evidencia y verificación para determinar qué debería suceder a continuación.
+
+[Instalar](#instalar) [Documentación](#documentación)
+
+PROBADO EN RC1
+
+| Evidencia                       |                  Resultado | Significado                                                                     |
+| ------------------------------ | ----------------------: | ------------------------------------------------------------------------------- |
+| Integración con OpenCode       | Integración a nivel de prompt | Intercepta las solicitudes antes de la resolución de habilidades y la ejecución del agente. |
+| Estado Persistente             | Aislamiento por tarea / por sesión | El estado de la tarea se persiste y se encuentra aislado en lugar de depender únicamente del historial de conversación. |
+| Verificación Fallida-Cerrada   | Finalización no verificada bloqueada | Las tareas no pueden pasar a completación mientras quede trabajo pendiente respaldado. |
+| Validación Determinista        | 10/10 casos pasados      | Arnés de instantáneas RC1: 10 casos pasados, 0 fallidos.                      |
+| Reducción de Contexto          | 69.6%                   | Medido en el arnés de instantáneas determinista de RC1.                       |
+| Ahorro Neto de Entrada         | 32.6%                   | Observado en una ejecución credentialada de proveedor real.                   |
+
+> WAM separa las garantías de implementación de las mediciones empíricas. Las afirmaciones en este README están respaldadas por implementación, pruebas, bancos de prueba deterministas o observaciones explícitamente etiquetadas.
+> 
+> El resultado del 32.6% es una ejecución observada de un solo proveedor, no una afirmación general de reducción de tokens. WAM reporta mediciones deterministas, de ejecución en seco y de proveedor real por separado porque no son directamente comparables.
 
 ## Qué cambia WAM
 
 | Flujo del agente | Tradicional | Con WAM |
 |---|---|---|
 | Continuidad de la tarea | Historial de conversación | Estado explícito de la tarea |
-| Contexto | Se acumula | Se reconstruye desde fuentes relevantes |
-| Habilidades | Disponibles ampliamente | Enrutadas a la tarea según requerimientos |
-| Supuestos | Implositos | Clasificados (known/inferred/assumed/unknown) |
+| Contexto | Se acumula | Se reconstruye |
+| Habilidades | Disponibles ampliamente | Enrutadas a la tarea |
+| Supuestos | Implositos | Clasificados |
 | Evidencia | A menudo transitoria | Persistida con el estado de la tarea |
 | Finalización | Afirmación del modelo | Estado verificado |
 | Próxima acción | Impulsada por conversación | Estado de tarea + evidencia |
@@ -165,12 +180,10 @@ Ver [docs/claims/](docs/claims/) para documentación detallada de claims y evide
 
 WAM se basa en y se integra con trabajos existentes en el ecosistema de agentes:
 
-- **OpenSpec** — especificación de tareas/cambios y flujos de trabajo estructurados de cambios.
-- **OpenCode** — tiempo de ejecución de plugin, agente, habilidad y herramienta.
-- **Superpowers** — habilidades componibles y flujos de trabajo de desarrollo de software agente.
-- **Fuentes de habilidades de WAM** — repositorios upstream de habilidades curadas utilizadas para construir el registro embebido.
-
-Véase [docs/sources.md](docs/sources.md) para los repositorios, versiones exactas y lo que WAM adopta de cada uno.
+- **OpenCode** — host/runtime y plugin/skill environment
+- **OpenSpec** — structured task/change workflow
+- **Superpowers** — composable software-development methodology
+- **WAM's own implementation and benchmark evidence**
 
 ## Desarrollo y pruebas
 

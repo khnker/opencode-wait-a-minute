@@ -18,7 +18,7 @@ import { assembleContext } from "../../../src/context/assembly.js";
 import { buildRuntimeContextGraph } from "../../../src/context/runtime-context-graph.js";
 
 /** Build the baseline request: raw full context graph. */
-function buildBaselineRequest(turn) {
+export function buildBaselineRequest(turn) {
   const graph = buildRuntimeContextGraph(turn.input);
   const nodes = Array.from(graph.getNodes().values()).sort((a, b) => a.createdAt - b.createdAt);
   const rawContext = nodes.map(n => `[Type: ${n.type}]\n${n.content}\n---`).join("\n");
@@ -30,12 +30,12 @@ function buildBaselineRequest(turn) {
 }
 
 /** Build the WAM request: optimized minimal context assembled via WAM engine + user prompt. */
-function buildWamRequest(scenario, turn) {
+export function buildWamRequest(scenario, turn) {
   const assembly = assembleContext({
     prompt: turn.prompt,
     taskId: scenario.id,
     ...turn.input,
-    budget: turn.budget ?? 4000
+    budget: turn.budget ?? Number(process.env.WAM_BENCH_BUDGET ?? 16000)
   });
   const lines = [...assembly.lines, `[Task]\n${turn.prompt}`];
   const prompt = lines.join("\n");

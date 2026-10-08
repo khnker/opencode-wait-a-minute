@@ -17,6 +17,8 @@ import { buildContextGraph } from "../context/context-graph-builder.js";
  * @property {number} budget
  * @property {string} root
  * @property {Object} graph - Context Graph instance
+ * @property {string[]} [promptTokens] - Tokenized user prompt; threaded
+ *   into resolveContext so category-node admission is prompt-aware.
  */
 
 /**
@@ -56,7 +58,7 @@ function nodeToCapsule(node) {
  * @returns {AdapterResult}
  */
 export function adaptRouterResult(routerResult, options = {}) {
-  const { budget = 4000 } = options;
+  const { budget = 16000 } = options;
 
   if (!routerResult) {
     return {
@@ -132,7 +134,7 @@ export function adaptRouterResult(routerResult, options = {}) {
  * @returns {AdapterResult}
  */
 export function routeAndAdapt(graph, options) {
-  const { taskId, budget = 4000, useLegacySelector = false } = options;
+  const { taskId, budget = 16000, useLegacySelector = false, promptTokens = null } = options;
   const legacySelectorAllowed =
     process.env.WAM_CONTEXT_SELECTOR === "legacy" || useLegacySelector === true;
 
@@ -148,7 +150,7 @@ export function routeAndAdapt(graph, options) {
   }
 
   try {
-    const routerResult = resolveContext(graph, { taskId, maxTokens: budget });
+    const routerResult = resolveContext(graph, { taskId, maxTokens: budget, promptTokens });
     const adapted = adaptRouterResult(routerResult, { budget });
     // C02: mark source as legacy only when caller explicitly opted in
     // AND router returned empty/insufficient — never silent.

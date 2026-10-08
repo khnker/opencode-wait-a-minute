@@ -146,7 +146,7 @@ const DEFAULT_CONFIG = {
   activePreset: "omni",
   silent: false,
   budgetTokens: 32000,
-  contextBudget: 4000,
+  contextBudget: 16000,
   tierPrompts: {},
 };
 
