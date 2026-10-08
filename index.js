@@ -606,6 +606,63 @@ const WaitAMinutePlugin = async (pluginInput) => {
     return root;
   };
 
+/**
+ * Runs after tool.execute.before — persists success/failure to the
+ * cognition store via noteSuccess/noteFailure, reading experiment IDs
+ * from the sessionExecutions map (or input._wam* overrides) instead of
+ * input.hypothesisId which is never set by tool.execute.before.
+ */
+async function postToolExecution(input, output) {
+  const toolName = input?.tool || "";
+  try {
+    if (bypassed) return;
+    const sid = input?.sessionID;
+    const taskRoot = await resolveSessionBase(sid);
+    const taskId = sessionTasks.get(sid) || readActiveTaskIdFresh(taskRoot) || "default-task";
+    const wamRoot = taskRoot;
+    const key = input._wamCallID || input?.callID || `${sid}:${toolName}`;
+    const mapping = sessionExecutions.get(key) || {};
+
+    if (input?.tool && output?.error) {
+      try {
+        await noteFailure(wamRoot, taskId, {
+          hypothesisId: input._wamHypothesisId || mapping.hypothesisId || input.hypothesisId,
+          experimentId: input._wamExperimentId || mapping.experimentId || input.experimentId,
+          requirementId: input._wamRequirementId || mapping.requirementId || input.requirementId,
+          reason: output.error || "tool execution failed",
+          actual: output.actual,
+          unexpected: output.unexpected,
+          provenance: `agent-tool-${toolName}-failure`,
+        });
+      } catch (e) {
+        console.log(`[wait-a-minute] postToolExecution noteFailure error:`, e.message);
+      }
+    } else if (input?.tool) {
+      try {
+        await noteSuccess(wamRoot, taskId, {
+          hypothesisId: input._wamHypothesisId || mapping.hypothesisId || input.hypothesisId,
+          experimentId: input._wamExperimentId || mapping.experimentId || input.experimentId,
+          requirementId: input._wamRequirementId || mapping.requirementId || input.requirementId,
+          result: output.result,
+          actual: output.actual,
+          unexpected: output.unexpected,
+          provenance: `agent-tool-${toolName}-success`,
+        });
+      } catch (e) {
+        console.log(`[wait-a-minute] postToolExecution noteSuccess error:`, e.message);
+      }
+    }
+  } catch (err) {
+    console.error("[wait-a-minute] postToolExecution error:", err);
+  } finally {
+    const cleanupKey = input._wamCallID || input?.callID || `${input?.sessionID}:${toolName}`;
+    if (cleanupKey && cleanupKey !== `${input?.sessionID}:${toolName}`) {
+      sessionExecutions.delete(cleanupKey);
+    }
+  }
+}
+
+
   // -------------------------------------------------------------------------
   // opencode 1.18.25 plugin API: factory RETURNS the hooks object
   // -------------------------------------------------------------------------
@@ -822,63 +879,6 @@ const WaitAMinutePlugin = async (pluginInput) => {
     },
   };
 };
-
-/**
- * Runs after tool.execute.before — persists success/failure to the
- * cognition store via noteSuccess/noteFailure, reading experiment IDs
- * from the sessionExecutions map (or input._wam* overrides) instead of
- * input.hypothesisId which is never set by tool.execute.before.
- */
-async function postToolExecution(input, output) {
-  try {
-    if (bypassed) return;
-    const sid = input?.sessionID;
-    const taskRoot = await resolveSessionBase(sid);
-    const taskId = sessionTasks.get(sid) || readActiveTaskIdFresh(taskRoot) || "default-task";
-    const wamRoot = taskRoot;
-    const toolName = input?.tool || "";
-    const key = input._wamCallID || input?.callID || `${sid}:${toolName}`;
-    const mapping = sessionExecutions.get(key) || {};
-
-    if (input?.tool && output?.error) {
-      try {
-        await noteFailure(wamRoot, taskId, {
-          hypothesisId: input._wamHypothesisId || mapping.hypothesisId || input.hypothesisId,
-          experimentId: input._wamExperimentId || mapping.experimentId || input.experimentId,
-          requirementId: input._wamRequirementId || mapping.requirementId || input.requirementId,
-          reason: output.error || "tool execution failed",
-          actual: output.actual,
-          unexpected: output.unexpected,
-          provenance: `agent-tool-${toolName}-failure`,
-        });
-      } catch (e) {
-        console.log(`[wait-a-minute] postToolExecution noteFailure error:`, e.message);
-      }
-    } else if (input?.tool) {
-      try {
-        await noteSuccess(wamRoot, taskId, {
-          hypothesisId: input._wamHypothesisId || mapping.hypothesisId || input.hypothesisId,
-          experimentId: input._wamExperimentId || mapping.experimentId || input.experimentId,
-          requirementId: input._wamRequirementId || mapping.requirementId || input.requirementId,
-          result: output.result,
-          actual: output.actual,
-          unexpected: output.unexpected,
-          provenance: `agent-tool-${toolName}-success`,
-        });
-      } catch (e) {
-        console.log(`[wait-a-minute] postToolExecution noteSuccess error:`, e.message);
-      }
-    }
-  } catch (err) {
-    console.error("[wait-a-minute] postToolExecution error:", err);
-  } finally {
-    const cleanupKey = input._wamCallID || input?.callID || `${input?.sessionID}:${toolName}`;
-    if (cleanupKey && cleanupKey !== `${input?.sessionID}:${toolName}`) {
-      sessionExecutions.delete(cleanupKey);
-    }
-  }
-}
-
 
 /**
  * Clasifica un mensaje recibido durante ASKING (spec clarification-gate):
