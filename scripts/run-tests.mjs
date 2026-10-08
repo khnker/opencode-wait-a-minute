@@ -62,8 +62,15 @@ function runNodeTest(files) {
   const args = ["--test", "--test-concurrency=1", ...files];
   const timeout = Number(process.env.WAM_TEST_TIMEOUT_MS || 240000);
   const res = spawnSync(process.execPath, args, { stdio: ["pipe", "pipe", "pipe"], timeout });
-  if (res.error && res.error.code === 'ETIMEDOUT') {
-    console.error(`[run-tests] ERROR: Test suite execution timed out after ${timeout}ms`);
+  if (res.error) {
+    if (res.error.code === 'ETIMEDOUT') {
+      console.error(`[run-tests] ERROR: Test suite execution timed out after ${timeout}ms`);
+    } else {
+      console.error(`[run-tests] ERROR: Spawn failed: code=${res.error.code}, message=${res.error.message}`);
+    }
+  }
+  if (res.signal) {
+    console.error(`[run-tests] ERROR: Child process terminated via signal: ${res.signal} (exit code: ${res.status ?? 'null'})`);
   }
   if (res.stdout) process.stdout.write(res.stdout);
   if (res.stderr) process.stderr.write(res.stderr);

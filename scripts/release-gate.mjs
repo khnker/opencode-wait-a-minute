@@ -76,10 +76,12 @@ for (const gate of GATES) {
     const code = typeof e?.status === "number" ? e.status : null;
     if (gate.required) {
       status = "FAIL";
+      console.error(`  [${gate.name}] FAILED (exit: ${e.status ?? 'unknown'}, signal: ${e.signal ?? 'none'})`);
     } else if (code === UNAVAILABLE_EXIT_CODE) {
       status = "SKIP";
     } else {
       status = "FAIL";
+      console.error(`  [${gate.name}] FAILED (exit: ${e.status ?? 'unknown'}, signal: ${e.signal ?? 'none'})`);
     }
   }
 
