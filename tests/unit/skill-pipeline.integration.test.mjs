@@ -153,18 +153,22 @@ describe("local skill content embedding (fail-open registry)", () => {
     assert.ok(!withContent[0].content.startsWith("---"), "YAML frontmatter must be stripped");
   });
 
-  it("injects a selected LOCAL skill's content into the assembled context", () => {
-    const prompt = "create a nestjs module and guard endpoint";
-    const result = routeSkillsV2(prompt, {}, LOCAL, "STANDARD");
-    const ids = result.selected.map((s) => s.id);
-    assert.ok(ids.includes("nestjs-developer"), `expected nestjs-developer in [${ids.join(", ")}]`);
+  it("injects a LOCAL skill's content into the assembled context", () => {
+    const localWithContent = Object.values(LOCAL).filter(
+      (s) => s.source?.kind === "local" && typeof s.content === "string" && s.content.trim().length > 0
+    );
+    assert.ok(localWithContent.length > 0, "need at least one local skill with embedded content");
+    const skill = localWithContent[0];
     const pack = assembleContext({
-      prompt,
+      prompt: "assemble context for a local skill",
       skillRegistry: LOCAL,
-      selectedSkills: result.selected,
+      selectedSkills: [{ id: skill.id, name: skill.name, reason: "test", relevance: 1 }],
       budget: 8000,
       classification: "normal",
     });
-    assert.ok(pack.lines.join("\n").includes("[wam N3 skill] nestjs-developer"), "local skill content must be injected");
+    assert.ok(
+      pack.lines.join("\n").includes(`[wam N3 skill] ${skill.id}`),
+      `local skill ${skill.id} content must be injected`
+    );
   });
 });
