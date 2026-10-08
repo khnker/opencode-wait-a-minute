@@ -9,13 +9,23 @@
  *
  * Exits non-zero if no suites are found or any suite fails.
  *
+ * Output is streamed live (never buffered until exit) so that an abrupt child
+ * exit — which discards buffered stdout — still leaves a complete trail.
+ *
+ * Diagnostic modes:
+ *   WAM_TEST_PER_FILE=1  run every suite in its own `node --test` process,
+ *                        printing `[run-tests] FILE: <path>` before each, so an
+ *                        abrupt exit identifies the culprit file.
+ *   WAM_TEST_LOG=<path>  tee markers and child stdout/stderr to a file so the
+ *                        trail survives log truncation (CI artifact).
+ *
  * Exports `collectTests(root)` so tests/test-discovery.test.mjs can verify
  * the recursive discovery contract without spawning the runner.
  */
 
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = process.cwd();
@@ -28,6 +38,26 @@ const IGNORE_DIRS = new Set([
   ".opencode",
   ".openspec",
 ]);
+
+let logStream = null;
+function openLogStream() {
+  const target = process.env.WAM_TEST_LOG;
+  if (!target) return null;
+  if (!logStream) logStream = fs.createWriteStream(target, { flags: "a" });
+  return logStream;
+}
+
+function logLine(line) {
+  process.stdout.write(line + "\n");
+  const s = openLogStream();
+  if (s) s.write(line + "\n");
+}
+
+function tee(target, chunk) {
+  target.write(chunk);
+  const s = openLogStream();
+  if (s) s.write(chunk);
+}
 
 /**
  * Recursively collect *.test.mjs files under root, excluding IGNORE_DIRS.
@@ -58,23 +88,63 @@ function rel(p) {
   return path.relative(ROOT, p);
 }
 
-function runNodeTest(files) {
-  const args = ["--test", "--test-concurrency=1", ...files];
-  const timeout = Number(process.env.WAM_TEST_TIMEOUT_MS || 240000);
-  const res = spawnSync(process.execPath, args, { stdio: ["pipe", "pipe", "pipe"], timeout, maxBuffer: 64 * 1024 * 1024 });
-  if (res.error) {
-    if (res.error.code === 'ETIMEDOUT') {
+/**
+ * Run `node --test` over the given files with live (streamed) output.
+ * Resolves to the child's exit code (or 1 on signal/error/timeout).
+ */
+function runNodeTestStreamed(files) {
+  return new Promise((resolve) => {
+    const timeout = Number(process.env.WAM_TEST_TIMEOUT_MS || 240000);
+    const args = ["--test", "--test-concurrency=1", ...files];
+    const child = spawn(process.execPath, args, { stdio: ["ignore", "pipe", "pipe"] });
+
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
       console.error(`[run-tests] ERROR: Test suite execution timed out after ${timeout}ms`);
-    } else {
-      console.error(`[run-tests] ERROR: Spawn failed: code=${res.error.code}, message=${res.error.message}`);
+      child.kill("SIGKILL");
+    }, timeout);
+
+    child.stdout.on("data", (chunk) => tee(process.stdout, chunk));
+    child.stderr.on("data", (chunk) => tee(process.stderr, chunk));
+
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      console.error(`[run-tests] ERROR: Spawn failed: code=${err.code}, message=${err.message}`);
+      resolve(1);
+    });
+
+    child.on("exit", (code, signal) => {
+      clearTimeout(timer);
+      if (signal && !timedOut) {
+        console.error(`[run-tests] ERROR: Child process terminated via signal: ${signal} (exit code: ${code ?? "null"})`);
+      }
+      resolve(code ?? 1);
+    });
+  });
+}
+
+/**
+ * Diagnostic: run each suite in its own process with a marker before it.
+ * The last marker printed before an abrupt exit names the culprit file.
+ */
+async function runPerFile(files) {
+  const failures = [];
+  for (const f of files) {
+    logLine(`[run-tests] FILE: ${rel(f)}`);
+    const code = await runNodeTestStreamed([f]);
+    if (code !== 0) {
+      failures.push({ file: rel(f), code });
+      logLine(`[run-tests] FAIL: ${rel(f)} (exit ${code})`);
     }
   }
-  if (res.signal) {
-    console.error(`[run-tests] ERROR: Child process terminated via signal: ${res.signal} (exit code: ${res.status ?? 'null'})`);
+  if (failures.length > 0) {
+    logLine(`[run-tests] ${failures.length}/${files.length} suites failed:`);
+    for (const { file, code } of failures) logLine(`  - ${file} (exit ${code})`);
+    return 1;
   }
-  if (res.stdout) process.stdout.write(res.stdout);
-  if (res.stderr) process.stderr.write(res.stderr);
-  return res.status ?? 1;
+  logLine(`[run-tests] all ${files.length} suites passed (per-file mode)`);
+  return 0;
 }
 
 function runLegacy(files) {
@@ -86,7 +156,7 @@ function runLegacy(files) {
   return res.status ?? 1;
 }
 
-function main() {
+async function main() {
   const isLegacy = process.argv.includes("--legacy");
   const explicit = path.join(ROOT, "tests/legacy/wait-a-minute-test.mjs");
   let discovered = collectTests(ROOT);
@@ -104,12 +174,19 @@ function main() {
     process.exit(2);
   }
 
-  console.log(`[run-tests] discovered ${files.length} suites`);
-  for (const f of files) {
-    console.log(`  - ${rel(f)}`);
+  logLine(`[run-tests] discovered ${files.length} suites`);
+  for (const f of files) logLine(`  - ${rel(f)}`);
+
+  let status;
+  if (isLegacy) {
+    status = runLegacy(files);
+  } else if (process.env.WAM_TEST_PER_FILE === "1") {
+    status = await runPerFile(files);
+  } else {
+    status = await runNodeTestStreamed(files);
   }
 
-  const status = isLegacy ? runLegacy(files) : runNodeTest(files);
+  if (logStream) logStream.end();
   process.exit(status);
 }
 
@@ -120,5 +197,8 @@ const invokedDirectly =
   fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 
 if (invokedDirectly) {
-  main();
+  main().catch((err) => {
+    console.error(`[run-tests] ERROR: ${err && err.stack ? err.stack : err}`);
+    process.exit(1);
+  });
 }

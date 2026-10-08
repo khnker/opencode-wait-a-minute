@@ -26,6 +26,17 @@ jobs:
 
       - name: Run unit/invariant tests
         run: npm test
+        env:
+          WAM_TEST_PER_FILE: "1"
+          WAM_TEST_LOG: test-output.log
+
+      - name: Upload test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output
+          path: test-output.log
+          if-no-files-found: ignore
 
       # OpenCode Smoke E2E is skipped on GitHub Actions (no configured provider);
       # the release gate enforces it only where a real provider is available.
