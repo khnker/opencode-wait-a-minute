@@ -595,7 +595,7 @@ function scanSourceSkills(source, sourceDir) {
  */
 function loadBundledRegistry() {
   try {
-    const regFile = path.join(import.meta.dirname, "skills", "registry.json");
+    const regFile = path.join(import.meta.dirname, "..", "..", "skills", "registry.json");
     if (!fileExists(regFile)) return {};
     const entries = JSON.parse(readFileSafely(regFile));
     const reg = {};
