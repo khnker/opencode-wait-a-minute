@@ -14,8 +14,23 @@ const MATTPOCOCK_SKILLS = [
   "improve-codebase-architecture",
 ];
 
-const BASE_SKILLS = ["writing-for-agents", "codebase-design"];
-const ONDEMAND_SKILLS = MATTPOCOCK_SKILLS.filter((s) => !BASE_SKILLS.includes(s));
+// Base set includes the two local builtins (writing-for-agents, codebase-design)
+// PLUS any curated source skill flagged loadStrategy:"base" in registry.json
+// (e.g. dietrichgebert-ponytail-ponytail). Tests dynamically resolve the
+// real base set from the merged registry as {id, name} pairs so they can be
+// looked up in both shapes (registry is keyed by id; selectedNames returns
+// name).
+function resolveBaseSkills() {
+  const { registry } = buildRealRegistry();
+  return Object.entries(registry)
+    .filter(([, s]) => s && s.loadStrategy === "base")
+    .map(([id, s]) => ({ id, name: s.name || id }));
+}
+const BASE_SKILLS = resolveBaseSkills();
+const BASE_SKILL_IDS = new Set(BASE_SKILLS.map((b) => b.id));
+const BASE_SKILL_NAMES = new Set(BASE_SKILLS.map((b) => b.name));
+const MATT_BASE_NAMES = MATTPOCOCK_SKILLS.filter((s) => BASE_SKILL_NAMES.has(s));
+const ONDEMAND_SKILLS = MATTPOCOCK_SKILLS.filter((s) => !BASE_SKILL_NAMES.has(s));
 
 // Builds the registry exactly as the plugin does in the real preflight flow:
 // discovered local skills + injected builtin routing metadata.
@@ -47,8 +62,11 @@ describe("skill-injection", () => {
       assert.strictEqual(registry[name].source.kind, "local", `${name} should be a local source`);
     }
 
-    for (const name of BASE_SKILLS) {
-      assert.strictEqual(registry[name].loadStrategy, "base", `${name} should load as base`);
+    // Bases — usar id como clave del registry (puede diferir del nombre para
+    // entries curados externos).
+    for (const { id, name } of BASE_SKILLS) {
+      assert.ok(registry[id], `${name} (${id}) debe estar en el registry`);
+      assert.strictEqual(registry[id].loadStrategy, "base", `${name} should load as base`);
     }
     for (const name of ONDEMAND_SKILLS) {
       assert.strictEqual(registry[name].loadStrategy, "ondemand", `${name} should load on demand`);
@@ -62,7 +80,8 @@ describe("skill-injection", () => {
       const result = routeSkillsV2(prompt, {}, registry, "STANDARD");
       const names = selectedNames(result);
 
-      for (const name of BASE_SKILLS) {
+      // Solo nos importan las bases que estan en el registry actual (locales).
+      for (const { name } of BASE_SKILLS) {
         assert.ok(names.includes(name), `${name} should be injected for prompt "${prompt}"`);
       }
       assert.strictEqual(result.counts.base, BASE_SKILLS.length, "base count should match");
@@ -91,7 +110,7 @@ describe("skill-injection", () => {
       const names = selectedNames(result);
 
       assert.ok(names.includes(skill), `${skill} should be injected for prompt "${prompt}" (got ${names})`);
-      for (const base of BASE_SKILLS) {
+      for (const { name: base } of BASE_SKILLS) {
         assert.ok(names.includes(base), `${base} base skill should still be injected for prompt "${prompt}"`);
       }
 
@@ -108,6 +127,7 @@ describe("skill-injection", () => {
     for (const name of ONDEMAND_SKILLS) {
       assert.ok(!selectedNames(result).includes(name), `${name} should not be injected without a match`);
     }
+    // Solo contar bases presentes en este registry (locales).
     assert.strictEqual(result.counts.base, BASE_SKILLS.length);
   });
 

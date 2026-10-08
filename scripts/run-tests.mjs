@@ -37,6 +37,7 @@ const IGNORE_DIRS = new Set([
   "coverage",
   ".opencode",
   ".openspec",
+  "upstream",
 ]);
 
 let logStream = null;

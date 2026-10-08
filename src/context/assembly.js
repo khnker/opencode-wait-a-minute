@@ -413,9 +413,19 @@ if (!isTrivial) {
     if (!isTrivial && skillRegistry && selectedSkills.length > 0) {
       const skillBudget = Math.floor(flex * 0.4); // 40% del flex restante para skills
       let skillSpent = 0;
-      const skillContentMax = 1200; // max chars por skill
       
-      for (const skill of selectedSkills) {
+      // Prioritize prompt-matched (on-demand) skills over always-on base skills so
+      // a tight budget never starves the task-relevant skills. Base skills only
+      // inject if budget remains after the matched ones.
+      const orderedSkills = [...selectedSkills].sort((a, b) => {
+        const ab = a.base ? 1 : 0;
+        const bb = b.base ? 1 : 0;
+        if (ab !== bb) return ab - bb;
+        return (b.relevance || 0) - (a.relevance || 0);
+      });
+
+      for (const skill of orderedSkills) {
+        const skillContentMax = skill.base ? 8000 : 1200; // max chars por skill
         if (skillSpent >= skillBudget) {
           rationale.push(`N3: budget agotado para skills (${skillSpent}/${skillBudget})`);
           break;

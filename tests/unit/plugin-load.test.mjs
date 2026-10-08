@@ -115,7 +115,7 @@ try {
 
 test("Routing: selección reporta hasContent/loaded real del catálogo (nunca fake)", () => {
   const registry = pluginDefault.getRegistry();
-  const sel = routeSkillsV2("angular", {}, registry, "STANDARD").selected;
+  const sel = routeSkillsV2("write documentation", {}, registry, "STANDARD").selected;
   assert.ok(sel.length > 0, "debe seleccionar skills");
   for (const s of sel) {
     assert.equal(typeof s.hasContent, "boolean");

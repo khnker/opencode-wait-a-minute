@@ -502,7 +502,7 @@ export async function handleMessage(input, output, deps) {
         projectPath: wamRoot,
         budget: cfg.contextBudget || 4000,
         taskState: updatedState,
-        skillRegistry: waitAMinute.loadBundledRegistry(),
+        skillRegistry: cfg.skills === false ? {} : (analysis.skillRegistryMap || waitAMinute.loadBundledRegistry()),
         selectedSkills: analysis.skills?.selected || [],
       });
       if (pack.lines.length) {

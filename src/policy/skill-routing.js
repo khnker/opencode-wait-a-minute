@@ -44,8 +44,10 @@ export function getSkillSearchPaths({ root, home } = {}) {
 
   return [
     { dir: path.join(effectiveRoot, ".opencode", "skills"), tier: "project-local" },
+    { dir: path.join(effectiveRoot, ".opencode", "skill"), tier: "project-local" },
     { dir: path.join(effectiveRoot, ".opencode", ".skills"), tier: "project-local" },
     { dir: path.join(effectiveHome, ".config", "opencode", "skills"), tier: "user-global" },
+    { dir: path.join(effectiveHome, ".config", "opencode", "skill"), tier: "user-global" },
     { dir: path.join(effectiveHome, ".config", "opencode", ".skills"), tier: "user-global" },
     { dir: path.join(effectiveHome, ".claude", "skills"), tier: "user-global" },
     { dir: path.join(effectiveHome, ".agents", "skills"), tier: "user-global" },

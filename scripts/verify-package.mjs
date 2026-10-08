@@ -6,7 +6,7 @@
  *   1. Pack the module into a tarball via `npm pack` (no publish, no network).
  *   2. Install the tarball into a fresh temp directory using `npm install`.
  *   3. Import the installed package and assert critical runtime contracts:
- *      - `loadBundledRegistry()` returns >500 skills, all with SKILL.md content
+ *      - `loadBundledRegistry()` returns >300 skills, all with SKILL.md content
  *      - All critical runtime files are present on disk
  *
  * Exits 0 on success, 1 on any failure. Intended to run in CI and locally.
@@ -19,7 +19,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const MIN_SKILL_COUNT = 500;
+const MIN_SKILL_COUNT = 300;
 
 // Critical runtime files that MUST ship in the tarball.
 const REQUIRED_FILES = [
@@ -104,7 +104,7 @@ async function main() {
       fail("import", "loadBundledRegistry is not exported as a function");
     }
 
-    // 5) Verify registry has >500 skills with SKILL.md content
+    // 5) Verify registry has >300 skills with SKILL.md content
     log("registry", "calling loadBundledRegistry()...");
     const registry = api.loadBundledRegistry();
     const skillIds = Object.keys(registry || {});

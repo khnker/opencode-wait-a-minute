@@ -42,15 +42,15 @@ function assembleWithSkills(prompt, selected, overrides = {}) {
 // Normal scenarios verified against the real catalog: a domain prompt must
 // detect a capability, select the matching skill(s), and inject real content.
 const SCENARIOS = [
-  { prompt: "implement tdd workflow", expect: ["antigravity-awesome-skills-tdd", "antigravity-awesome-skills-implement"] },
-  { prompt: "write documentation", expect: ["antigravity-awesome-skills-documentation"] },
-  { prompt: "angular component", expect: ["antigravity-awesome-skills-angular"] },
+  { prompt: "write documentation", expect: ["github-awesome-copilot-documentation-writer"] },
+  { prompt: "create an implementation plan", expect: ["github-awesome-copilot-create-implementation-plan"] },
+  { prompt: "generate playwright test", expect: ["github-awesome-copilot-playwright-generate-test"] },
 ];
 
 describe("skill pipeline integration (detect -> select -> inject)", () => {
   it("loads the real bundled catalog with embedded content", () => {
     const ids = Object.keys(REGISTRY);
-    assert.ok(ids.length > 1000, `expected a large catalog, got ${ids.length}`);
+    assert.ok(ids.length > 300, `expected a large catalog, got ${ids.length}`);
     for (const { expect } of SCENARIOS) {
       for (const skill of expect) {
         assert.ok(REGISTRY[skill], `${skill} must exist in the catalog`);

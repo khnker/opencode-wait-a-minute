@@ -20,6 +20,7 @@ import { discoverSkills } from "../policy/skill-routing.js";
 
 // Re-export for backward compatibility
 export { classifyRequest, detectStack, classifyUncertainty, buildUncertainties, buildAssumptions, discoverSkills };
+export { parseFrontmatter, toContract, buildSkillGraph, detectCycle, topoSort, validateActivation, recordExecutedGraph, getExecutedGraph, planExecution, preserveStateAcrossTransition } from "./skill-composition.js";
 
 
 // -- Caveman compression (terse, para headroom de contexto) ----------------
@@ -1676,6 +1677,10 @@ export async function analyze(options = {}) {
       sources: usedSources.map((s) => (typeof s === "string" ? s : s.id)),
       corpus: corpusRoot,
     },
+    // Full unified registry (id -> skill + embedded content) built for routing.
+    // Reused by the injection layer so selected skills resolve content from the
+    // exact same registry that produced the selection. Not persisted.
+    skillRegistryMap: skillRegistry,
     skills: {
       candidates: skillSelection.candidates.map((c) => ({
         name: c.name,
