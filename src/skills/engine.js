@@ -1588,10 +1588,13 @@ export async function analyze(options = {}) {
   }
 
   // Step 5: Select skills (registry unificado: local APPROVED + catálogo embebido)
-  const availableSkills = discoverSkills();
+  // Gateable via config.skills=false: skills are not discovered, routed nor injected.
+  const skillsEnabled = config?.skills !== false;
+  const availableSkills = skillsEnabled ? discoverSkills() : [];
   const baseDir = projectPath || process.cwd();
-  const { registry: skillRegistry, corpusRoot, sources: usedSources, registryFile } =
-    buildRegistry(availableSkills, baseDir);
+  const { registry: skillRegistry, corpusRoot, sources: usedSources, registryFile } = skillsEnabled
+    ? buildRegistry(availableSkills, baseDir)
+    : { registry: {}, corpusRoot: null, sources: [], registryFile: null };
 
   // Step 6: Determine mode and contract
   const riskLevel = assumptions.some(a => /alto riesgo|high risk|peligroso|destructivo/.test(a)) ? "high" : "medium";
@@ -1602,8 +1605,17 @@ export async function analyze(options = {}) {
 
   // Step 5.5: Skill routing v2 — scoring ponderado + persistencia registry
   const rigor = modeInfo.mode === "FAST" ? "MINIMAL" : modeInfo.mode === "STRICT" ? "RIGOROUS" : "STANDARD";
-  const skillSelection = routeSkillsV2(prompt, projectInfo, skillRegistry, rigor, { rigor, weights: config?.scoringWeights, projectRoot: baseDir });
-  try { persistRegistry(registryFile, skillRegistry); } catch {}
+  const skillSelection = skillsEnabled
+    ? routeSkillsV2(prompt, projectInfo, skillRegistry, rigor, { rigor, weights: config?.scoringWeights, projectRoot: baseDir })
+    : {
+        candidates: [],
+        selected: [],
+        rejected: [],
+        exceeded: [],
+        counts: { selected: 0, limit: 0, total: 0, base: 0 },
+        explain: () => "skills disabled (config.skills=false)",
+      };
+  if (skillsEnabled) { try { persistRegistry(registryFile, skillRegistry); } catch {} }
 
   // Explicalidad: qué skills seleccionadas y por qué (spec §23)
   const selectionExplain = skillSelection.explain();

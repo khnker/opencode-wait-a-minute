@@ -8,9 +8,9 @@
  * Uso:
  *   node scripts/build-registry.cjs [upstream-dir]
  *
- * upstreap-dir (default: ./upstream) debe contener subcarpetas con los
- * repos clonados (khasky-awesome-agent-skills, whobat-ai-agent-skills,
- * antigravity-awesome-skills). El maintainer los clona/fetch manualmente.
+ * upstream-dir (default: ./upstream) debe contener subcarpetas con los
+ * repos clonados, nombradas por el `id` de SOURCE_CONFIG (p. ej.
+ * github-awesome-copilot). El maintainer los clona/fetch manualmente.
  */
 
 const fs = require("fs");
@@ -23,6 +23,7 @@ const SOURCE_CONFIG = [
   { id: "khasky-awesome-agent-skills", repository: "https://github.com/khasky/awesome-agent-skills.git", trust: "curated" },
   { id: "whobat-ai-agent-skills", repository: "https://github.com/whobat/AI-Agent-skills.git", trust: "community" },
   { id: "antigravity-awesome-skills", repository: "https://github.com/sickn33/antigravity-awesome-skills.git", trust: "community" },
+  { id: "github-awesome-copilot", repository: "https://github.com/github/awesome-copilot.git", trust: "curated" },
 ];
 
 function readSafe(p) { try { return fs.readFileSync(p, "utf8"); } catch { return ""; } }

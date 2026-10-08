@@ -3,12 +3,24 @@ import path from 'node:path';
 
 const LOG_FILE = process.env.WAM_LOG_FILE || path.join(process.cwd(), '.wam', 'plugin.log');
 
+let loggingEnabled = true;
+
+/** Enable/disable WAM file logging at runtime (driven by WAM config). */
+export function configureLogger({ enabled } = {}) {
+  if (enabled !== undefined) loggingEnabled = enabled !== false;
+}
+
+export function isLoggingEnabled() {
+  return loggingEnabled;
+}
+
 /**
  * Simple diagnostic logger for wait-a-minute-plugin.
  * Prefixes: [ISO-Timestamp] [LEVEL] [category] Message
  */
 export const logger = {
   _log(level, category, message) {
+    if (!loggingEnabled) return;
     const timestamp = new Date().toISOString();
     const formattedMessage = `[${timestamp}] [${level}] [${category}] ${message}\n`;
     

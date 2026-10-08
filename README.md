@@ -312,8 +312,39 @@ See [docs/development/testing.md](docs/development/testing.md) and
 
 ---
 
+## Configuration
+
+WAM is on by default. Each capability can be toggled independently via
+environment variables (highest precedence) or a project `.wam/config.json`:
+
+| Flag | Env var | Effect |
+|------|---------|--------|
+| `skills` | `WAM_SKILLS=false` · `WAM_DISABLE_SKILLS=1` | Skip skill discovery, routing and injection |
+| `logging` | `WAM_SILENT=1` · `WAM_DISABLE_LOGGING=1` | Silence WAM file + console diagnostics |
+| `enforcement` | `WAM_GOVERNANCE=off` · `WAM_BYPASS=1` | Disable contract governance blocking |
+
+```jsonc
+// .wam/config.json
+{
+  "skills": false,
+  "logging": false,
+  "enforcement": false
+}
+```
+
+Precedence: `WAM_*` env → `.wam/config.json` → defaults (all `true`).
+Inspect the effective config with `/wam config` (`/wam config path` for the file).
+
+---
+
 ## License
 
 | License | Copyright |
 |---------|-----------|
 | [MIT](./LICENSE) | © 2026 khnker |
+
+## Sources & Ecosystem
+
+WAM builds upon standard patterns from community-driven ecosystems and specifications:
+- **Agent Skills & Primitives:** Inspired by the [Awesome GitHub Copilot](https://github.com/github/awesome-copilot) collection and the [Agent Skills specification](https://agentskills.io/specification) for self-contained, modular capabilities.
+- **Spec-Driven Development (OpenSpec):** Integrates strict spec-driven design, traceability, and architectural change management via OpenSpec workflows.

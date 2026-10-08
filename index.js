@@ -3,6 +3,9 @@ import { startExperiment, noteSuccess, noteFailure } from "./src/execution/execu
 import { migrateLegacyCognition } from "./src/cognition/cognition-store.js";
 import { handleMessage } from "./src/integration/message-handler.js";
 import { injectWamParts } from "./src/integration/part-provenance.js";
+import { loadWamConfig } from "./src/config/wam-config.js";
+import { configureLogger } from "./src/integration/logger.js";
+import { setLoggingEnabled, wamLog, wamError } from "./src/shared/wam-log.js";
 
 import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
 import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules } from "./src/context/context.js";
@@ -100,7 +103,7 @@ async function bridgeExecution({ taskId, taskRoot, state, tool, args, callID, se
     });
 
     if (!result?.ok || !result.hypothesis || !result.experiment) {
-      console.log(`[wait-a-minute] No se pudo iniciar el experimento para ${tool}: ${result?.guard?.reason || "sin resultado"}`);
+      wamLog(`[wait-a-minute] No se pudo iniciar el experimento para ${tool}: ${result?.guard?.reason || "sin resultado"}`);
       return;
     }
 
@@ -119,7 +122,7 @@ async function bridgeExecution({ taskId, taskRoot, state, tool, args, callID, se
       requirementId: requirement?.id || null,
     };
   } catch (error) {
-    console.log(`[wait-a-minute] Falló el puente de ejecución para ${tool}: ${error.message}`);
+    wamLog(`[wait-a-minute] Falló el puente de ejecución para ${tool}: ${error.message}`);
   }
 }
 
@@ -248,7 +251,7 @@ function writeActiveTaskId(id, root, options = {}) {
     fs.writeFileSync(ACTIVE_FILE(root), JSON.stringify(payload));
   } catch (err) {
     // Critical write: surface error to caller for handling — never silent
-    console.error(`[WAM] writeActiveTaskId failed for ${id} at ${root}:`, err.message);
+    wamError(`[WAM] writeActiveTaskId failed for ${id} at ${root}:`, err.message);
     throw err;
   }
 }
@@ -560,6 +563,13 @@ const WaitAMinutePlugin = async (pluginInput) => {
   // Project directory (opencode 1.18.25: plugin input, not ctx)
   const projectDirectory = pluginInput?.directory || process.cwd();
 
+  // Runtime configuration (.wam/config.json + WAM_* env). Source of truth:
+  // src/config/wam-config.js. Gates skill injection, logging and governance.
+  const wamConfig = loadWamConfig(projectDirectory);
+  configureLogger({ enabled: wamConfig.logging });
+  setLoggingEnabled(wamConfig.logging);
+  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement };
+
   // Track if plugin is bypassed
   let bypassed = false;
 
@@ -635,7 +645,7 @@ async function postToolExecution(input, output) {
           provenance: `agent-tool-${toolName}-failure`,
         });
       } catch (e) {
-        console.log(`[wait-a-minute] postToolExecution noteFailure error:`, e.message);
+        wamLog(`[wait-a-minute] postToolExecution noteFailure error:`, e.message);
       }
     } else if (input?.tool) {
       try {
@@ -649,11 +659,11 @@ async function postToolExecution(input, output) {
           provenance: `agent-tool-${toolName}-success`,
         });
       } catch (e) {
-        console.log(`[wait-a-minute] postToolExecution noteSuccess error:`, e.message);
+        wamLog(`[wait-a-minute] postToolExecution noteSuccess error:`, e.message);
       }
     }
   } catch (err) {
-    console.error("[wait-a-minute] postToolExecution error:", err);
+    wamError("[wait-a-minute] postToolExecution error:", err);
   } finally {
     const cleanupKey = input._wamCallID || input?.callID || `${input?.sessionID}:${toolName}`;
     if (cleanupKey && cleanupKey !== `${input?.sessionID}:${toolName}`) {
@@ -762,10 +772,10 @@ async function postToolExecution(input, output) {
         }
         const tool = input?.tool || "";
         if (process.env.WAM_DEBUG_TE) {
-          console.log(`[WAM-DEBUG-TE] sid=${sid} taskId=${taskId} phase=${st?.phase} tool=${tool}`);
+          wamLog(`[WAM-DEBUG-TE] sid=${sid} taskId=${taskId} phase=${st?.phase} tool=${tool}`);
         }
         if (process.env.WAM_DEBUG_TE) {
-          console.log(`[WAM-DEBUG-TE-CHECK] phase=${st?.phase} tool=${tool} inBlocked=${BLOCKED_TOOLS.has(tool)} riskCheckWillPass`);
+          wamLog(`[WAM-DEBUG-TE-CHECK] phase=${st?.phase} tool=${tool} inBlocked=${BLOCKED_TOOLS.has(tool)} riskCheckWillPass`);
         }
 
 
@@ -824,6 +834,7 @@ async function postToolExecution(input, output) {
           enforceGovernance(tool, st, {
             isSubagent: sessionParents.has(sid) || !sessionResolved.has(sid),
             declaredFiles: st?.contract?.files || st?.contract?.declaredFiles || [],
+            enforcementEnabled: cfg.enforcement !== false,
           });
         } catch (err) {
           if (err?.wamPolicyBlock) input.output = err.message;
@@ -835,7 +846,7 @@ async function postToolExecution(input, output) {
         // git mutante (commit/push) sigue bloqueado hasta responder la pregunta.
         if (tool === "bash" && READONLY_GIT_RE.test(bashCommandOf(input))) return;
         if (BLOCKED_TOOLS.has(tool)) {
-          if (process.env.WAM_DEBUG_TE) console.log(`[WAM-DEBUG-TE] BLOCKING ${tool} in ASKING`);
+          if (process.env.WAM_DEBUG_TE) wamLog(`[WAM-DEBUG-TE] BLOCKING ${tool} in ASKING`);
           const u = (st.contract?.unknowns || []).find((x) => x.status === "blocking");
           const question = u ? `${u.id}: ${u.question}` : "pregunta bloqueante pendiente";
           const directive = `[wait-a-minute] ENFORCED BLOCK — tarea en ASKING (${question}). Herramienta ${tool} bloqueada. Responder: /wam answer ${u?.id || "U1"} <respuesta>`;
@@ -866,7 +877,7 @@ async function postToolExecution(input, output) {
           input._wamRequirementId = bridgeResult.requirementId;
         }
       } catch (bridgeError) {
-        console.log("[wait-a-minute] Bridge execution non-blocking error:", bridgeError.message);
+        wamLog("[wait-a-minute] Bridge execution non-blocking error:", bridgeError.message);
       }
     },
 
@@ -874,7 +885,7 @@ async function postToolExecution(input, output) {
       try {
         await postToolExecution(input, output);
       } catch (e) {
-        console.log(`[wait-a-minute] tool.execute.after non-blocking error:`, e.message);
+        wamLog(`[wait-a-minute] tool.execute.after non-blocking error:`, e.message);
       }
     },
   };
@@ -901,6 +912,23 @@ function classifyAskingMessage(text = "") {
  */
 async function wamCli(args, cfg = {}, root = process.cwd(), taskId = readActiveTaskId(root) || "default-task") {
   const [sub, action, ...rest] = args || [];
+
+  if (sub === "config") {
+    if (action === "path") return path.join(root, ".wam", "config.json");
+    if (action === "get" || action === undefined) {
+      return [
+        "WAM config (precedencia: env WAM_* > .wam/config.json > defaults)",
+        "  skills:      " + (cfg.skills !== false),
+        "  logging:     " + (cfg.logging !== false),
+        "  enforcement: " + (cfg.enforcement !== false),
+        "",
+        "Editar en .wam/config.json o vía env:",
+        "  WAM_SKILLS=false  WAM_SILENT=1  WAM_GOVERNANCE=off",
+      ].join("\n");
+    }
+    return "Uso: /wam config [get|path]";
+  }
+
   // taskId de la sesión del comando (namespaced ses-<id> si genérico)
 
   if (sub === "skills") {

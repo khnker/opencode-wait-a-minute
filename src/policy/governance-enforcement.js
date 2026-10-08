@@ -70,6 +70,12 @@ function logDecision(event) {
 export function enforceGovernance(tool, state, ctx = {}) {
   if (!CONTRACT_GATED_TOOLS.has(tool)) return { allowed: true, reason: "tool-not-gated" };
 
+  // Hard config switch (cfg.enforcement === false): governance is fully off.
+  if (ctx.enforcementEnabled === false) {
+    logDecision({ decision: "allow", reason: "config-disabled", tool, phase: state?.phase });
+    return { allowed: true, reason: "config-disabled" };
+  }
+
   if (isGovernanceDisabled()) {
     logDecision({ decision: "allow", reason: "override", tool, phase: state?.phase });
     return { allowed: true, reason: "override" };
