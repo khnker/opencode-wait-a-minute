@@ -2,7 +2,7 @@
  * Pre-flight request classification logic.
  */
 export function classifyRequest(prompt) {
-  const lower = prompt.toLowerCase();
+  const lower = String(prompt ?? "").toLowerCase();
 
   // Trivial patterns - bypass wait-a-minute
   const trivialPatterns = [

@@ -713,8 +713,9 @@ function recordSkillUsage(usage, baseDir) {
  * Routing con scoring ponderado + persistencia. Reemplaza routeSkills() en analyze.
  */
 export function routeSkillsV2(prompt, projectInfo, registry, mode, options = {}) {
+  prompt = String(prompt ?? "");
   logger.info("pipeline-routing", `Starting routeSkillsV2. Mode: ${mode}, Prompt: ${prompt.substring(0, 50)}...`);
-  const tracer = new ContextDecisionTracer(options.taskId || "default", options.projectRoot || process.cwd()); console.log("--- DEBUG: Tracer instanciado para " + (options.taskId || "default"));
+  const tracer = new ContextDecisionTracer(options.taskId || "default", options.projectRoot || process.cwd());
 
   // Log concept extraction
   tracer.logConceptExtraction(prompt, { source: "user" });
@@ -823,6 +824,22 @@ candidates.sort((a, b) => b.score - a.score);
  * Descubre skills en el registro (dirs locales), extrae metadata sin cargar contenido.
  * Registry: id, name, source, capabilities, triggers, risk, compatibility, status.
  */
+/**
+ * Lee el contenido de una skill local desde su SKILL.md y remueve el
+ * frontmatter YAML. Se embebe en el registry en build-time para que la
+ * inyeccion N3 (assembleContext) y la carga on-demand operen igual que con
+ * el catalogo bundleado (que ya trae content embebido).
+ */
+function readSkillContent(skillPath) {
+  if (!skillPath) return "";
+  try {
+    const raw = fs.readFileSync(skillPath, "utf-8");
+    return raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "").trim();
+  } catch {
+    return "";
+  }
+}
+
 function buildSkillRegistry(availableSkills) {
   const registry = {};
   const builtinCapabilities = {
@@ -890,6 +907,7 @@ function buildSkillRegistry(availableSkills) {
       compatibility: { opencode: true },
       status: "APPROVED",
       cache: false,
+      content: readSkillContent(info?.path),
       ...(ext.keywords ? { keywords: ext.keywords } : {}),
       ...(ext.domain ? { domain: ext.domain } : {}),
     };
@@ -1536,9 +1554,9 @@ export function synthesizeContract(prompt = "", mode = "NORMAL", uncertainties =
   return { requirements, constraints: [], verification, unknowns, status: "PROPOSED", rigor: mode };
 }
 
-export async function analyze(options) {
+export async function analyze(options = {}) {
   const {
-    prompt,
+    prompt = "",
     projectPath,
     config,
     tierCaps,

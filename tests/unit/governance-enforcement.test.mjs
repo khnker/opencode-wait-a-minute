@@ -1,95 +1,85 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { enforceGovernance } from "../../src/policy/governance-enforcement.js";
+import {
+  enforceGovernance,
+  isTrivialChange,
+  isTerminalPhase,
+} from "../../src/policy/governance-enforcement.js";
 import { WamPolicyBlock } from "../../src/policy/risk-engine.js";
 
-test("Governance: mutating tool with APPROVED contract passes", () => {
-  assert.doesNotThrow(() =>
-    enforceGovernance("write", {
-      contract: { status: "APPROVED" },
-      phase: "IMPLEMENTING",
-    })
-  );
+const approved = { phase: "IMPLEMENTING", contract: { status: "APPROVED" } };
+const draft = {
+  phase: "PROPOSED",
+  contract: { status: "PROPOSED" },
+  requirements: [{ id: "r1", status: "pending" }],
+};
+
+test("allows gated tool with APPROVED contract", () => {
+  assert.doesNotThrow(() => enforceGovernance("write", approved));
 });
 
-test("Governance: mutating tool in DONE phase passes", () => {
-  assert.doesNotThrow(() =>
-    enforceGovernance("edit", {
-      contract: { status: "PROPOSED" },
-      phase: "DONE",
-    })
-  );
+test("allows on terminal phase (DONE / COMPLETE)", () => {
+  assert.doesNotThrow(() => enforceGovernance("edit", { phase: "DONE", contract: { status: "PROPOSED" } }));
+  assert.doesNotThrow(() => enforceGovernance("edit", { phase: "COMPLETE", contract: { status: "PROPOSED" } }));
 });
 
-test("Governance: mutating tool with non-APPROVED contract throws WamPolicyBlock", () => {
+test("blocks gated tools without approved contract", () => {
+  assert.throws(() => enforceGovernance("write", draft), WamPolicyBlock);
+  assert.throws(() => enforceGovernance("todo_write", draft), WamPolicyBlock);
+  assert.throws(() => enforceGovernance("apply_patch", draft), WamPolicyBlock);
   assert.throws(
-    () =>
-      enforceGovernance("write", {
-        contract: { status: "PROPOSED" },
-        phase: "PROPOSED",
-        requirements: [{ status: "pending" }],
-      }),
-    WamPolicyBlock
+    () => enforceGovernance("edit", draft),
+    (err) => err instanceof WamPolicyBlock && err.wamPolicyBlock === true && err.name === "WamPolicyBlock"
   );
 });
 
-test("Governance: edit tool without approval throws WamPolicyBlock", () => {
-  assert.throws(
-    () =>
-      enforceGovernance("edit", {
-        contract: { status: "PROPOSED" },
-        phase: "ASKING",
-      }),
-    WamPolicyBlock
-  );
+test("allows ASKING (defers to clarification gate)", () => {
+  assert.doesNotThrow(() => enforceGovernance("edit", { phase: "ASKING", contract: { status: "PROPOSED" } }));
 });
 
-test("Governance: safe tool (read) passes even without approval", () => {
-  assert.doesNotThrow(() =>
-    enforceGovernance("read", {
-      contract: { status: "PROPOSED" },
-      phase: "PROPOSED",
-    })
-  );
+test("untracked session (null/undefined state) fails open", () => {
+  assert.doesNotThrow(() => enforceGovernance("write", null));
+  assert.doesNotThrow(() => enforceGovernance("write", undefined));
 });
 
-test("Governance: todo_write (mutating) without approval throws", () => {
-  assert.throws(
-    () =>
-      enforceGovernance("todo_write", {
-        contract: { status: "PROPOSED" },
-        phase: "PROPOSED",
-      }),
-    WamPolicyBlock
-  );
+test("non-gated tools never throw (bash/read/task)", () => {
+  assert.doesNotThrow(() => enforceGovernance("read", draft));
+  assert.doesNotThrow(() => enforceGovernance("bash", draft));
+  assert.doesNotThrow(() => enforceGovernance("task", draft));
 });
 
-test("Governance: bash (mutating) without approval throws", () => {
-  assert.throws(
-    () =>
-      enforceGovernance("bash", {
-        contract: { status: "VERIFYING" },
-        phase: "VERIFYING",
-      }),
-    WamPolicyBlock
-  );
+test("delegated subagent is exempt", () => {
+  assert.doesNotThrow(() => enforceGovernance("write", draft, { isSubagent: true }));
 });
 
-test("Governance: missing state defaults to blocking", () => {
-  assert.throws(
-    () => enforceGovernance("write", {}),
-    WamPolicyBlock
-  );
+test("trivial declared change is allowed", () => {
+  assert.doesNotThrow(() => enforceGovernance("write", draft, { declaredFiles: ["a.mjs", "b.mjs"] }));
 });
 
-test("Governance: WamPolicyBlock is structured error with wamPolicyBlock flag", () => {
+test("non-trivial declared change is blocked", () => {
+  assert.throws(() => enforceGovernance("write", draft, { declaredFiles: ["a", "b", "c"] }), WamPolicyBlock);
+});
+
+test("protected paths are never trivial", () => {
+  assert.equal(isTrivialChange(["ci.yml"]), false);
+  assert.equal(isTrivialChange([".github/workflows/ci.yml"]), false);
+  assert.equal(isTrivialChange(["migrations/001.sql"]), false);
+  assert.throws(() => enforceGovernance("write", draft, { declaredFiles: ["ci.yml"] }), WamPolicyBlock);
+});
+
+test("override (WAM_GOVERNANCE=off) disables enforcement", () => {
+  const prev = process.env.WAM_GOVERNANCE;
+  process.env.WAM_GOVERNANCE = "off";
   try {
-    enforceGovernance("apply_patch", { contract: { status: "PROPOSED" }, phase: "PROPOSED" });
-    assert.fail("Should have thrown");
-  } catch (err) {
-    assert.equal(err.name, "WamPolicyBlock");
-  assert.equal(err?.wamPolicyBlock, true);
-    assert.ok(err.policy);
-    assert.equal(typeof err.message, "string");
+    assert.doesNotThrow(() => enforceGovernance("write", draft));
+  } finally {
+    if (prev === undefined) delete process.env.WAM_GOVERNANCE;
+    else process.env.WAM_GOVERNANCE = prev;
   }
+});
+
+test("isTerminalPhase", () => {
+  assert.equal(isTerminalPhase("DONE"), true);
+  assert.equal(isTerminalPhase("COMPLETE"), true);
+  assert.equal(isTerminalPhase("PROPOSED"), false);
 });

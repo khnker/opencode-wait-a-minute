@@ -21,11 +21,12 @@ import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
-import { mkdtempSync, rmSync, readdirSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, readdirSync, existsSync, readFileSync } from "node:fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
+const PKG_NAME = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")).name;
 
 function log(step, msg) {
   console.log(`[${step}] ${msg}`);
@@ -85,7 +86,7 @@ async function main() {
     }
 
     // --- Step 3: import the plugin ---------------------------------------
-    const pluginPath = join(installDir, "node_modules", "wait-a-minute", "index.js");
+    const pluginPath = join(installDir, "node_modules", PKG_NAME, "index.js");
     if (!existsSync(pluginPath)) {
       fail("import", `plugin entry point not found at ${pluginPath}`);
     }

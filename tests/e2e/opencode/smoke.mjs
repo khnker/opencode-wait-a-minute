@@ -52,6 +52,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "../../..");
+const PKG_NAME = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")).name;
 
 // Fail fast on an unsupported Node runtime. The supported range lives in the
 // machine-readable matrix (compatibility-matrix.mjs), never in this file.
@@ -339,7 +340,7 @@ async function main() {
   const installedMain = join(
     workspace,
     "node_modules",
-    "wait-a-minute",
+    PKG_NAME,
     "index.js"
   );
   if (!existsSync(installedMain)) {

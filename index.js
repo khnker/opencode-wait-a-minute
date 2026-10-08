@@ -11,6 +11,7 @@ import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } f
 import { ContextDecisionTracer } from "./src/context/context-decision-audit.js";
 import { guardAction } from "./src/execution/runtime-guards.js";
 import { WamPolicyBlock, evaluateAction } from "./src/policy/risk-engine.js";
+import { enforceGovernance } from "./src/policy/governance-enforcement.js";
 import { classifyByCapabilities, buildCandidate } from "./src/policy/strategy-capabilities.js";
 import { getStatusReport } from "./src/execution/execution-state.js";
 import { createSnapshot, checkContinuation, rebuildScope } from "./src/context/context-snapshot.js";
@@ -391,9 +392,6 @@ function writeCavemanSummary(taskId, state, root, extra = "") {
   return cav;
 }
 
-// -- Delegación dura: reqs pendientes → subagentes en paralelo --------------
-
-const MUTATING_TOOLS = new Set(["write", "edit", "apply_patch", "patch", "todo_write", "todowrite"]);
 
 function domainHint(text = "") {
   const t = text.toLowerCase();
@@ -571,6 +569,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
   // consultamos vía client.session.get para no depender del cwd del proceso.
   const sessionRoots = new Map();
   const sessionParents = new Map(); // sessionID → parentID (subagentes Task tienen parent)
+  const sessionResolved = new Set(); // sessionIDs cuyo parentID se resolvió (distingue main de subagente)
   const processedMessages = new Map(); // messageID+kind → processed (chat.message idempotency)
   const sessionTasks = new Map(); // sessionID → taskId activo visto en chat.message
   const client = pluginInput?.client;
@@ -581,9 +580,11 @@ const WaitAMinutePlugin = async (pluginInput) => {
     try {
       const info = client?.session?.get && sessionID ? await client.session.get({ sessionID }) : null;
       if (info?.location?.directory) base = info.location.directory;
-      if (info?.parentID) sessionParents.set(sessionID, info.parentID);
+      const parent = info?.parentID || info?.parent_id || info?.parent?.id;
+      if (parent) sessionParents.set(sessionID, parent);
+      if (info) sessionResolved.add(sessionID);
     } catch {
-      // fallback: cwd del server
+      // fallback: cwd del server (sesión no resuelta → fail-open, no se gatea)
     }
     sessionRoots.set(sessionID, base);
     return base;
@@ -710,16 +711,6 @@ const WaitAMinutePlugin = async (pluginInput) => {
           console.log(`[WAM-DEBUG-TE-CHECK] phase=${st?.phase} tool=${tool} inBlocked=${BLOCKED_TOOLS.has(tool)} riskCheckWillPass`);
         }
 
-        // Delegación dura: DESACTIVADA PARA DESARROLLO — la sesión principal
-        // puede mutar archivos directamente (flujo sin fricción).
-        // if (st?.contract?.status === "APPROVED" && !sessionParents.has(sid)) {
-        //   const pend = (st.requirements || []).some((r) => r.status !== "done" && r.status !== "verified");
-        //   if (pend && MUTATING_TOOLS.has(tool)) {
-        //     const n = (st.requirements || []).filter((r) => r.status !== "done" && r.status !== "verified").length;
-        //     const directive = `[wait-a-minute] ENFORCED BLOCK — ${n} req(s) pendiente(s) del contrato APPROVED: la sesión principal NO muta archivos. Delegar via Task en paralelo (ver [wam delegation]). Herramienta ${tool} bloqueada aquí.`;
-        //     throw new Error(directive);
-        //   }
-        // }
 
         // Strategy Continuity: si hay estrategia aprobada, verificar si la acción
         // está cubierta antes de proceder con la lógica de ASKING.
@@ -767,19 +758,19 @@ const WaitAMinutePlugin = async (pluginInput) => {
         // Sub-sessions (delegated workers, identified by parentID) are NEVER blocked
         // here: they execute the main session's approved plan via Task delegation,
         // not their own contracts. Blocking them breaks flujo sin fricción.
-        if (
-          MUTATING_TOOLS.has(tool)
-          && !sessionParents.has(sid)
-          && st?.contract?.status !== "APPROVED"
-          && st?.phase !== "DONE"
-          && st?.phase !== "ASKING"
-        ) {
-          const reqs = (st?.requirements || []).filter((r) => r.status !== "done" && r.status !== "verified");
-          const pendCount = reqs.length;
-          const phase = st?.phase || "PROPOSED";
-          const directive = `[wait-a-minute] GOVERNANCE BLOCK (${tool}): contrato no aprobado (fase ${phase}). ${pendCount} requisito(s) pendiente(s). Aprobar contrato primero: /wam contract approve o继续 con implementación legítima.`;
-          input.output = directive;
-          throw new WamPolicyBlock(directive, { tool, reason: "contract not approved", level: "BLOCKED", source: "governance-enforcement" });
+        // Governance Enforcement centralizado (src/policy/governance-enforcement.js).
+        // Exento: subagentes (parentID), sesiones no resueltas (fail-open),
+        // override explícito (WAM_GOVERNANCE=off), fase terminal, ASKING, y
+        // cambios triviales declarados. Solo se gatea la sesión main con un
+        // contrato tracked y no aprobado.
+        try {
+          enforceGovernance(tool, st, {
+            isSubagent: sessionParents.has(sid) || !sessionResolved.has(sid),
+            declaredFiles: st?.contract?.files || st?.contract?.declaredFiles || [],
+          });
+        } catch (err) {
+          if (err?.wamPolicyBlock) input.output = err.message;
+          throw err;
         }
 
         if (st?.phase !== "ASKING") return;
