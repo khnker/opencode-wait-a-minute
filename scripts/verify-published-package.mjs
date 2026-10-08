@@ -32,7 +32,11 @@ function globToRegExp(glob) {
 function collectExpectedPaths(pkgJson) {
   const paths = new Set();
   if (pkgJson.main) paths.add(pkgJson.main);
-  for (const entry of pkgJson.files || []) paths.add(entry);
+  for (const entry of pkgJson.files || []) {
+    if (typeof entry !== "string") continue;
+    if (entry.startsWith("!")) continue; // exclusion pattern, not an expected path
+    paths.add(entry);
+  }
   return [...paths];
 }
 
