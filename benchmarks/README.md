@@ -6,7 +6,7 @@ context graph and reports token savings, latency, and correctness parity.
 
 ## What RC1 measures
 
-The RC1 scenario set exercises six end-to-end shapes:
+The RC1 scenario set exercises five end-to-end shapes:
 
 | scenario | purpose |
 |---|---|
@@ -14,7 +14,6 @@ The RC1 scenario set exercises six end-to-end shapes:
 | `contextual` | mid-sized requirement set, baseline-friendly |
 | `continuation` | 20-turn session to surface cumulative token savings |
 | `mutation` | requirement revisions mid-session (control over fast path) |
-| `decision-intake` | downstream decision surfacing |
 | `negative-control` | overhead probe with no shared context |
 
 Each turn is run on two arms:
