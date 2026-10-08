@@ -83,3 +83,36 @@ test("isTerminalPhase", () => {
   assert.equal(isTerminalPhase("COMPLETE"), true);
   assert.equal(isTerminalPhase("PROPOSED"), false);
 });
+
+
+// --- regression: deadlock produced by a tracked PROPOSED contract with 0 requirements ---
+const emptyDraft = { phase: "PROPOSED", contract: { status: "PROPOSED" }, requirements: [] };
+
+test("empty-contract fix: tracked PROPOSED with 0 requirements fails open (no deadlock)", () => {
+  assert.doesNotThrow(() => enforceGovernance("write", emptyDraft));
+  assert.doesNotThrow(() => enforceGovernance("edit", emptyDraft));
+  assert.doesNotThrow(() => enforceGovernance("todo_write", emptyDraft));
+  assert.doesNotThrow(() => enforceGovernance("apply_patch", emptyDraft));
+});
+
+test("empty-contract fix: a blocking unknown still gates an otherwise empty contract", () => {
+  const withUnknown = {
+    phase: "PROPOSED",
+    contract: { status: "PROPOSED", unknowns: [{ id: "U1", status: "blocking", question: "?" }] },
+    requirements: [],
+  };
+  assert.throws(() => enforceGovernance("write", withUnknown), WamPolicyBlock);
+});
+
+test("empty-contract fix: any pending requirement still gates", () => {
+  assert.throws(
+    () => enforceGovernance("write", { phase: "PROPOSED", contract: { status: "PROPOSED" }, requirements: [{ id: "r1" }] }),
+    WamPolicyBlock
+  );
+});
+
+test("trivial escape reachable via declaredFiles (single src file)", () => {
+  assert.doesNotThrow(() =>
+    enforceGovernance("write", emptyDraft, { declaredFiles: ["src/skills/skill-inference.test.mjs"] })
+  );
+});

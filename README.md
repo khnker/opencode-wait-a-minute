@@ -199,6 +199,32 @@ The exact selection mechanism is documented in
 
 ---
 
+## Task skills can be combined
+
+A single task often needs more than one skill. WAM composes multiple skills into
+a single decision using dependency constraints, layer boundaries, and conflict
+rules rather than letting skills compete against each other.
+
+- **`dependsOn`** — skills that must be selected first. Ordering is derived from
+  the dependency graph, so e.g. a `backend-integrity` prerequisite is applied
+  before the implementing skill.
+- **`conflicts`** — mutually exclusive skills (e.g. `angular-developer` vs
+  `nestjs-best-practices`, frontend vs backend). Incompatible selections are
+  pruned instead of both being injected.
+- **Layer gating** — each skill is restricted to `frontend`, `backend`,
+  `shared`, or `infrastructure`, so a backend-only skill cannot mutate a frontend
+  file.
+- **Execution patterns** — dependency-composed skill graphs are executed as
+  composed workflows with `required`, `optional`, `conditional`, `parallel`,
+  `retry`, and `fallback` step modifiers.
+
+All of this is covered by the multi-skill injection tests
+(`tests/unit/skill-injection-registry.test.mjs`,
+`tests/unit/skill-injection.test.mjs`,
+`tests/unit/multilayer-skill-injection.test.mjs`).
+
+---
+
 ## Evidence changes what happens next
 
 WAM treats evidence as part of task state.
@@ -334,6 +360,26 @@ environment variables (highest precedence) or a project `.wam/config.json`:
 
 Precedence: `WAM_*` env → `.wam/config.json` → defaults (all `true`).
 Inspect the effective config with `/wam config` (`/wam config path` for the file).
+
+---
+
+## Known interactions
+
+WAM injects the selected skill bodies through the `chat.message` hook and reads tool
+output (files, searches) to assemble context. Other host-side plugins that rewrite or
+prune those outputs can interfere:
+
+- **Output deduplication.** Plugins such as Dynamic Context Pruning (DCP) can replace
+  repeated tool results with a `[dedup:ref sha=…]` placeholder when
+  `strategies.deduplication.enabled` is `true` and `protectedTools` is empty. Reads or
+  searches WAM depends on then come back as a reference instead of content. Protect the
+  context-gathering tools, e.g. `"protectedTools": ["read", "grep", "glob"]`, or disable
+  deduplication.
+- **Skill injection budget.** Skill bodies are injected at level N3 within the remaining
+  flex budget. Task-matched skills are injected before always-on base skills; when the
+  budget runs out the rest are skipped and the reason is recorded in the pack rationale
+  (`N3: budget agotado para skills`). Skills without embedded content are reported as
+  `sin contenido embebido` and cannot be injected.
 
 ---
 

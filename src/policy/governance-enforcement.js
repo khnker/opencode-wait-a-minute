@@ -8,8 +8,15 @@
  *     dispatched.
  *   - A session with no tracked task/contract fails OPEN: there is nothing to
  *     approve, and default-deny here deadlocked every write/edit.
- *   - Delegated workers (sessions with a parentID) are exempt.
+ *   - Delegated workers (sessions with a resolved parentID) are exempt. An
+ *     unresolved session is NOT a subagent — see isSubagent detection in
+ *     index.js to keep that contract.
  *   - An explicit, audited override disables enforcement (WAM_GOVERNANCE=off).
+ *   - A PROPOSED/DRAFT contract with no pending requirements fails OPEN so the
+ *     first write of a fresh task is never bricked.
+ *   - Files under /tmp or other non-repo paths are treated as ephemeral and
+ *     are NOT classified as protected paths, even if their basename matches a
+ *     protected pattern.
  */
 
 import { WamPolicyBlock } from "./risk-engine.js";
@@ -30,17 +37,42 @@ const TRIVIAL_MAX_FILES = Number.parseInt(process.env.WAM_TRIVIAL_MAX_FILES || "
 const PROTECTED_SEGMENT_RE = /(^|[\\/])(\.github|migrations?|deploy|\.env)([\\/]|$)/i;
 const PROTECTED_BASENAME_RE = /(^|[\\/])(ci\.ya?ml|package\.json|package-lock\.json|tsconfig[^\\/]*\.json)$/i;
 
+/** Non-repo / ephemeral path prefixes that should not be subject to
+ *  protected-path rules. Governance is about the project repo, not the user's
+ *  temp dir. */
+const NON_REPO_PATH_PREFIXES = [
+  "/tmp/",
+  "/private/tmp/",
+  "/var/folders/",
+  process.env.TMPDIR ? process.env.TMPDIR + "/" : "",
+  process.env.TEMP ? process.env.TEMP + "/" : "",
+  process.env.TMP ? process.env.TMP + "/" : "",
+].filter(Boolean);
+
+/** True when the path is outside any tracked repository and is ephemeral in
+ *  nature. Used to short-circuit protected-path checks so that, e.g., a
+ *  scratch file at /tmp/foo/package.json doesn't trigger governance. */
+export function isNonRepoPath(file) {
+  if (!file) return false;
+  const f = String(file);
+  return NON_REPO_PATH_PREFIXES.some((p) => p && f.startsWith(p));
+}
+
 export function isGovernanceDisabled() {
   const v = String(process.env.WAM_GOVERNANCE || "").toLowerCase();
   return v === "off" || v === "0" || process.env.WAM_BYPASS === "1";
 }
 
 export function isTerminalPhase(phase) {
-  return TERMINAL_PHASES.has(phase);
+  return TERMINAL_PHASES.has(String(phase || "").toUpperCase());
 }
 
 export function isProtectedPath(file) {
   const f = String(file || "");
+  if (!f) return false;
+  // Non-repo / ephemeral paths (e.g. /tmp scratch files) are never "protected":
+  // governance rules are about the project repo, not the user's temp dir.
+  if (isNonRepoPath(f)) return false;
   return PROTECTED_SEGMENT_RE.test(f) || PROTECTED_BASENAME_RE.test(f);
 }
 
@@ -62,7 +94,9 @@ function logDecision(event) {
  * @param {string} tool
  * @param {object|null} state - task state ({ phase, contract, requirements }).
  * @param {object} [ctx]
- * @param {boolean} [ctx.isSubagent] - true when the caller is a delegated worker.
+ * @param {boolean} [ctx.isSubagent] - true when the caller is a delegated worker
+ *   (i.e. the session has a resolved parentID). An unresolved session is NOT
+ *   a subagent.
  * @param {string[]} [ctx.declaredFiles] - files the current task is scoped to.
  * @returns {{allowed: boolean, reason: string}}
  * @throws {WamPolicyBlock}
@@ -107,6 +141,34 @@ export function enforceGovernance(tool, state, ctx = {}) {
 
   const pending = (state.requirements || state.contract?.requirements || [])
     .filter((r) => r.status !== "done" && r.status !== "verified").length;
+
+  // Nothing to approve: a tracked contract in a non-approved state with no
+  // pending requirements and no unknowns has no work to gate. Denying here is
+  // a fail-closed deadlock (the block message even reports "0 requisito(s)
+  // pendiente(s)"). Fail open, like an untracked session, so the first write
+  // of a fresh task is never bricked.
+  //
+  // Note: previously this required `declared.length === 0` too, which combined
+  // with the contract file-derivation in index.js meant every edit (which
+  // always declares its own target file) would deadlock on a fresh PROPOSED
+  // contract. The new rule is: pending === 0 AND unknowns.length === 0 → no
+  // work to gate, regardless of declared files.
+  const unknowns = state?.contract?.unknowns || state?.unknowns || [];
+  if (pending === 0 && unknowns.length === 0) {
+    logDecision({ decision: "allow", reason: "empty-contract", tool, phase });
+    return { allowed: true, reason: "empty-contract" };
+  }
+
+  // Hard fail-open: a PROPOSED/DRAFT contract with zero pending requirements,
+  // zero declared files AND no blocking unknowns has no contract body to
+  // approve. Never block. (The unknowns check keeps blocking unknowns
+  // effective — see "empty-contract fix: a blocking unknown still gates an
+  // otherwise empty contract" test.)
+  const declared = Array.isArray(ctx.declaredFiles) ? ctx.declaredFiles : [];
+  if (pending === 0 && declared.length === 0 && unknowns.length === 0) {
+    logDecision({ decision: "allow", reason: "proposed-no-work", tool, phase });
+    return { allowed: true, reason: "proposed-no-work" };
+  }
 
   const directive =
     `[wait-a-minute] GOVERNANCE BLOCK (${tool}): contrato no aprobado ` +

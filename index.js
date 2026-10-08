@@ -205,6 +205,17 @@ function bashCommandOf(input) {
   return "";
 }
 
+/**
+ * Archivos objetivo declarados por un tool de escritura (write/edit/apply_patch).
+ * Fallback de `declaredFiles` para que el escape "trivial" del governance gate
+ * sea alcanzable cuando el contrato todavia no declara archivos.
+ */
+function targetFilesOf(input) {
+  const args = input?.args || input?.parameters || {};
+  const p = args?.filePath || args?.path || args?.file || args?.file_path || args?.target;
+  return p ? [String(p)] : [];
+}
+
 const ACTIVE_FILE = (root) => path.join(root || process.cwd(), ".wam", "active-task");
 
 function readActiveTaskId(root) {
@@ -578,6 +589,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
   // sesión tiene su propio directorio de trabajo (location.directory) — lo
   // consultamos vía client.session.get para no depender del cwd del proceso.
   const sessionRoots = new Map();
+  const sessionWamRoots = new Map(); // sessionID -> wamRoot resuelto en chat.message (unifica read/write del gate)
   const sessionParents = new Map(); // sessionID → parentID (subagentes Task tienen parent)
   const sessionResolved = new Set(); // sessionIDs cuyo parentID se resolvió (distingue main de subagente)
   const processedMessages = new Map(); // messageID+kind → processed (chat.message idempotency)
@@ -613,6 +625,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
     try {
       initMemory(root);
     } catch {}
+    if (sessionID) sessionWamRoots.set(sessionID, root);
     return root;
   };
 
@@ -759,7 +772,10 @@ async function postToolExecution(input, output) {
       try {
         if (bypassed) return;
         sid = input?.sessionID;
-        taskRoot = await resolveSessionBase(sid);
+        // Mismo root que chat.message (wamRootFor/ensureWamMemory): si el gate
+        // leyera resolveSessionBase() y chat.message escribiera en otro root,
+        // el estado leido no coincidiria con el escrito (misfire o bypass).
+        taskRoot = sessionWamRoots.get(sid) || await resolveSessionBase(sid);
         taskId = sessionTasks.get(sid) || readActiveTaskIdFresh(taskRoot) || (sid ? `ses-${sid.slice(-10)}` : "default-task");
         st = getTaskState(taskId, taskRoot);
         // Fallback: try the active task from disk if first lookup failed
@@ -831,9 +847,21 @@ async function postToolExecution(input, output) {
         // cambios triviales declarados. Solo se gatea la sesión main con un
         // contrato tracked y no aprobado.
         try {
+          const contractFiles = st?.contract?.files || st?.contract?.declaredFiles || [];
+          const declaredFiles = contractFiles.length ? contractFiles : targetFilesOf(input);
+          // Subagent detection: a session is a subagent ONLY when its parentID
+          // was explicitly resolved to a non-null parent. The previous
+          // `!sessionResolved.has(sid)` clause was a fail-open placeholder
+          // that incorrectly classified every pre-resolution main session as
+          // a subagent, silently disabling governance for legitimate main
+          // flows (including the very first write that proposes the contract).
+          // An unresolved session is a "main session in progress" — not a
+          // subagent — and should be governed normally. Real subagents carry
+          // a non-null parentID in sessionParents.
+          const isSubagent = sessionParents.has(sid);
           enforceGovernance(tool, st, {
-            isSubagent: sessionParents.has(sid) || !sessionResolved.has(sid),
-            declaredFiles: st?.contract?.files || st?.contract?.declaredFiles || [],
+            isSubagent,
+            declaredFiles,
             enforcementEnabled: cfg.enforcement !== false,
           });
         } catch (err) {
@@ -1395,6 +1423,12 @@ const waitAMinute = {
       kept.push({ id: `req-overflow`, title: `(+${overflow} requisitos consolidados de la especificación)`, status: "pending", evidence: [] });
       fresh.requirements = kept;
       if (fresh.contract) fresh.contract.requirements = kept.map((r) => r.title);
+    }
+    // No persistir un contrato PROPOSED sin requisitos: dejaría un contrato
+    // tracked con 0 pendientes y sin declared files, lo que bloquea write/edit
+    // (fail-closed) sin nada que aprobar. Untracked hasta tener >=1 requisito.
+    if (!fresh.requirements || fresh.requirements.length === 0) {
+      return fresh;
     }
     persistTaskState(taskId, fresh, root);
     return fresh;
