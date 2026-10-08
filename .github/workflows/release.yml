@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PACKAGE_NAME: wait-a-minute
+  PACKAGE_NAME: opencode-wait-a-minute
   NPM_TOKEN: ${{ secrets.NPM_SECRET }}
 
 jobs:

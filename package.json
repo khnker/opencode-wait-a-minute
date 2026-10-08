@@ -49,11 +49,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/khnker/wait-a-minute-plugin.git"
+    "url": "https://github.com/khnker/opencode-wait-a-minute.git"
   },
-  "homepage": "https://github.com/khnker/wait-a-minute-plugin#readme",
+  "homepage": "https://github.com/khnker/opencode-wait-a-minute#readme",
   "bugs": {
-    "url": "https://github.com/khnker/wait-a-minute-plugin/issues"
+    "url": "https://github.com/khnker/opencode-wait-a-minute/issues"
   },
   "publishConfig": {
     "provenance": true,
