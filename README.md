@@ -11,26 +11,88 @@
 
 # Wait a Minute (WAM)
 
-### Deterministic control and state management for OpenCode agents
+**WAM gives OpenCode agents a persistent task state, focused context, skill routing, and evidence-based completion.**  
+Instead of carrying everything through conversation history, WAM keeps more state than it sends: it tracks what the task is, what is known, what is uncertain, which skills matter, what has been observed, and what has been verified.
 
-WAM adds deterministic control, task-state management, context enrichment, and token optimization to OpenCode agents by correlating tasks, skills, context, evidence, and verified state to determine what should happen next.
+[![npm version](https://img.shields.io/npm/v/wait-a-minute.svg)](https://www.npmjs.com/package/wait-a-minute)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/license-MIT-007acc)](./LICENSE)
+[![OpenCode compatibility](https://img.shields.io/badge/OpenCode-%3E%3D1.18.0-007acc)](docs/OPENCODE_COMPATIBILITY.md)
 
-[![npm](https://img.shields.io/badge/npm-local-1.1.0-007acc)](https://nodejs.org/)
-[![node](https://img.shields.io/badge/node->=20-339933)](https://nodejs.org/)
-[![license](https://img.shields.io/badge/license-MIT-007acc)](./LICENSE)
-[![npm downloads](https://img.shields.io/npm/dw/wait-a-minute)](https://www.npmjs.com/package/wait-a-minute)
+## Qué cambia WAM
 
-</div>
+| Flujo del agente | Tradicional | Con WAM |
+|---|---|---|
+| Continuidad de la tarea | Historial de conversación | Estado explícito de la tarea |
+| Contexto | Se acumula | Se reconstruye desde fuentes relevantes |
+| Habilidades | Disponibles ampliamente | Enrutadas a la tarea según requerimientos |
+| Supuestos | Implositos | Clasificados (known/inferred/assumed/unknown) |
+| Evidencia | A menudo transitoria | Persistida con el estado de la tarea |
+| Finalización | Afirmación del modelo | Estado verificado |
+| Próxima acción | Impulsada por conversación | Estado de tarea + evidencia |
 
-[Quick start](#quick-start) · [How WAM works](#how-wam-works) · [Why this matters](#why-this-matters) · [What WAM changes](#what-wam-changes) · [Validation](#validation) · [Benchmarks & evidence](#benchmarks--evidence) · [FAQ](#faq) · [Documentation](#documentation)
+## La idea central
 
-## Quick start
+### WAM mantiene más estado del que envía
 
-Install the plugin and enable it in OpenCode. No further configuration is required.
+Un agente no necesita todo el estado disponible en cada llamada al modelo.
+
+WAM mantiene el estado de la tarea por separado del contexto transitorio del modelo y reconstruye el contexto más útil para la decisión actual.
+
+```mermaid
+flowchart LR
+    S[Estado de la tarea] --> C[Ensamblaje de contexto]
+    K[Habilidades relevantes] --> C
+    E[Evidencia] --> C
+    C --> M[Modelo]
+    M --> O[Observación]
+    O --> E
+    E --> S
+```
+
+El modelo ve lo que necesita para la decisión actual.  
+WAM conserva el estado necesario para continuar la tarea.
+
+## Cómo funciona WAM
+
+En cada petición, WAM:
+1. **Clasifica** la solicitud (tipo de tarea, dominio, etc.)
+2. **Inspecciona** el estado actual de la tarea (requisitos, supuestos, evidencia)
+3. **Establece** el estado necesario para esta iteración (actualiza conocidos/inciertos)
+4. **Selecciona** habilidades y contexto relevante para la tarea
+5. **Ejecuta** el agente con el contexto y habilidades preparados
+6. **Observa** la salida y cualquier efecto
+7. **Verifica** la evidencia contra criterios de finalización
+8. **Determina** la siguiente acción basada en el estado verificado
+
+La toma de decisiones de control (qué hacer después) se basa explícitamente en el estado de la tarea y la evidencia verificada, no en lo que quede accidentalmente en el historial de conversación.
+
+## Por qué WAM
+
+Los agentes de IA modernos tratan el historial de conversación como su mecanismo primario de estado, lo que crea problemas reales:
+
+- **Historial contaminado**: Detalles irrelevantes de conversaciones previas (por ejemplo, discusiones sobre UI, temas no relacionados) quedan en la ventana de contexto y pueden influir inadecuadamente en decisiones técnicas.
+- **Falta de determinismo**: La misma solicitud puede producir resultados diferentes según el historial accidental de la conversación, lo que hace que el comportamiento sea impredecible para flujos de trabajo de ingeniería.
+- **Ventana de contexto limitada**: El historial consume tokens sin importar su relevancia, reduciendo el espacio disponible para la tarea actual y forzando truncamientos o pérdida de información.
+- **Dificultad de auditoría**: Cuando un agente no puede rastrear una decisión a un estado y evidencia explícitos, resulta imposible validar o reproducir su comportamiento de forma confiable.
+
+WAM trata esto como un problema de gestión de estado, no como un problema de conversación. Al hacer que el estado de la tarea sea la fuente de verdad:
+- El contexto se enfoca en información relevante para la tarea actual.
+- El flujo de control se vuelve explícito y rastreable.
+- La ventana de contexto se utiliza eficientemente para lo necesario en el momento.
+- Cada decisión se puede vincular a estado y evidencia verificables.
+
+## Primeros pasos
+
+### Instalar
 
 ```bash
 npm install wait-a-minute
 ```
+
+El paquete de npm es `wait-a-minute`; el repositorio es `opencode-wait-a-minute`.
+
+### Habilitar en OpenCode
 
 ```jsonc
 // opencode.jsonc
@@ -39,252 +101,91 @@ npm install wait-a-minute
 }
 ```
 
-WAM intercepts prompts before skill resolution and agent execution. Once installed, its control and state-management flow applies automatically.
+Una vez instalado, WAM intercepta las peticiones antes de la resolución de habilidades y la ejecución del agente. Su flujo de control y gestión de estado se aplica automáticamente.
 
-**Requirements:** Node `>=20` · OpenCode `>=1.18.0` — tested on Ubuntu 24.04, Node 24.16.0, OpenCode 1.18.33 ([docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md)).
+**Requisitos:** Node `>=20` · OpenCode `>=1.18.0` — probado en Ubuntu 24.04, Node 24.16.0, OpenCode 1.18.33 ([docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md)).
 
-## How WAM works
+## Dónde encaja WAM
 
-On each prompt, WAM:
-1. Classifies the request
-2. Persists task state
-3. Reconstructs relevant context
-4. Gates completion on verification state
+WAM opera en el límite entre el planteamiento (prompt) y el agente, mejorando el plano de control sin reemplazar las capas existentes:
 
-Policy, uncertainty, and risk gate the decision; execution guards gate actions; completion follows from verified state rather than model judgment.
-
-```mermaid
-flowchart TD
-    R[User Request] --> T[Task / State]
-    T --> P[Policy + Uncertainty + Risk]
-    P --> C[Context + Skills]
-    C --> M[Model Decision]
-    M --> G[Execution Guard]
-    G --> O[Observation]
-    O --> E[Evidence]
-    E --> V[Verified State]
-    V --> N[Next Action]
+```
+OpenCode
+  ├── Agentes
+  ├── Habilidades
+  ├── Herramientas
+  └── Plugins
+         ↑
+        WAM
+        │
+        ├─ Estado de tarea
+        ├─ Reconstrucción de contexto
+        ├─ Enrutamiento de habilidades
+        ├─ Gestión de supuestos/incertidumbre
+        ├─ Evidencia
+        └─ Verificación y recuperación
 ```
 
-## Why this matters
+- **OpenSpec** gestiona especificaciones y flujos de trabajo de cambios estructurados.
+- **Superpowers / Habilidades** proporcionan metodología de desarrollo y procedimientos reutilizables.
+- **WAM** proporciona el plano de control + estado de tarea + orquestación de contexto/evidencia.
 
-Modern AI agents fundamentally misunderstand where state should live. They treat the conversation history as their primary state mechanism, which creates four critical and interconnected problems:
+## Capacidades
 
-### 1. Signal-to-noise collapse
-Each user interaction adds entropy to the context window. An agent debugging a payment error at 2 PM might be influenced by:
-- Morning discussions about UI color schemes
-- Yesterday’s debate about lunch options
-- Last week’s architectural decisions for unrelated features
-This isn’t just theoretical—it measures as 30-70% noise in typical agent contexts, directly reducing the signal available for the current task.
+- **Estado de tarea persistente**: Mantiene requisitos, supuestos, evidencia y decisiones entre vueltas del modelo.
+- **Reconstrucción de contexto**: Ensambla el contexto mínimo útil desde archivos, habilidades y evidencia verificados.
+- **Enrutamiento de habilidades**: Selecciona y provee únicamente las habilidades relevantes para la tarea actual.
+- **Gestión de supuestos e incertidumbre**: Clasifica la información como conocida, inferida, asumida o desconocida para guiar la exploración.
+- **Orquestación de evidencia**: Trata la evidencia observada como ciudadano de primera clase que actualiza el estado y gatea la finalización.
+- **Verificación basada en estado**: La finalización depende del estado verificado, no del juicio del modelo.
+- **Aislamiento y recuperación**: El estado de cada tarea permanece asociado a ella y no contamina otras tareas.
 
-### 2. Non-deterministic agent behavior
-Without explicit state boundaries, identical inputs produce different outputs based on accidental conversational history. Try running the same agent prompt twice in different conversation contexts: you’ll get different code, different tool choices, and different conclusions. This makes agents unreliable for engineering work where reproducibility is non-negotiable.
+## Validación
 
-### 3. Context window exhaustion
-Agent contexts have hard limits (32K-128K tokens). Conversation history consumes these tokens regardless of relevance. When the window fills, the agent either:
-- Loses access to early task details (breaking context)
-- Starts forgetting recent work (requiring repetition)
-- Forces costly context truncation that loses nuance
-This creates a tax on task length and complexity that scales poorly.
+WAM se verifica mediante:
+- **Pruebas unitarias e de integración**: Lógica central, ensamblaje de estado, selección de habilidades y gates de verificación.
+- **Pruebas de extremo a extremo con OpenCode**: Flujos de trabajo completos desde la petición hasta la observación.
+- **Medición de benchmarks**: Uso de tokens, eficiencia de reconstrucción de contexto y comportamiento determinista del flujo de control.
+- **Validación de aislamiento**: Garantiza que el estado de una tarea no afecta a otra.
 
-### 4. Erosion of trust and verifiability
-When agents can’t explain why they made a decision beyond “it seemed right in context,”
-engineering oversight becomes impossible. You can’t audit, you can’t reproduce,
-and you can’t build reliable systems on top of unpredictable components.
+Ver [docs/claims/](docs/claims/) para documentación detallada de claims y evidencia.
 
-WAM treats this as a state management problem, not a conversation problem. By making task state the source of truth:
-- Signal-to-noise ratio approaches 1:1 for task-relevant information
-- Behavior becomes deterministic: same task + same evidence = same outcome
-- Context windows are used efficiently for current task needs only
-- Every decision becomes traceable to explicit state and evidence
+## Documentación
 
-This transforms agents from stochastic conversational partners into reliable engineering tools.
+| Tema | Documentación |
+|---|---|
+| Arquitectura | [docs/architecture/](docs/architecture/) |
+| Conceptos | [docs/concepts/](docs/concepts/) |
+| Claims y validación | [docs/claims/](docs/claims/) |
+| Compatibilidad con OpenCode | [docs/OPENCODE_COMPATIBILITY.md](docs/OPENCODE_COMPATIBILITY.md) |
+| Validación RC1 | [docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md) |
+| Alcance de la release RC1 | [docs/RC1_SCOPE.md](docs/RC1_SCOPE.md) |
 
-## What WAM changes
+## Fuentes e influencias
 
-| Without WAM | With WAM |
-|-------------|----------|
-| Conversation is the main continuity mechanism | Task state is persisted explicitly |
-| Context tends to accumulate | Context is reconstructed |
-| Skills may be broadly available | Skills are routed to the task |
-| Completion can rely on model judgment | Completion is tied to verification state |
-| Next action comes from conversation | Next action is derived from task state + evidence |
-| Context boundaries are implicit | Tasks have explicit state boundaries |
+WAM se basa en y se integra con trabajos existentes en el ecosistema de agentes:
 
-## The core idea
+- **OpenSpec** — especificación de tareas/cambios y flujos de trabajo estructurados de cambios.
+- **OpenCode** — tiempo de ejecución de plugin, agente, habilidad y herramienta.
+- **Superpowers** — habilidades componibles y flujos de trabajo de desarrollo de software agente.
+- **Fuentes de habilidades de WAM** — repositorios upstream de habilidades curadas utilizadas para construir el registro embebido.
 
-WAM separates **persistent task state** from **transient model context**.
+Véase [docs/sources.md](docs/sources.md) para los repositorios, versiones exactas y lo que WAM adopta de cada uno.
 
-| | Persistent | Transient |
-|---|---|---|
-| **Where it lives** | WAM state store | Model context window |
-| **Lives across** | Model turns; recoverable across sessions/resumes | Single decision |
-| **What it holds** | Task state, requirements, evidence, decisions and recovery information | Only what's relevant *now* |
-
-> **Context is derived from task state, not accumulated from conversation history.**
-
-## Tasks are isolated
-
-Tasks have their own identity and state.
-```text
-Task A
-Fix payment timeout
-```
-Its relevant state may include:
-- Stripe API
-- payment-service.ts
-- retry configuration
-- timeout logs
-- verification evidence
-After Task A finishes:
-```text
-Task B
-Update README
-```
-Task A's state remains associated with Task A. It does not automatically become Task B's model context.
-Task B can instead reconstruct context around:
-- README.md
-- repository documentation
-- documentation structure
-- relevant skills
-- current documentation state
-This is the basis of task isolation and context separation. See
-[Task Isolation](docs/claims/task-isolation.md) and
-[Context Separation](docs/concepts/context-separation.md).
-
-## Context enrichment
-
-Context is not only selected from files. WAM enriches the task with relevant skills and
-evidence from verified sources to create a focused, high-signal context window.
-
-## Task skills can be combined
-
-A single task often needs multiple skills working together. WAM coordinates skill execution
-based on task requirements and evidence, ensuring the right skills are applied at the right time.
-
-## Evidence changes what happens next
-
-WAM treats evidence as a first-class citizen. Verified evidence:
-- Updates task state
-- Influences skill selection
-- Gates completion criteria
-- Provides grounding for model decisions
-
-## Validation
-
-WAM's claims are independently documented and verified through:
-- **Internal deterministic tests** (no network): Pure logic validation
-- **Empirical real tests** (dry-run · mock provider · no network): Realistic scenarios
-- **External evidence**: Third-party verification and benchmarking
-
-See [Validation](docs/claims/) for detailed documentation.
-
-## Benchmarks & evidence
-
-WAM reports **three evidence classes**:
-
-### A. Internal deterministic (no network)
-Source: `benchmarks/`
-Pure logic tests validating WAM's core algorithms and state transitions.
-
-### B. Empirical real (dry-run · mock provider · no network)
-Source: `benchmarks/`
-Realistic scenarios with mocked external dependencies to validate behavior
-without network calls.
-
-### C. External evidence
-Source: `benchmarks/evidence/`
-Third-party validation, performance benchmarks, and real-world usage data.
-
-## FAQ
-
-<details>
-<summary><strong>Does WAM work with all OpenCode agents?</strong></summary>
-Yes, WAM works with any OpenCode agent that follows the standard plugin interface.
-It intercepts prompts before skill resolution and applies its state management
-flow universally.
-</details>
-
-<details>
-<summary><strong>How does WAM affect token usage?</strong></summary>
-WAM reduces token usage by reconstructing only relevant context rather than
-accumulating conversation history. This leads to more focused, efficient
-agent interactions.
-</details>
-
-<details>
-<summary><strong>Can I customize WAM's behavior?</strong></summary>
-Yes, WAM is configurable through `opencode.jsonc`. Each capability (state
-persistence, context enrichment, etc.) can be enabled/disabled or tuned
-to your specific needs.
-</details>
-
-<details>
-<summary><strong>What happens to my existing OpenCode setup?</strong></summary>
-WAM is designed to be additive. Install it alongside your existing setup
-and it will enhance agent behavior without breaking existing functionality.
-</details>
-
-## Configuration
-
-WAM is on by default. Each capability can be configured in `opencode.jsonc`:
-
-```jsonc
-{
-  "plugins": ["wait-a-minute"],
-  "wait-a-minute": {
-    "statePersistence": true,
-    "contextEnrichment": true,
-    "skillRouting": true,
-    "verificationGating": true
-  }
-}
-```
-
-See [Configuration](docs/configuration.md) for detailed options.
-
-## Development & testing
+## Desarrollo y pruebas
 
 ```bash
+# Ejecutar suite de pruebas
 npm test
+
+# Ejecutar puerta de validación (si está configurada)
+npm run gate
 ```
 
-Run the test suite to validate WAM's behavior and ensure compatibility
-with OpenCode updates.
+## Licencia
 
-## Documentation
-
-| Area | Read |
-|------|------|
-| Architecture | [docs/architecture.md](docs/architecture.md) |
-| Claims & validation | [docs/claims/](docs/claims/) |
-| Concepts | [docs/concepts/](docs/concepts/) |
-| Installation | [docs/installation.md](docs/installation.md) |
-| Configuration | [docs/configuration.md](docs/configuration.md) |
-| API reference | [docs/api.md](docs/api.md) |
-
-## Known interactions
-
-WAM is designed to work seamlessly with:
-- All official OpenCode skills
-- Community-developed plugins
-- Custom agent configurations
-- Existing opencode.jsonc settings
-
-## Sources & ecosystem
-
-WAM builds upon standard patterns from:
-- State machine theory
-- Context management best practices
-- Verifiable computing principles
-- Agent-oriented programming
-
-See [Sources](docs/sources.md) for detailed references and influences.
-
-## License
-
-| License | Copyright |
-|---------|-----------|
+| Licencia | Copyright |
+|---|---|
 | MIT | 2024 Nicolás Dev |
 
-[MIT License](LICENSE)
+[Licencia MIT](LICENSE)
