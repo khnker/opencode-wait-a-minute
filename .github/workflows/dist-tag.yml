@@ -1,0 +1,39 @@
+name: Dist Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to tag (e.g. 1.1.0-rc.10)"
+        required: true
+      dist_tag:
+        description: "npm dist-tag to point at the version (e.g. latest)"
+        required: true
+      package:
+        description: "Package name"
+        required: false
+        default: "opencode-wait-a-minute"
+
+permissions:
+  contents: read
+
+jobs:
+  dist-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Configure npm with NPM_TOKEN
+        run: npm config set //registry.npmjs.org/:_authToken "${NPM_TOKEN}"
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_SECRET }}
+
+      - name: Add dist-tag
+        run: npm dist-tag add "${{ inputs.package }}@${{ inputs.version }}" "${{ inputs.dist_tag }}"
+
+      - name: Show dist-tags
+        run: npm dist-tag ls "${{ inputs.package }}"
