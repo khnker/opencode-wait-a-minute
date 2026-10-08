@@ -61,7 +61,7 @@ function rel(p) {
 function runNodeTest(files) {
   const args = ["--test", "--test-concurrency=1", ...files];
   const timeout = Number(process.env.WAM_TEST_TIMEOUT_MS || 240000);
-  const res = spawnSync(process.execPath, args, { stdio: ["pipe", "pipe", "pipe"], timeout });
+  const res = spawnSync(process.execPath, args, { stdio: ["pipe", "pipe", "pipe"], timeout, maxBuffer: 64 * 1024 * 1024 });
   if (res.error) {
     if (res.error.code === 'ETIMEDOUT') {
       console.error(`[run-tests] ERROR: Test suite execution timed out after ${timeout}ms`);

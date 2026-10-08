@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const LOG_FILE = '/home/nicolas/dev/comparador-precios/.wam/plugin.log';
+const LOG_FILE = process.env.WAM_LOG_FILE || path.join(process.cwd(), '.wam', 'plugin.log');
 
 /**
  * Simple diagnostic logger for wait-a-minute-plugin.
