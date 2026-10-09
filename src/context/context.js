@@ -16,6 +16,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { generateContract, evaluateContract, mergeAssumptions } from "./sufficiency-contract.js";
+import { retrieveWithCqe } from "./cqe-adapter.js";
+
+function detectFileSearchIntent(task) {
+  const q = task.toLowerCase();
+  return /\b(find|search|grep|locate|where is)\b/.test(q);
+}
 
 const LEVELS = ["L1", "L2", "L3", "L4"];
 const LIFECYCLE = ["candidate", "active", "superseded", "stale", "invalidated"];
@@ -441,6 +447,28 @@ export function selectContext(task, { budget = 8000, root, sessionId, log = true
       fs.mkdirSync(path.dirname(logFile), { recursive: true });
       fs.appendFileSync(logFile, JSON.stringify({ timestamp: nowIso(), task, selected_ids: pkg.selected_ids, budget_used: used, budget, sufficiency }) + "\n");
     } catch {}
+  }
+  return pkg;
+}
+
+/**
+ * Variante async de selectContext que enriquece el paquete con file_context de
+ * CQE cuando la tarea es una intención de búsqueda de archivos. Se mantiene
+ * separada del selectContext sincrónico para no forzar `await` en callers que
+ * no pueden esperarlo (p.ej. assembleContext).
+ */
+export async function selectContextWithCqe(task, opts = {}) {
+  const pkg = selectContext(task, opts);
+  if (!opts.disableCqe && detectFileSearchIntent(task)) {
+    try {
+      const cqeRes = await retrieveWithCqe(task, { repoRoot: opts.root || process.cwd() });
+      if (cqeRes && cqeRes.items && cqeRes.items.length > 0) {
+        pkg.file_context = cqeRes.items;
+        pkg.rationale.push(`CQE: retrieved ${cqeRes.items.length} file matches`);
+      }
+    } catch {
+      // Non-fatal: CQE es augmentación best-effort; el contexto nativo prevalece.
+    }
   }
   return pkg;
 }

@@ -1,2 +1,2 @@
-import { selectContext, retrieveContext } from "./context.js";
-export { selectContext, retrieveContext };
+import { selectContext, selectContextWithCqe, retrieveContext } from "./context.js";
+export { selectContext, selectContextWithCqe, retrieveContext };
