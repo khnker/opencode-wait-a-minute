@@ -26,9 +26,9 @@ PROBADO EN RC1
 | Integración con OpenCode       | Integración a nivel de prompt | Intercepta las solicitudes antes de la resolución de habilidades y la ejecución del agente. |
 | Estado Persistente             | Aislamiento por tarea / por sesión | El estado de la tarea se persiste y se encuentra aislado en lugar de depender únicamente del historial de conversación. |
 | Verificación Fallida-Cerrada   | Finalización no verificada bloqueada | Las tareas no pueden pasar a completación mientras quede trabajo pendiente respaldado. |
-| Validación Determinista        | 10/10 casos pasados      | Arnés de instantáneas RC1: 10 casos pasados, 0 fallidos.                      |
-| Reducción de Contexto          | 69.6%                   | Medido en el arnés de instantáneas determinista de RC1.                       |
-| Ahorro Neto de Entrada         | 32.6%                   | Observado en una ejecución credentialada de proveedor real.                   |
+| Validación Determinista        | 10/10 casos pasados      | Arnés de instantáneas RC1: 10 casos pasados, 0 fallidos. [docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md) |
+| Reducción de Contexto          | 69.6%                   | Medido en el arnés de instantáneas determinista de RC1. [docs/benchmarks/results.md](docs/benchmarks/results.md) |
+| Ahorro Neto de Entrada         | 32.6%                   | Observado en una ejecución credentialada de proveedor real. [docs/benchmarks/results.md](docs/benchmarks/results.md) |
 
 > WAM separa las garantías de implementación de las mediciones empíricas. Las afirmaciones en este README están respaldadas por implementación, pruebas, bancos de prueba deterministas o observaciones explícitamente etiquetadas.
 > 
