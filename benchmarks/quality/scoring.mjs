@@ -5,6 +5,7 @@
  *   - normalize(s)              trim / lowercase / collapse whitespace.
  *   - factCoverage             substring containment over normalized strings.
  *   - parseJudgeJson           fence-aware JSON extraction from judge prose.
+ *   - extractFinalAnswer       isolate the committed answer from CoT prose.
  *   - aggregate                trivial descriptive stats over numeric scores.
  *   - pairedQualityDelta       numeric compare vs EPS, count wins/losses/ties.
  *
@@ -16,6 +17,38 @@ const EPS = 1e-9;
 export function normalize(s) {
   if (typeof s !== "string") return "";
   return s.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/**
+ * Instruction appended (identically) to BOTH arms of the quality A/B run so the
+ * model commits to a machine-extractable final answer. Without this, a
+ * chain-of-thought response is judged on its reasoning text, which penalizes
+ * verbosity rather than measuring answer correctness.
+ */
+export const ANSWER_INSTRUCTION =
+  "End your response with a single line in the exact form `FINAL ANSWER: <answer>` " +
+  "containing only the final answer (no reasoning after it).";
+
+/**
+ * Extract the final answer from a possibly chain-of-thought response.
+ *
+ * Takes the content after the LAST `FINAL ANSWER:` marker (case-insensitive),
+ * which is where the model commits to its answer. When no marker is present the
+ * whole trimmed text is returned (total function, never throws).
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function extractFinalAnswer(text) {
+  if (typeof text !== "string") return "";
+  const re = /final\s+answer\s*:/gi;
+  let end = -1;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    end = m.index + m[0].length;
+  }
+  if (end === -1) return text.trim();
+  return text.slice(end).trim();
 }
 
 function factToVariants(fact) {

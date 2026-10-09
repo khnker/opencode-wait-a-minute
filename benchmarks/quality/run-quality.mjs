@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 import { resolveProvider } from "../providers/index.mjs";
 import { runPairedScenario } from "../real/runners/paired-runner.mjs";
 import { buildBaselineRequest, buildWamRequest } from "../real/runners/paired-runner.mjs";
-import { factCoverage, aggregate, pairedQualityDelta } from "./scoring.mjs";
+import { factCoverage, aggregate, pairedQualityDelta, extractFinalAnswer, ANSWER_INSTRUCTION } from "./scoring.mjs";
 import { judgeResponse } from "./judge.mjs";
 import { QUALITY_SCENARIOS } from "./scenarios.mjs";
 
@@ -99,8 +99,37 @@ async function armCallWithRetry(armFn, retriesRef, armName) {
   return { resp, retried: true };
 }
 
+/**
+ * Append the identical final-answer instruction to the last user message.
+ * Applied to BOTH arms so the A/B stays fair while making the answer
+ * machine-extractable (avoids judging chain-of-thought verbosity).
+ */
+function appendAnswerInstruction(request) {
+  const messages = Array.isArray(request?.messages) ? request.messages : [];
+  if (messages.length === 0) return request;
+  const last = messages[messages.length - 1];
+  if (!last || typeof last.content !== "string") return request;
+  return {
+    ...request,
+    messages: [
+      ...messages.slice(0, -1),
+      { ...last, content: `${last.content}\n\n${ANSWER_INSTRUCTION}` }
+    ]
+  };
+}
+
+/** Wrap a provider so every request carries the final-answer instruction. */
+function withAnswerFormat(provider) {
+  if (!provider || typeof provider.complete !== "function") return provider;
+  return {
+    ...provider,
+    complete: (request) => provider.complete(appendAnswerInstruction(request))
+  };
+}
+
 async function runOne({ scenario, provider, judgeEnabled, judgeProvider }) {
-  const paired = await runPairedScenario({ scenario, provider });
+  const armProvider = withAnswerFormat(provider);
+  const paired = await runPairedScenario({ scenario, provider: armProvider });
   // Flakiness guard: for any arm whose response came back empty/whitespace,
   // retry that arm ONCE. Retries are recorded per turn (and aggregated below)
   // so we can spot unreliable providers without masking sustained failures.
@@ -112,25 +141,31 @@ async function runOne({ scenario, provider, judgeEnabled, judgeProvider }) {
     if (!t.baseline || typeof t.baseline.text !== "string" || t.baseline.text.trim() === "") {
       // retry baseline
       // eslint-disable-next-line no-await-in-loop
-      const retried = await provider.complete(buildBaselineRequest(turn));
+      const retried = await armProvider.complete(buildBaselineRequest(turn));
       t.baseline = retried;
       retries.baseline += 1;
     }
     if (!t.wam || typeof t.wam.text !== "string" || t.wam.text.trim() === "") {
       // retry WAM
       // eslint-disable-next-line no-await-in-loop
-      const retried = await provider.complete(buildWamRequest(scenario, turn));
+      const retried = await armProvider.complete(buildWamRequest(scenario, turn));
       t.wam = retried;
       retries.wam += 1;
     }
   }
   const perTurn = (paired.turns ?? []).map((t) => {
-    const baseCov = factCoverage(t.baseline?.text ?? "", scenario.rubric.requiredFacts);
-    const wamCov = factCoverage(t.wam?.text ?? "", scenario.rubric.requiredFacts);
+    const baselineText = t.baseline?.text ?? "";
+    const wamText = t.wam?.text ?? "";
+    const baselineAnswer = extractFinalAnswer(baselineText);
+    const wamAnswer = extractFinalAnswer(wamText);
+    const baseCov = factCoverage(baselineAnswer, scenario.rubric.requiredFacts);
+    const wamCov = factCoverage(wamAnswer, scenario.rubric.requiredFacts);
     return {
       turnIndex: t.turnIndex,
-      baselineText: t.baseline?.text ?? "",
-      wamText: t.wam?.text ?? "",
+      baselineText,
+      wamText,
+      baselineAnswer,
+      wamAnswer,
       baselineFactScore: baseCov.score,
       wamFactScore: wamCov.score,
       baselineMatched: baseCov.matched,
@@ -149,10 +184,10 @@ async function runOne({ scenario, provider, judgeEnabled, judgeProvider }) {
   if (judgeEnabled && judgeProvider) {
     const task = scenario.turns?.[0]?.prompt ?? scenario.description;
     const baseJudgeRaw = perTurn.map((t) =>
-      judgeResponse({ provider: judgeProvider, task, response: t.baselineText, rubric: scenario.rubric })
+      judgeResponse({ provider: judgeProvider, task, response: t.baselineAnswer, rubric: scenario.rubric })
     );
     const wamJudgeRaw = perTurn.map((t) =>
-      judgeResponse({ provider: judgeProvider, task, response: t.wamText, rubric: scenario.rubric })
+      judgeResponse({ provider: judgeProvider, task, response: t.wamAnswer, rubric: scenario.rubric })
     );
     const baseJudge = await Promise.all(baseJudgeRaw);
     const wamJudge = await Promise.all(wamJudgeRaw);

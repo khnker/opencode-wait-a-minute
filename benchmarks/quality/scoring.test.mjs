@@ -7,7 +7,9 @@ import {
   parseJudgeJson,
   aggregate,
   pairedQualityDelta,
-  extractFirstJsonObject
+  extractFirstJsonObject,
+  extractFinalAnswer,
+  ANSWER_INSTRUCTION
 } from "./scoring.mjs";
 
 test("normalize: trim, lowercase, collapse whitespace", () => {
@@ -153,4 +155,28 @@ test("pairedQualityDelta: empty arrays", () => {
   const r = pairedQualityDelta([], []);
   assert.equal(r.n, 0);
   assert.equal(r.wins + r.losses + r.ties, 0);
+});
+
+test("extractFinalAnswer: returns text after the FINAL ANSWER marker", () => {
+  const text = "Let me think... the answer is unclear.\nFINAL ANSWER: Q1:-requirement[3]";
+  assert.equal(extractFinalAnswer(text), "Q1:-requirement[3]");
+});
+
+test("extractFinalAnswer: marker is case-insensitive and takes the LAST one", () => {
+  const text = "final answer: wrong\nsome more reasoning\nFinal Answer: right";
+  assert.equal(extractFinalAnswer(text), "right");
+});
+
+test("extractFinalAnswer: no marker falls back to whole trimmed text", () => {
+  assert.equal(extractFinalAnswer("  just the answer  "), "just the answer");
+});
+
+test("extractFinalAnswer: non-string is empty", () => {
+  assert.equal(extractFinalAnswer(null), "");
+  assert.equal(extractFinalAnswer(undefined), "");
+  assert.equal(extractFinalAnswer(42), "");
+});
+
+test("ANSWER_INSTRUCTION mentions the FINAL ANSWER marker", () => {
+  assert.ok(ANSWER_INSTRUCTION.includes("FINAL ANSWER:"));
 });

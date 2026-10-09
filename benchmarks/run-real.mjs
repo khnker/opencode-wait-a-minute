@@ -14,6 +14,7 @@ import { buildEvidenceManifest } from "./reporters/manifest.mjs";
 import { listAblations, summarizeAblation } from "./evaluation/ablation.mjs";
 import { pairedDelta, summarize } from "./evaluation/statistics.mjs";
 import { getRepoCommit } from "./runners/baseline-runner.mjs";
+import { aggregateTrials } from "./real/runners/paired-runner.mjs";
 
 export async function runRealSuite({ provider, scenarios, root, timestamp, trials = 1, ablated = false }) {
   const allScenarios = scenarios || (await import("./scenarios/real.mjs")).REAL_SCENARIOS;
@@ -94,10 +95,42 @@ function buildStatistics(suite, model, provider) {
  * to exercise the full harness without network access. Writes
  * `real-report.json` into `outDir`.
  */
-export async function runDryRun({ outDir, ablated = false } = {}) {
+/**
+ * Derive per-trial scalar metrics from a suite's scenario results so they can
+ * be summarized into the `trialStats` block. One entry per scenario × trial.
+ */
+function perTrialMetricsFromResults(results) {
+  const list = Array.isArray(results) ? results : [];
+  return list.map((r) => {
+    const turns = Array.isArray(r.turns) ? r.turns : [];
+    const baselineInput = turns.reduce(
+      (n, t) => n + (t.baseline?.usage?.inputTokens ?? 0),
+      0
+    );
+    const wamInput = turns.reduce(
+      (n, t) => n + (t.wam?.usage?.inputTokens ?? 0),
+      0
+    );
+    const contextRebuilds = turns.reduce(
+      (n, t) => n + (t.wam?.counters?.Context_reconstructed ?? 0),
+      0
+    );
+    const netSavingsPct =
+      baselineInput > 0 ? ((baselineInput - wamInput) / baselineInput) * 100 : 0;
+    const stateEquivalentRate =
+      r.stateEquivalent === true
+        ? 1
+        : typeof r.stateEquivalent === "number"
+          ? r.stateEquivalent
+          : 0;
+    return { baselineInput, wamInput, netSavingsPct, contextRebuilds, stateEquivalentRate };
+  });
+}
+
+export async function runDryRun({ outDir, ablated = false, trials = 1 } = {}) {
   const provider = createMockProvider();
   const scenarios = RC1_SCENARIOS;
-  const suite = await runRealSuite({ provider, scenarios, ablated });
+  const suite = await runRealSuite({ provider, scenarios, ablated, trials });
 
   const report = buildRealReport({
     sessionResults: suite.results,
@@ -108,6 +141,7 @@ export async function runDryRun({ outDir, ablated = false } = {}) {
   report.evaluations = suite.evaluations;
   report.metrics = suite.metrics;
   report.statistics = buildStatistics(suite, provider.model, "mock");
+  report.trialStats = aggregateTrials(perTrialMetricsFromResults(suite.results));
 
   if (ablated) {
     const allRuns = suite.results.flatMap(sr => normalizeRuns(sr, { model: provider.model, provider: "mock" }));
@@ -136,12 +170,18 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const ablationFlag = argv.includes("--ablation");
   const outIdx = argv.indexOf("--out");
   const outDir = outIdx >= 0 ? argv[outIdx + 1] : undefined;
+  const trialsIdx = argv.indexOf("--trials");
+  const trials =
+    trialsIdx >= 0
+      ? Number(argv[trialsIdx + 1])
+      : Number(process.env.WAM_BENCH_TRIALS) || 1;
 
   if (dryRunFlag) {
     const { dir, report, manifest } =
-      await runDryRun({ outDir, ablated: ablationFlag });
+      await runDryRun({ outDir, ablated: ablationFlag, trials });
     console.log(`[run-real] dry-run complete → ${dir}`);
     console.log("netInputSavings:", report.netInputSavings, "breakEvenTurn:", report.breakEvenTurn);
+    console.log("trialStats.n:", report.trialStats?.n);
     console.log("manifest:", manifest.schema, "runs:", manifest.counts.runs, "trials:", manifest.counts.trials);
     if (ablationFlag) {
       console.log("ablation:", report.ablation.map((a) => a.name).join(","));
@@ -158,7 +198,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 
   let suite;
   try {
-    suite = await runRealSuite({ provider });
+    suite = await runRealSuite({ provider, trials });
   } catch (error) {
     console.error(`[run-real] ERROR: benchmark run failed: ${error?.message ?? error}`);
     process.exit(1);

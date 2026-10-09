@@ -13,7 +13,7 @@
  *                  `taskId`/`objective` and an identical `taskState`,
  *                  which is what enables the fast-path after turn 0.
  */
-export const CONTINUATION_SIZES = [1, 3, 5, 10];
+export const CONTINUATION_SIZES = [5, 10, 25, 50, 100];
 
 const CONTINUATION_TASK_STATE = Object.freeze({
   phase: "PROPOSED",

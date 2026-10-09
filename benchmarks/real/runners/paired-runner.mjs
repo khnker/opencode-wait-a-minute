@@ -13,6 +13,7 @@
 import { extractUsage, wamInputReduction } from "../telemetry/token-usage.mjs";
 import { latencyDelta } from "../telemetry/latency.mjs";
 import { outcomeMatches, classifyComparison, VALID, INVALID_COMPARISON } from "../telemetry/outcome.mjs";
+import { summarize as statsSummarize } from "../stats.mjs";
 
 import { assembleContext } from "../../../src/context/assembly.js";
 import { buildRuntimeContextGraph } from "../../../src/context/runtime-context-graph.js";
@@ -162,4 +163,28 @@ export async function runPairedSuite({ scenarios, provider, trials = 1 }) {
   );
 
   return { runs, totals };
+}
+
+/**
+ * Aggregate per-trial scalar metrics into the trialStats shape used by the
+ * real-benchmark report. Each metric is summarized independently via the
+ * pure helpers in `benchmarks/real/stats.mjs`.
+ *
+ * @param {Array<{baselineInput: number, wamInput: number, netSavingsPct: number, contextRebuilds: number, stateEquivalentRate: number}>} perTrialMetrics
+ * @returns {{n: number, baselineInput: object, wamInput: object, netSavingsPct: object, contextRebuilds: object, stateEquivalentRate: object}}
+ */
+export function aggregateTrials(perTrialMetrics) {
+  const trials = Array.isArray(perTrialMetrics) ? perTrialMetrics : [];
+  const fields = [
+    "baselineInput",
+    "wamInput",
+    "netSavingsPct",
+    "contextRebuilds",
+    "stateEquivalentRate"
+  ];
+  const out = { n: trials.length };
+  for (const field of fields) {
+    out[field] = statsSummarize(trials.map((t) => t?.[field]));
+  }
+  return out;
 }

@@ -10,6 +10,7 @@ measurements do and do not prove. Read it before quoting any number.
 - [Results](results.md) — the RC1 numbers exactly as they appear in
   `benchmarks/reports/rc1/metrics.json`.
 - [Limitations](limitations.md) — constraints on interpreting the numbers.
+- [Evidence status](evidence.md) — roadmap status with exact artifacts and numbers.
 - [RC1 evidence bundle](RC1.md) — how the artifact set is generated and traced.
 
 ## Non-negotiable rules

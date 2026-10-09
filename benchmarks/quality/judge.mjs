@@ -33,6 +33,7 @@ Rules:
 - "pass" should be true when the score is >= 50, false otherwise.
 - "reason" must be a single concise sentence (under 200 chars).
 - "score" must be an integer 0..100.
+- Judge ONLY factual coverage and correctness. Ignore verbosity, length, formatting, markdown, and any chain-of-thought or reasoning text. A terse answer that contains the required facts scores the same as a verbose one that contains them.
 - Do not include any text outside the JSON object.`;
 
   const user = `TASK:
