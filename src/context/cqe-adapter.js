@@ -69,7 +69,7 @@ function withTimeout(promise, timeoutMs) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-function normalizeItem(raw, idx, queryText, elapsedMs) {
+export function normalizeItem(raw, idx, queryText, elapsedMs) {
   return {
     id: raw.id || `${raw.path || raw.file || 'unknown'}:${raw.startLine ?? raw.line ?? idx}`,
     path: raw.path || raw.file || '',
@@ -87,7 +87,7 @@ function normalizeItem(raw, idx, queryText, elapsedMs) {
   };
 }
 
-function dedupe(items) {
+export function dedupe(items) {
   const seen = new Set();
   const out = [];
   for (const it of items) {
