@@ -66,7 +66,7 @@ describe('saveWamState with StateValidator', () => {
     const tempDir = await tmpdir();
     const testDir = path.join(tempDir, 'test-invalid-save');
 
-    const invalidState = { taskId: 'bad-task' };
+    const invalidState = { taskId: 'bad-task', status: null };
 
     await assert.rejects(
       saveWamState('bad-task', invalidState, testDir),
@@ -79,7 +79,7 @@ describe('loadWamState with StateValidator', () => {
   it('loads state and processes health checks', async () => {
     const tempDir = await tmpdir();
     const testDir = path.join(tempDir, 'test-load-wam');
-    await mkdir(testDir, { recursive: true });
+    await mkdir(path.join(testDir, 'load-task-111'), { recursive: true });
 
     const state = createWamState('load-task-111');
     state.status = 'IN_PROGRESS';

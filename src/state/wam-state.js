@@ -8,6 +8,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { StateValidator } from '../persistence/state-validator.js';
+import { logTrace } from '../persistence/traceability-manager.js';
 
 // ── Constants ────────────────────────────────────────────────
 export const SCHEMA_VERSION = 1;
@@ -61,6 +62,10 @@ export async function saveWamState(taskId, state, rootDir) {
   state.updatedAt = new Date().toISOString();
   const filePath = path.join(dir, STATE_FILENAME);
   await fs.writeFile(filePath, JSON.stringify(state, null, 2));
+  
+  // Ensure traces directory exists and log the state save
+  await logTrace(taskId, rootDir, `Saved WAM state at ${filePath}`);
+  
   return filePath;
 }
 
