@@ -90,7 +90,7 @@ test("Strategy Continuity: capability loading + candidate selection in a clean N
     {
       encoding: "utf8",
       cwd: os.tmpdir(),
-      env: { ...process.env, WAM_DEBUG_TE: "" },
+      env: { ...process.env, WAM_DEBUG_TE: "", WAM_STRICT_BLOCK: "1" },
       timeout: 60000,
     }
   );

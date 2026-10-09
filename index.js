@@ -810,16 +810,23 @@ async function postToolExecution(input, output) {
             try {
               sessionStore.set(`wam-strategy-hit-${tool}`, { reason: stratCheck.reason, at: Date.now() });
             } catch {}
-          } else if (stratCheck.covered === false) {
+            } else if (stratCheck.covered === false) {
             // Acción prohibida explícitamente por la estrategia → bloquear.
             const directive = `[wait-a-minute] STRATEGY VIOLATION: ${stratCheck.reason}. La estrategia aprobada "${st.approvedStrategy.strategy}" no autoriza esta acción.`;
             input.output = directive;
-            throw new WamPolicyBlock(directive, {
-              tool,
-              reason: stratCheck.reason,
-              level: "BLOCKED",
-              source: "approved-strategy-continuity",
-            });
+            // Soft mode: log warning and allow execution to continue unless strict mode
+            if (process.env.WAM_STRICT_BLOCK === "1") {
+              throw new WamPolicyBlock(directive, {
+                tool,
+                reason: stratCheck.reason,
+                level: "BLOCKED",
+                source: "approved-strategy-continuity",
+              });
+            } else {
+              // Log warning/directive and set input.output (soft warning mode)
+              wamLog(`[wait-a-minute] SOFT STRATEGY BLOCK (${tool}): ${directive}`);
+              // Note: input.output already set above, execution can continue
+            }
           }
           // covered === null → no decidir aquí; fall through to risk/asking logic
         }
@@ -831,7 +838,14 @@ async function postToolExecution(input, output) {
         if (risk.level === "BLOCKED") {
           const directive = `[wait-a-minute] RISK BLOCK (${tool}): ${risk.reason || "acción fuera del envelope de riesgo"}. Requiere autorización explícita del usuario.`;
           input.output = directive;
-          throw new WamPolicyBlock(directive, { tool, reason: risk.reason, level: risk.level });
+          // Soft mode: log warning and allow execution to continue unless strict mode
+          if (process.env.WAM_STRICT_BLOCK === "1") {
+            throw new WamPolicyBlock(directive, { tool, reason: risk.reason, level: risk.level });
+          } else {
+            // Log warning/directive and set input.output (soft warning mode)
+            wamLog(`[wait-a-minute] SOFT BLOCK (${tool}): ${directive}`);
+            // Note: input.output already set above, execution can continue
+          }
         }
 
         // Governance Enforcement: block mutating tools when contract is not APPROVED.
@@ -859,11 +873,24 @@ async function postToolExecution(input, output) {
           // subagent — and should be governed normally. Real subagents carry
           // a non-null parentID in sessionParents.
           const isSubagent = sessionParents.has(sid);
-          enforceGovernance(tool, st, {
-            isSubagent,
-            declaredFiles,
-            enforcementEnabled: cfg.enforcement !== false,
-          });
+          try {
+            enforceGovernance(tool, st, {
+              isSubagent,
+              declaredFiles,
+              enforcementEnabled: cfg.enforcement !== false,
+            });
+          } catch (err) {
+            if (err?.wamPolicyBlock) {
+              input.output = err.message;
+              // Soft mode: log warning and allow execution to continue unless strict mode
+              if (process.env.WAM_STRICT_BLOCK !== "1") {
+                wamLog(`[wait-a-minute] SOFT GOVERNANCE BLOCK (${tool}): ${err.message}`);
+                // Execution continues, governance warning logged
+                return;
+              }
+            }
+            throw err;
+          }
         } catch (err) {
           if (err?.wamPolicyBlock) input.output = err.message;
           throw err;

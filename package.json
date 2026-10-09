@@ -3,6 +3,9 @@
   "description": "WAM keeps more state than it sends: deterministic task-state, context reconstruction, and evidence-backed completion for OpenCode agents.",
   "version": "1.1.0",
   "main": "index.js",
+  "dependencies": {
+    "context-query-core": "file:../context-query-core"
+  },
   "engines": {
     "node": ">=20"
   },

@@ -29,6 +29,28 @@ test("runSuite('deterministic') writes the four envelope files", async () => {
   }
 });
 
+test("runSuite('quality') writes the four envelope files", async () => {
+  const out = tmpDir("wam-cli-qual-");
+  try {
+    const result = await runSuite("quality", { outDir: out });
+    const dir = path.join(out, "quality");
+    for (const name of ENVELOPE) {
+      const p = path.join(dir, name);
+      assert.ok(fs.existsSync(p), `missing envelope file ${name}`);
+      assert.ok(fs.statSync(p).size > 0, `empty envelope file ${name}`);
+    }
+    assert.equal(result.suite, "quality");
+    assert.equal(result.outDir, dir);
+    const metrics = JSON.parse(fs.readFileSync(path.join(dir, "metrics.json"), "utf8"));
+    assert.equal(metrics.offline, true);
+    const report = fs.readFileSync(path.join(dir, "report.md"), "utf8");
+    assert.match(report, /QUALITY BENCHMARK REPORT/);
+    assert.match(report, /Average Fact Coverage/);
+  } finally {
+    fs.rmSync(out, { recursive: true, force: true });
+  }
+});
+
 test("envelope manifest hashes the other three artifacts", async () => {
   const out = tmpDir("wam-cli-det-man-");
   try {
@@ -94,8 +116,8 @@ test("parseArgs rejects an unknown suite", () => {
   );
 });
 
-test("SUITES lists the three runnable suites", () => {
-  assert.deepEqual([...SUITES].sort(), ["deterministic", "real", "validation"]);
+test("SUITES lists the four runnable suites", () => {
+  assert.deepEqual([...SUITES].sort(), ["deterministic", "quality", "real", "validation"]);
 });
 
 test("catalogue legacy benchmark files exist at their recorded locations", () => {

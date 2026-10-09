@@ -11,7 +11,7 @@
  *   report.md       — human-readable report
  *
  * Usage:
- *   node benchmarks/cli.mjs [--suite=deterministic|validation|real|all] [--out=<dir>]
+ *   node benchmarks/cli.mjs [--suite=deterministic|validation|real|quality|all] [--out=<dir>]
  *
  * Default: --suite=deterministic
  *
@@ -29,11 +29,13 @@ import crypto from "node:crypto";
 import { runBenchmarkSuite } from "./run.mjs";
 import { runValidationSuite } from "./run-validation.mjs";
 import { runDryRun } from "./run-real.mjs";
+import { runQualitySuite } from "./quality/run-quality.mjs";
+import { QUALITY_SCENARIOS } from "./quality/scenarios.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const SUITES = Object.freeze(["deterministic", "validation", "real"]);
+export const SUITES = Object.freeze(["deterministic", "validation", "real", "quality"]);
 
 export function parseArgs(argv) {
   const args = { suite: "deterministic", out: null };
@@ -120,6 +122,15 @@ function readRealArtifacts(outDir) {
   return { raw: { suite: rawSuite, realReport }, metrics, markdown: null };
 }
 
+function readQualityArtifacts(outDir) {
+  const raw = JSON.parse(fs.readFileSync(path.join(outDir, "raw.json"), "utf8"));
+  const metrics = JSON.parse(
+    fs.readFileSync(path.join(outDir, "metrics.json"), "utf8")
+  );
+  const report = fs.readFileSync(path.join(outDir, "report.md"), "utf8");
+  return { raw, metrics, markdown: report };
+}
+
 function writeEnvelope(suite, targetDir, { raw, metrics, markdown }) {
   fs.mkdirSync(targetDir, { recursive: true });
 
@@ -168,7 +179,7 @@ function writeEnvelope(suite, targetDir, { raw, metrics, markdown }) {
 /**
  * Run a single suite by name and emit the uniform envelope.
  *
- * @param {"deterministic"|"validation"|"real"} name
+ * @param {"deterministic"|"validation"|"real"|"quality"} name
  * @param {{outDir?: string, baseDir?: string}} [opts]
  * @returns {Promise<{suite:string, outDir:string, manifest:object}>}
  */
@@ -247,6 +258,23 @@ export async function runSuite(name, opts = {}) {
     return { suite: name, outDir: target, manifest };
   }
 
+  if (name === "quality") {
+    // Offline by default (mock provider) so the envelope is deterministic and
+    // never reaches the network. runQualitySuite writes raw.json, metrics.json
+    // and report.md into the work dir, which we re-emit via the envelope.
+    const workDir = path.join(baseOut, "_qual-work");
+    fs.mkdirSync(workDir, { recursive: true });
+    await runQualitySuite({
+      outDir: workDir,
+      timestamp: new Date().toISOString(),
+      provider: "mock",
+    });
+    const { raw, metrics, markdown } = readQualityArtifacts(workDir);
+    const { manifest } = writeEnvelope(name, target, { raw, metrics, markdown });
+    fs.rmSync(workDir, { recursive: true, force: true });
+    return { suite: name, outDir: target, manifest };
+  }
+
   throw new Error(`Unknown suite: ${name}`);
 }
 
@@ -254,7 +282,7 @@ export async function main(argv = process.argv) {
   const args = parseArgs(argv);
   if (args.help) {
     console.log(
-      "Usage: node benchmarks/cli.mjs [--suite=deterministic|validation|real|all] [--out=<dir>]"
+      "Usage: node benchmarks/cli.mjs [--suite=deterministic|validation|real|quality|all] [--out=<dir>]"
     );
     return 0;
   }
