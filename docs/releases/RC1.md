@@ -2,7 +2,7 @@
 
 ## Scope
 
-RC1 (Release Candidate 1) focuses on hardening the wait-a-minute-plugin for production use. It includes:
+RC1 (Release Candidate 1) focuses on hardening the opencode-wait-a-minute plugin for production use. It includes:
 
 - **Core pre-flight improvements**: Better assumption detection and task classification
 - **Completion control**: Robust evidence-based completion gating

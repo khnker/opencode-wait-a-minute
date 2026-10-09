@@ -1,0 +1,23 @@
+# Tasks: Package Identity & Installation
+
+- [x] Create OpenSpec change structure (proposal, design, specs, tasks) — `openspec/changes/package-identity-and-installation/`
+- [x] Validate the change with `npx openspec validate package-identity-and-installation`
+- [x] Unify package name in README.md (EN): replace `wait-a-minute` with `opencode-wait-a-minute` except legacy filename `wait-a-minute-test.mjs`
+- [x] Unify package name in README_es.md (ES)
+- [x] Unify package name in `docs/architecture-boundaries.md`
+- [x] Unify package name in `docs/architecture/compatibility.md`
+- [x] Unify package name in `docs/releases/RC1.md`
+- [x] Unify package name in `docs/development/release.md`
+- [x] Unify package name in `docs/RC1_VALIDATION.md`
+- [x] Fix `tests/e2e/opencode/smoke.mjs` — replace bare `wait-a-minute` with `opencode-wait-a-minute`
+- [x] Fix `scripts/verify-package.mjs` — check for old name references
+- [x] Fix `scripts/verify-published-package.mjs` — check for old name references
+- [x] Fix `scripts/check-compatibility.mjs` — check for old name references
+- [x] Fix `scripts/package-e2e.mjs` — check for old name references
+- [x] Create `scripts/verify-tarball-install.mjs` — tarball pack → install → assert name
+- [x] Wire `"verify:tarball": "node scripts/verify-tarball-install.mjs"` in `package.json`
+- [x] Extend release gate to run tarball assertion
+- [x] Verify `npm test` passes (2854 pass / 0 fail)
+- [x] Verify `npm run validate` passes
+- [x] Verify `node scripts/verify-tarball-install.mjs` passes
+- [x] Commit with message `chore(identity): unify package name to opencode-wait-a-minute`

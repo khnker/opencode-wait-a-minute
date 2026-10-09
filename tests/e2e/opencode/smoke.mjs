@@ -7,7 +7,7 @@
  *   1. `npm pack` the repo into an isolated temp dir.
  *   2. `npm install` the produced .tgz into a fresh temp workspace (own node_modules).
  *   3. Register the plugin in a temp opencode.jsonc pointing at the installed
- *      package entry (`node_modules/wait-a-minute/index.js`, i.e. the installed main).
+ *      package entry (`node_modules/opencode-wait-a-minute/index.js`, i.e. the installed main).
  *   4. Spawn real `opencode`, wait for a plugin event, assert the round-trip.
  *   5. Emit `WAM_E2E_SUMMARY {json}` (also written to $WAM_E2E_SUMMARY_PATH when set).
  *
@@ -201,7 +201,7 @@ function runOpencode(env) {
       stdoutBuf += raw;
       const line = raw.replace(/\x1b\[[0-9;]*m/g, "").trim();
       if (!line) return;
-      if (line.includes("WAM") || line.includes("wait-a-minute")) {
+      if (line.includes("WAM") || line.includes("opencode-wait-a-minute")) {
         log("output", line);
       } else {
         log("output-raw", line.slice(0, 200));

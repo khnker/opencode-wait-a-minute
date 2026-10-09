@@ -9,8 +9,8 @@ We welcome contributions to WAM! Please follow these guidelines.
 \`\`\`bash
 # Fork the repository
 # Clone your fork
-git clone https://github.com/your-username/wait-a-minute-plugin.git
-cd wait-a-minute-plugin
+git clone https://github.com/your-username/opencode-wait-a-minute.git
+cd opencode-wait-a-minute
 
 # Install dependencies
 npm install

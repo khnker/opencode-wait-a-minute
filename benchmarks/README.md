@@ -1,6 +1,6 @@
 # Benchmarks
 
-RC1 benchmark suite for the **wait-a-minute-plugin** (WAM). It compares a
+RC1 benchmark suite for the **opencode-wait-a-minute** (WAM). It compares a
 baseline LLM context (full transcript re-injection) against the WAM runtime
 context graph and reports token savings, latency, and correctness parity.
 

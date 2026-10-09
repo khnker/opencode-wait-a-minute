@@ -117,17 +117,17 @@ WAM treats this as a state management problem, not a conversation problem. By ma
 ### Install
 
 ```bash
-npm install wait-a-minute
+npm install opencode-wait-a-minute
 ```
 
-The npm package is `wait-a-minute`; the repository is `opencode-wait-a-minute`.
+The npm package is `opencode-wait-a-minute`; the repository is `opencode-wait-a-minute`.
 
 ### Enable in OpenCode
 
 ```jsonc
 // opencode.jsonc
 {
-  "plugins": ["wait-a-minute"]
+  "plugins": ["opencode-wait-a-minute"]
 }
 ```
 

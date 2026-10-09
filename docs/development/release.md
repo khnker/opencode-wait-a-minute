@@ -38,7 +38,7 @@ Publishing is automated by [`.github/workflows/release.yml`](../../.github/workf
 
 Before the first publish, configure an npm Automation token for the package:
 
-1. Go to **[npmjs.com/package/wait-a-minute → Settings → Access Tokens → Create token](https://www.npmjs.com/settings/khnker/tokens/new)**
+1. Go to **[npmjs.com/package/opencode-wait-a-minute → Settings → Access Tokens → Create token](https://www.npmjs.com/settings/khnker/tokens/new)**
 2. Call it something like "gh-release" and assign full access.
 3. Go to **Settings → Secrets and variables → Actions → New repository secret**
 4. Name: `NPM_SECRET`
@@ -65,13 +65,13 @@ git tag v1.1.0-rc.1
 git push origin v1.1.0-rc.1
 
 # 4. Verify the published artifact
-npm run verify:published -- wait-a-minute@1.1.0-rc.1
+npm run verify:published -- opencode-wait-a-minute@1.1.0-rc.1
 ```
 
 Installing a prerelease:
 
 ```bash
-npm install wait-a-minute@next
+npm install opencode-wait-a-minute@next
 ```
 
 ## Related documentation

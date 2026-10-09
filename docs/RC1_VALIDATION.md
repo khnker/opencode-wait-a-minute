@@ -1,6 +1,6 @@
 # RC1 Validation Runbook
 
-This document enables any developer to validate an RC1 build of wait-a-minute-plugin from a clean state.
+This document enables any developer to validate an RC1 build of opencode-wait-a-minute from a clean state.
 
 ## Environment
 
@@ -23,8 +23,8 @@ opencode --version  # >=1.18.0
 ## 1. Fresh Install
 
 ```bash
-git clone https://github.com/khnker/wait-a-minute-plugin.git
-cd wait-a-minute-plugin
+git clone https://github.com/khnker/opencode-wait-a-minute.git
+cd opencode-wait-a-minute
 npm ci
 ```
 
@@ -227,7 +227,7 @@ Which scans the tarball for forbidden files:
 npm run verify:published
 ```
 
-Input: `npm run verify:published wait-a-minute@1.1.0`
+Input: `npm run verify:published opencode-wait-a-minute@1.1.0`
 
 Validates:
 - Registry artifact matches local tarball (content + checksum)

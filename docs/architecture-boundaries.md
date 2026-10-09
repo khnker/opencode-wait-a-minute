@@ -1,6 +1,6 @@
 # Arquitectura WAM - Fronteras y Dependencias
 
-Esta documentación define las fronteras arquitectónicas prohibidas para prevenir el acoplamiento circular y la mezcla de responsabilidades en el proyecto `wait-a-minute-plugin`.
+Esta documentación define las fronteras arquitectónicas prohibidas para prevenir el acoplamiento circular y la mezcla de responsabilidades en el proyecto `opencode-wait-a-minute`.
 
 ## Capas Arquitectónicas
 

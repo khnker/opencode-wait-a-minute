@@ -39,6 +39,7 @@
     "verify:security": "node scripts/verify-security.mjs",
     "verify:compat": "node scripts/check-compatibility.mjs",
     "verify:published": "node scripts/verify-published-package.mjs",
+    "verify:tarball": "node scripts/verify-tarball-install.mjs",
     "smoke": "node -e \"import('./index.js').then(m => console.log('WAM plugin loaded successfully'))\"",
     "skills:sync": "node scripts/sync-upstream.cjs",
     "skills:build": "node scripts/build-registry.cjs",

@@ -1,6 +1,6 @@
 # Node / OpenCode Compatibility Matrix
 
-This document defines the supported environment for the `wait-a-minute` plugin.
+This document defines the supported environment for the `opencode-wait-a-minute` plugin.
 
 ## Supported Versions
 - **Node.js**: >=20 (enforced via `package.json` engines)

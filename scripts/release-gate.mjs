@@ -30,6 +30,7 @@ const GATES = [
   { name: "Version Parity", cmd: "node scripts/verify-version-parity.mjs", required: true },
   { name: "Test Suite", cmd: "npm test", required: true, timeout: 300000 },
   { name: "Package Integrity", cmd: "node scripts/verify-package.mjs", required: true },
+  { name: "Tarball Identity", cmd: "node scripts/verify-tarball-install.mjs", required: true },
   { name: "Security Audit", cmd: "node scripts/verify-security.mjs", required: true },
   { name: "Migration E2E", cmd: "node tests/e2e/migration/run.mjs", required: true },
   { name: "Isolation E2E", cmd: "node tests/isolation/run.mjs", required: true },
