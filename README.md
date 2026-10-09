@@ -17,6 +17,22 @@ WAM keeps more state than it sends.
 
 WAM adds deterministic control, task-state management, context reconstruction, skill routing, and evidence-backed verification to OpenCode agents. It correlates task state, skills, context, evidence, and verification to determine what should happen next.
 
+#### Context-Query-Core Integration (CQE)
+
+WAM now includes an integration with [context-query-core](https://github.com/khnker/context-query-core), a fast, in-process code-evidence retriever that uses SQLite and trigram indexing to retrieve relevant source-code snippets with lexical and symbolic matching.
+
+CQE is enabled by default. Use `WAM_CQE_MODE=disabled` or `WAM_CQE=0` to disable.
+
+When enabled, WAM supplements its native context retrieval with CQE results, improving precision and recall for code-related queries as demonstrated in the retrieval A/B benchmark (see `benchmarks/retrieval/`).
+
+CQE also cuts the tokens injected into the model context. On the fixture A/B benchmark, CQE retrieved **142 tokens vs. 302 tokens for baseline** ripgrep search across 8 queries — a **52.98% reduction** — while keeping recall comparable (0.70 vs. 0.75) and improving precision and MRR. Reproduce with:
+
+```bash
+node benchmarks/retrieval/run-ab.mjs --corpus fixture --k 5
+```
+
+The integration is designed to be safe: it never alters task state, distinguishes empty results from errors, and falls back to native retrieval on any issue.
+
 [Install](#install) [Documentation](#documentation)
 
 PROVEN IN RC1

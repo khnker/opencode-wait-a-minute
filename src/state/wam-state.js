@@ -7,6 +7,7 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { StateValidator } from '../persistence/state-validator.js';
 
 // ── Constants ────────────────────────────────────────────────
 export const SCHEMA_VERSION = 1;
@@ -54,6 +55,7 @@ export function createWamState(taskId, requirements = {}, context = {}, evidence
  * @returns {Promise<string>} resolved file path
  */
 export async function saveWamState(taskId, state, rootDir) {
+  StateValidator.validate(state);
   const dir = path.join(rootDir, taskId);
   await fs.mkdir(dir, { recursive: true });
   state.updatedAt = new Date().toISOString();
@@ -76,7 +78,8 @@ export async function loadWamState(taskId, rootDir) {
     return null;
   }
   const raw = await fs.readFile(filePath, 'utf8');
-  return JSON.parse(raw);
+  const state = JSON.parse(raw);
+  return StateValidator.processState(state);
 }
 
 /**

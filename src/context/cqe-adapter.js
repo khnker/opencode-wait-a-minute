@@ -2,9 +2,11 @@
  * WAM CQE Adapter — integration of context-query-core into WAM context retrieval.
  *
  * Modes:
- *   - disabled: native WAM retrieval only (safe default).
+ *   - disabled: native WAM retrieval only (set via env or explicit mode).
  *   - shadow:   run CQE for comparison, but return native context to the agent.
  *   - enabled:  use CQE results when available, fall back to native on error/empty.
+ *
+ * Default: enabled (CQE is on by default; set WAM_CQE_MODE=disabled to opt out).
  *
  * Guarantees:
  *   - Never transitions task state; CQE success != verification.
@@ -14,6 +16,8 @@
  */
 
 import { createEngine } from 'context-query-core';
+import fs from 'fs';
+import path from 'path';
 import { retrieveContext } from './context-retrieval.js';
 import { wamLog } from '../shared/wam-log.js';
 
@@ -23,9 +27,19 @@ let defaultEngine = null;
 let defaultEngineKey = null;
 
 function resolveMode(explicit) {
-  const raw = explicit || process.env.WAM_CQE_MODE || (process.env.WAM_CQE === '1' ? 'enabled' : 'disabled');
-  const mode = String(raw).toLowerCase();
-  return VALID_MODES.has(mode) ? mode : 'disabled';
+  if (explicit != null && explicit !== '') {
+    const mode = String(explicit).toLowerCase();
+    return VALID_MODES.has(mode) ? mode : 'disabled';
+  }
+  const env = process.env.WAM_CQE_MODE;
+  if (env != null && env !== '') {
+    const mode = String(env).toLowerCase();
+    return VALID_MODES.has(mode) ? mode : 'disabled';
+  }
+  if (process.env.WAM_CQE === '0' || process.env.WAM_CQE === 'false') {
+    return 'disabled';
+  }
+  return 'enabled';
 }
 
 /**
@@ -34,21 +48,12 @@ function resolveMode(explicit) {
  */
 export function createCqeEngine(config = {}) {
   const repoRoot = config.repoRoot || config.root || process.cwd();
-  const engine = createEngine({
+  return createEngine({
     repoRoot,
     cacheDir: config.cacheDir,
     indexDir: config.indexDir,
     budget: config.budget,
   });
-  return {
-    repoRoot: engine.repoRoot,
-    cacheDir: engine.cacheDir,
-    indexDir: engine.indexDir,
-    budget: engine.budget,
-    query: (text, opts = {}) => engine.query(text, opts),
-    clearCache: () => engine.clearCache(),
-    dispose: () => engine.dispose(),
-  };
 }
 
 function getDefaultEngine(repoRoot) {
@@ -70,16 +75,22 @@ function withTimeout(promise, timeoutMs) {
 }
 
 export function normalizeItem(raw, idx, queryText, elapsedMs) {
+  const content = raw.snippet || raw.content || '';
+  const startLine = raw.startLine ?? raw.line_start ?? raw.line ?? null;
+  const endLine = raw.endLine ?? raw.line_end ?? null;
+  const tokenEstimate =
+    raw.tokenEstimate ?? raw.token_estimate ?? raw.cost?.tokens ?? Math.ceil(content.length / 4);
   return {
-    id: raw.id || `${raw.path || raw.file || 'unknown'}:${raw.startLine ?? raw.line ?? idx}`,
+    id: raw.id || raw.evidence_id || `${raw.path || raw.file || 'unknown'}:${startLine ?? idx}`,
     path: raw.path || raw.file || '',
-    content: raw.snippet || raw.content || '',
-    startLine: raw.startLine ?? raw.line ?? null,
-    endLine: raw.endLine ?? null,
-    score: raw.score ?? raw.relevance ?? null,
-    evidenceType: raw.type || raw.evidenceType || 'retrieval',
+    content,
+    startLine,
+    endLine,
+    score: raw.score ?? raw.score_final ?? raw.relevance ?? null,
+    evidenceType: raw.evidenceType || raw.evidence_type || raw.type || 'retrieval',
+    tokenEstimate,
     provenance: {
-      operator: raw.operator || 'cqe-retrieval',
+      operator: raw.provenance?.operator || raw.operator || 'cqe-retrieval',
       query: queryText,
       source: 'cqe',
       elapsedMs,
@@ -97,6 +108,35 @@ export function dedupe(items) {
     out.push(it);
   }
   return out;
+}
+
+const MAX_SNIPPET_LINES = 3;
+
+/**
+ * Materialize a snippet for evidence items that carry only path + line range.
+ * Keeps the injected context bounded (MAX_SNIPPET_LINES) so CQE stays token-cheap.
+ * @param {Object} item - Normalized item.
+ * @param {string} [repoRoot] - Repository root for resolving relative paths.
+ * @returns {Object} Item with `content` and `tokenEstimate` populated when possible.
+ */
+export function materializeSnippet(item, repoRoot) {
+  if (item.content && item.content.trim()) return item;
+  if (!item.path) return item;
+  const abs = path.isAbsolute(item.path) ? item.path : path.join(repoRoot || process.cwd(), item.path);
+  try {
+    const lines = fs.readFileSync(abs, 'utf8').split('\n');
+    const start = Math.max(1, item.startLine ?? 1);
+    const end = Math.min(lines.length, item.startLine ? (item.endLine ?? start + MAX_SNIPPET_LINES - 1) : MAX_SNIPPET_LINES);
+    const snippet = lines.slice(start - 1, end).join('\n').trim();
+    if (!snippet) return item;
+    return {
+      ...item,
+      content: snippet,
+      tokenEstimate: Math.max(8, Math.ceil(snippet.length / 4)),
+    };
+  } catch (e) {
+    return item;
+  }
 }
 
 /**
@@ -160,7 +200,9 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
   };
 
   const rawResults = (cqeResult && Array.isArray(cqeResult.results)) ? cqeResult.results : [];
-  const normalized = dedupe(rawResults.map((r, i) => normalizeItem(r, i, queryText, elapsedMs)));
+  const normalized = dedupe(
+    rawResults.map((r, i) => normalizeItem(r, i, queryText, elapsedMs))
+  ).map(it => materializeSnippet(it, constraints.repoRoot));
 
   if (mode === 'shadow') {
     wamLog('cqe-adapter', 'Shadow comparison', {

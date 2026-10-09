@@ -8,6 +8,7 @@ import { configureLogger } from "./src/integration/logger.js";
 import { setLoggingEnabled, wamLog, wamError } from "./src/shared/wam-log.js";
 
 import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
+import { purgeTasks } from "./src/persistence/retention-manager.js";
 import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules } from "./src/context/context.js";
 import { assembleContext } from "./src/context/assembly.js";
 import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./src/verification/verification.js";
@@ -624,6 +625,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
     const root = await wamRootFor(sessionID, promptText);
     try {
       initMemory(root);
+      purgeTasks(path.join(root, 'tasks')).catch(e => wamError(`Retention purge failed: ${e}`));
     } catch {}
     if (sessionID) sessionWamRoots.set(sessionID, root);
     return root;
