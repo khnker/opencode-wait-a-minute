@@ -159,21 +159,20 @@ export function canComplete(taskRoot, taskId) {
 
   // Outcome-based completion check (enforce-outcome-based-done)
   try {
-    const contract = taskState.outcomeContract || {
-      taskId,
-      objective: taskState.objective || `Task ${taskId} outcome completion`,
-      acceptanceCriteria: requirements.map((req) => ({
-        id: req.id,
-        description: req.description || req.id,
-        mandatory: true,
-      })),
-    };
-    const outcome = evaluateOutcome(contract, allEvidence, taskState.observations || []);
-    if (!outcome.canComplete || outcome.status !== OUTCOME_STATUSES.ACHIEVED) {
+    const contract = taskState.outcomeContract;
+    if (!contract) {
       blockers.push({
-        requirementId: 'outcome-evaluation',
-        reason: `Outcome not achieved (status=${outcome.status}): ${outcome.reasons?.join(', ') || 'mandatory criteria unsatisfied'}`,
+        requirementId: 'outcome-contract',
+        reason: 'Missing outcome contract — outcome contract is mandatory for completion',
       });
+    } else {
+      const outcome = evaluateOutcome(contract, allEvidence, taskState.observations || []);
+      if (!outcome.canComplete || outcome.status !== OUTCOME_STATUSES.ACHIEVED) {
+        blockers.push({
+          requirementId: 'outcome-evaluation',
+          reason: `Outcome not achieved (status=${outcome.status}): ${outcome.error || outcome.reasons?.join(', ') || 'mandatory criteria unsatisfied'}`,
+        });
+      }
     }
   } catch (err) {
     blockers.push({

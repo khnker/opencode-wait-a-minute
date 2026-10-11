@@ -107,7 +107,7 @@ test('evaluateOutcome: verified observation satisfies criterion', () => {
   assert.equal(result.canComplete, true);
 });
 
-test('evaluateOutcome: newer verified evidence overrides older failed evidence', () => {
+test('evaluateOutcome: newer verified evidence does NOT override older failed without explicit supersession', () => {
   const contract = {
     taskId: 't1',
     objective: 'Temporal test',
@@ -120,7 +120,43 @@ test('evaluateOutcome: newer verified evidence overrides older failed evidence',
     { criterionId: 'c1', status: 'VERIFIED', timestamp: now },
   ];
   const result = evaluateOutcome(contract, evidence, []);
-  // Newest VERIFIED should win
+  // Without explicit supersession, failure persists
+  assert.equal(result.status, OUTCOME_STATUSES.NOT_ACHIEVED);
+  assert.equal(result.canComplete, false);
+});
+
+test('evaluateOutcome: explicit supersession allows reverification after failure', () => {
+  const contract = {
+    taskId: 't1',
+    objective: 'Temporal test with supersession',
+    acceptanceCriteria: [{ id: 'c1', description: 'Fixed', mandatory: true }],
+  };
+  const old = Date.now() - 10000;
+  const now = Date.now();
+  const evidence = [
+    { criterionId: 'c1', status: 'FAILED', timestamp: old },
+    { criterionId: 'c1', status: 'VERIFIED', timestamp: now, supersedes: true },
+  ];
+  const result = evaluateOutcome(contract, evidence, []);
+  // Explicit supersession allows override
+  assert.equal(result.status, OUTCOME_STATUSES.ACHIEVED);
+  assert.equal(result.canComplete, true);
+});
+
+test('evaluateOutcome: explicit reverifies allows reverification after failure', () => {
+  const contract = {
+    taskId: 't1',
+    objective: 'Temporal test with reverifies',
+    acceptanceCriteria: [{ id: 'c1', description: 'Fixed', mandatory: true }],
+  };
+  const old = Date.now() - 10000;
+  const now = Date.now();
+  const evidence = [
+    { criterionId: 'c1', status: 'FAILED', timestamp: old },
+    { criterionId: 'c1', status: 'VERIFIED', timestamp: now, reverifies: true },
+  ];
+  const result = evaluateOutcome(contract, evidence, []);
+  // Explicit reverifies allows override
   assert.equal(result.status, OUTCOME_STATUSES.ACHIEVED);
   assert.equal(result.canComplete, true);
 });

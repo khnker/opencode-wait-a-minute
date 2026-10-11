@@ -15,6 +15,7 @@
 
 import { evaluateRequirement as evaluateRequirementChecks } from "../verification/verification.js";
 import { truncate } from "../execution/formatting.js";
+import { evaluateOutcome, OUTCOME_STATUSES } from "../verification/outcome-evaluator.js";
 
 // ═══════════════════════════════════════════════════════════════
 // Constantes de fase
@@ -186,25 +187,48 @@ export function evaluateCompletionGate(state, promptText) {
   }
 
   // 7. Contract checks must pass
-  const checks = state?.contract?.checks || [];
-  if (checks.length > 0) {
-    const byReq = new Map();
-    for (const c of checks) {
-      if (!byReq.has(c.reqId)) byReq.set(c.reqId, []);
-      byReq.get(c.reqId).push(c);
-    }
-    const checkFailures = [];
-    for (const [reqId, list] of byReq) {
-      const verdict = evaluateRequirementChecks(list, list);
-      if (verdict.status !== "VERIFIED")
-        checkFailures.push(`${reqId}: ${verdict.reason || "checks pendientes"}`);
-    }
-    if (checkFailures.length > 0) {
-      return { blocked: true, verifying: true, pending: checkFailures };
-    }
-  }
+   const checks = state?.contract?.checks || [];
+   if (checks.length > 0) {
+     const byReq = new Map();
+     for (const c of checks) {
+       if (!byReq.has(c.reqId)) byReq.set(c.reqId, []);
+       byReq.get(c.reqId).push(c);
+     }
+     const checkFailures = [];
+     for (const [reqId, list] of byReq) {
+       const verdict = evaluateRequirementChecks(list, list);
+       if (verdict.status !== "VERIFIED")
+         checkFailures.push(`${reqId}: ${verdict.reason || "checks pendientes"}`);
+     }
+     if (checkFailures.length > 0) {
+       return { blocked: true, verifying: true, pending: checkFailures };
+     }
+   }
 
-  return { blocked: false, allDone: true };
+   // 8. Outcome evaluation check
+   const outcomeContract = state?.outcomeContract;
+   if (!outcomeContract) {
+     return {
+       blocked: true,
+       pending: ["Missing outcome contract — outcome contract is required before DONE"],
+     };
+   }
+   try {
+     const outcomeResult = evaluateOutcome(outcomeContract, state?.evidence || [], state?.observations || []);
+     if (!outcomeResult.canComplete || outcomeResult.status !== OUTCOME_STATUSES.ACHIEVED) {
+       return {
+         blocked: true,
+         pending: [`Outcome not achieved (status=${outcomeResult.status}): ${outcomeResult.error || outcomeResult.reasons?.join(", ") || "mandatory criteria unsatisfied"}`],
+       };
+     }
+   } catch (err) {
+     return {
+       blocked: true,
+       pending: [`Outcome evaluator error (fail-closed): ${err.message}`],
+     };
+   }
+
+   return { blocked: false, allDone: true };
 }
 
 /**

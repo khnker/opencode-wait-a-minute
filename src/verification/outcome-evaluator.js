@@ -19,7 +19,6 @@ export const EVIDENCE_TYPES = {
   MEASUREMENT: 'measurement',
   NARRATIVE: 'narrative',
 };
-
 export function validateOutcomeContract(contract) {
   if (!contract || typeof contract !== 'object') {
     return { valid: false, error: 'Contract must be an object' };
@@ -33,8 +32,21 @@ export function validateOutcomeContract(contract) {
   if (!Array.isArray(contract.acceptanceCriteria) || contract.acceptanceCriteria.length === 0) {
     return { valid: false, error: 'Contract requires non-empty acceptanceCriteria array' };
   }
-  if (!contract.acceptanceCriteria.every((c) => typeof c === 'object')) {
-    return { valid: false, error: 'Each acceptance criterion must be an object' };
+  const ids = new Set();
+  for (const c of contract.acceptanceCriteria) {
+    if (!c || typeof c !== 'object') {
+      return { valid: false, error: 'Each acceptance criterion must be an object' };
+    }
+    if (!c.id || typeof c.id !== 'string' || !c.id.trim()) {
+      return { valid: false, error: 'Each acceptance criterion requires a non-empty string id' };
+    }
+    if (!c.description || typeof c.description !== 'string' || !c.description.trim()) {
+      return { valid: false, error: 'Each acceptance criterion requires a non-empty string description' };
+    }
+    if (ids.has(c.id)) {
+      return { valid: false, error: `Duplicate acceptance criterion id: ${c.id}` };
+    }
+    ids.add(c.id);
   }
   return { valid: true };
 }
@@ -84,7 +96,6 @@ function evaluateCriterionItems(items) {
         resolution = 'unverified';
         detail = 'Evidence/observation is not verified';
       }
-      // Only update detail to a more specific reason.
       if (!satisfied && !failed) {
         detail = `Unverified ${type} for criterion`;
       }
@@ -100,6 +111,11 @@ function evaluateCriterionItems(items) {
     }
 
     if (isValidated) {
+      // If there was a previous failure, a new verified item only overrides if explicitly superseding or reverifying.
+      if (failed && !item.supersedes && !item.reverifies && !item.explicitSupersession) {
+        // Keep failed state unless explicit supersession/reverification is provided
+        continue;
+      }
       satisfied = true;
       failed = false;
       detail = `Verified ${type} (timestamp=${finalItem.timestamp || finalItem.createdAt})`;
@@ -163,7 +179,7 @@ export function evaluateOutcome(contract, evidenceList = [], observations = []) 
   let optionalResults = [];
 
   for (const criterion of criteria) {
-    const cId = criterion.id || String(criterion.description || Math.random()).slice(0, 12);
+    const cId = criterion.id;
     const isMandatory = criterion.mandatory !== false;
     const items = getItemsFor(cId);
 
