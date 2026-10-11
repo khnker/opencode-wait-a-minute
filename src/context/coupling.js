@@ -1,4 +1,4 @@
-import { traceCrossLayer } from "context-query-core";
+import { traceCrossLayer } from '../../vendor/context-query-core/src/index.js';
 
 export function detectCouplingIntent(text) {
   const q = text.toLowerCase();

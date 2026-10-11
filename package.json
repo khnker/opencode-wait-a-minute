@@ -17,7 +17,8 @@
     "LICENSE",
     "!**/*.test.js",
     "!**/*.test.mjs",
-    "!**/bench-*.mjs"
+    "!**/bench-*.mjs",
+    "vendor/"
   ],
   "scripts": {
     "gate": "node scripts/release-gate.mjs",

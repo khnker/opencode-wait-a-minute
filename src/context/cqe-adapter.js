@@ -15,7 +15,7 @@
  *   - Repository is explicit; never relies on an accidental process.cwd().
  */
 
-import { createEngine } from 'context-query-core';
+import { createEngine } from '../../vendor/context-query-core/src/index.js';
 import fs from 'fs';
 import path from 'path';
 import { retrieveContext } from './context-retrieval.js';

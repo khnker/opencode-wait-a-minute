@@ -1,0 +1,57 @@
+{
+  "name": "context-query-core",
+  "version": "1.0.0",
+  "description": "Standalone, importable CQE core library: context-query engine with evidence evaluator, query planner, and orchestrator. No MCP/transport coupling.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./core": "./src/core.js",
+    "./evidence-evaluator": "./src/evidence-evaluator.js",
+    "./query-planner": "./src/query-planner.js",
+    "./orchestrator": "./src/orchestrator.js"
+  },
+  "files": [
+    "index.js",
+    "src/",
+    "README.md",
+    "LICENSE",
+    "vendor/"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js test/*.test.mjs",
+    "verify:package": "node scripts/verify-package.mjs",
+    "benchmark": "node benchmarks/cqe-benchmark.mjs",
+    "benchmark:ci": "node benchmarks/cqe-benchmark.mjs --ci",
+    "bench": "node benchmarks/retrieval-ab.js",
+    "bench:cqe": "node benchmarks/cqe-benchmark.mjs",
+    "bench:cross-layer": "node benchmarks/cross-layer-benchmark.mjs"
+  },
+  "keywords": [
+    "cqe",
+    "context-query",
+    "retrieval",
+    "orchestrator",
+    "evidence",
+    "planner",
+    "ai",
+    "agent"
+  ],
+  "author": "Nicolas",
+  "license": "MIT",
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">= 18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khnker/context-query-core.git"
+  },
+  "bugs": {
+    "url": "https://github.com/khnker/context-query-core/issues"
+  },
+  "homepage": "https://github.com/khnker/context-query-core#readme"
+}
