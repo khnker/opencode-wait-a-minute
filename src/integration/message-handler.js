@@ -16,6 +16,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { hasWamMarkerFor, isWamSynthetic } from "./part-provenance.js";
+import { buildTaskInferenceDirective } from "../cognition/task-inference-engine.js";
+import { detectCouplingIntent, traceCouplingForTask } from "../context/selection.js";
 
 // Idempotency guard: a chat.message invocation must be processed at most once
 // per message id + kind. The store is normally owned by the plugin instance
@@ -156,6 +158,8 @@ export async function handleMessage(input, output, deps) {
     readLiveContext,
     persistLiveContext,
     assembleContext,
+    selectContextWithCqe,
+    detectFileSearchIntent,
     createSnapshot,
     checkContinuation,
     rebuildScope,
@@ -506,10 +510,46 @@ export async function handleMessage(input, output, deps) {
         selectedSkills: analysis.skills?.selected || [],
       });
       if (pack.lines.length) {
-        inject.push(pack.lines.join("\n") + `\n[wam pack ${pack.budget_used}/${pack.budget} tok ${pack.levels.N0 ? "N0" : ""}${pack.levels.N1 ? "+N1" : ""}${pack.levels.N2 ? "+N2" : ""}${pack.levels.N3 ? "+N3" : ""}]`);
+        inject.push(pack.lines.join("\n") + "\n");
       }
-      try { createSnapshot(taskId, updatedState, wamRoot); } catch {}
+
+      if (detectCouplingIntent(promptText)) {
+        const couplingPack = await traceCouplingForTask(promptText, { root: wamRoot });
+        if (couplingPack.ok && couplingPack.lines.length > 0) {
+           inject.push(couplingPack.lines.join("\n") + "\n");
+        }
+      }
+
+      if (detectFileSearchIntent(promptText)) {
+        const cqePack = await selectContextWithCqe(promptText, {
+          root: wamRoot,
+          disableCqe: cfg.disableCqe === true,
+        });
+        if (cqePack.file_context && cqePack.file_context.length > 0) {
+          inject.push(`\n[wam cqe file_context]\n${JSON.stringify(cqePack.file_context, null, 2)}`);
+        }
+      }
     } catch {}
+
+    // Directive inference
+    if (updatedState.contract?.objective && updatedState.phase !== "DONE" && analysis.intent?.classification !== "trivial") {
+      if (!updatedState.inferenceDirectiveShown) {
+        try {
+          const { lines } = buildTaskInferenceDirective({ 
+            objective: updatedState.contract.objective, 
+            requirements: updatedState.requirements 
+          });
+          if (lines.length > 0) {
+            inject.push(...lines);
+            updatedState.inferenceDirectiveShown = true;
+            persistTaskState(taskId, updatedState, wamRoot);
+          }
+        } catch (e) {
+          console.error("Failed to build task inference directive:", e);
+        }
+      }
+    }
+
 
     if (gate.blocked) {
       const maxGateReqs = 5;

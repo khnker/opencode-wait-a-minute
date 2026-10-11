@@ -17,7 +17,11 @@
 - [x] OpenSpec change validates
 
 ## Deferred
-- [ ] Wire `selectContextWithCqe` into the async runtime path (`message-handler.js`)
+- [x] Wire `selectContextWithCqe` into the async runtime path (`message-handler.js`)
+  - `src/integration/message-handler.js`: tras `assembleContext`, si `detectFileSearchIntent(promptText)` → `await selectContextWithCqe(promptText, { root: wamRoot, disableCqe: cfg.disableCqe === true })`; inyecta `file_context` en `inject`. Envuelto en try/catch (fail-open).
+  - `index.js`: importa `selectContextWithCqe`/`detectFileSearchIntent` de `./src/context/context.js` y los pasa en `deps` de `handleMessage`.
+  - `src/context/context.js`: `detectFileSearchIntent` ahora `export`; re-exportado desde `src/context/selection.js`.
+  - Tests: `tests/integration/cqe/select-context-with-cqe.test.mjs` (RT-01..03, 3/3).
 - [ ] Commit (awaiting explicit approval)
 
 ## Owner decisions pending

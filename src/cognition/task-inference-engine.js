@@ -26,6 +26,48 @@ export const COMPLETION_TYPE = Object.freeze({
 });
 
 /**
+ * Maps requirements to task objects for the inference engine.
+ */
+function mapRequirementsToTasks(requirements) {
+  return requirements.map((req, index) => {
+    const title = req.title || `Task ${index + 1}`;
+    const id = title.toLowerCase().replace(/[^a-z0-9]/g, "-") + "-" + index;
+    const isService = /endpoint|api|service|servicio|health|http|server/i.test(title) ||
+                      /endpoint|api|service|servicio|health|http|server/i.test(req.description || "");
+    const dataIntensive = /data|dato|dataset|ingest|sample|muestra|migrat/i.test(title) ||
+                          /data|dato|dataset|ingest|sample|muestra|migrat/i.test(req.description || "");
+    
+    return {
+      id,
+      description: req.description || title,
+      requiresVerification: true,
+      isService,
+      dataIntensive,
+    };
+  });
+}
+
+export function buildTaskInferenceDirective({ objective, requirements = [], prompt = "" }, context = {}) {
+  if (requirements.length === 0) {
+    return { lines: [], inferred: [], objective };
+  }
+
+  const tasks = mapRequirementsToTasks(requirements);
+  const inferred = inferNextTasks(tasks, context);
+  
+  const lines = [
+    `⛔ [wait-a-minute] TASK INFERENCE DIRECTIVE: ${objective}`,
+    `Current tasks: ${requirements.map(r => r.title).join(", ")}`,
+    "Inferred non-implicit tasks:",
+    ...inferred.map(t => `- ${t.id}: ${t.description} (Criteria: ${t.completionCriteria.map(c => c.type).join(", ")})`),
+    "Instruction: Infer any additional non-implicit tasks, list evidence, DO NOT declare DONE until criteria met.",
+    "Example: habilitar un endpoint → verificar el servicio en local + revisar 10% de los datos + validar."
+  ];
+
+  return { lines, inferred, objective };
+}
+
+/**
  * Largest-remainder normalization: scales raw weights so they sum to exactly
  * 1.0 while keeping each weight quantized to 4 decimal places.
  */

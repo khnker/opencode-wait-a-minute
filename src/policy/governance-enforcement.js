@@ -28,6 +28,29 @@ export const CONTRACT_GATED_TOOLS = new Set([
   "write", "edit", "apply_patch", "patch", "todo_write", "todowrite",
 ]);
 
+export const DELEGATION_GATED_TOOLS = new Set(["read", "grep", "glob", "list"]);
+
+export function enforceReadDelegation(tool, ctx = {}) {
+  const mode = process.env.WAM_READ_DELEGATION || "off";
+  if (mode === "off") {
+    return { allowed: true, reason: "read-delegation-off" };
+  }
+  if (ctx.enforcementEnabled === false) {
+    return { allowed: true, reason: "config-disabled" };
+  }
+  if (ctx.isSubagent) {
+    return { allowed: true, reason: "subagent" };
+  }
+  if (!DELEGATION_GATED_TOOLS.has(tool)) {
+    return { allowed: true, reason: "tool-not-delegation-gated" };
+  }
+  return {
+    allowed: false,
+    reason: "delegate-to-fast",
+    directive: `[wait-a-minute] READ DELEGATION (${tool}): delegá la exploración read-only al subagente @fast (Task subagent_type=fast) en vez de ejecutarla en la sesión principal.`,
+  };
+}
+
 /** Phases from which no further mutation gate applies. */
 export const TERMINAL_PHASES = new Set(["COMPLETE", "DONE"]);
 

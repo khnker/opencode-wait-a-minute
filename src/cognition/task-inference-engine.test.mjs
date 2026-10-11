@@ -2,6 +2,7 @@ import {
   inferNextTasks,
   generateCompletionCriteria,
   evaluateCompletion,
+  buildTaskInferenceDirective,
   COMPLETION_TYPE,
 } from "./task-inference-engine.js";
 import assert from "assert/strict";
@@ -214,6 +215,50 @@ test("end-to-end: inferred task with all criteria passed can be completed", () =
   const result = evaluateCompletion(allPassed);
   assert.equal(result.canComplete, true);
   assert.equal(result.missing.length, 0);
+});
+
+test("generateCompletionCriteria: breaking tag → includes DOCUMENTATION", () => {
+  const criteria = generateCompletionCriteria({ id: "x", tags: ["breaking"] }, {});
+  const types = criteria.map((c) => c.type);
+  assert.ok(types.includes(COMPLETION_TYPE.DOCUMENTATION));
+  const sum = criteria.reduce((s, c) => s + c.weight, 0);
+  assert.ok(Math.abs(sum - 1) < 1e-9, `weights should sum to 1, got ${sum}`);
+});
+
+test("evaluateCompletion: boundary at exactly minCompletionWeight", () => {
+  const pass = evaluateCompletion([{ type: COMPLETION_TYPE.VALIDATION, weight: 0.6, passed: true }]);
+  assert.equal(pass.canComplete, true);
+  const fail = evaluateCompletion([{ type: COMPLETION_TYPE.VALIDATION, weight: 0.5999, passed: true }]);
+  assert.equal(fail.canComplete, false);
+});
+
+test("normalizeWeights: three criteria sum exactly 1 and stay positive", () => {
+  const criteria = generateCompletionCriteria({ id: "t", dataIntensive: true, tags: ["deploy"] });
+  assert.equal(criteria.length, 3);
+  const sum = criteria.reduce((s, c) => s + c.weight, 0);
+  assert.ok(Math.abs(sum - 1) < 1e-9, `weights should sum to 1, got ${sum}`);
+  assert.ok(criteria.every((c) => c.weight > 0));
+});
+
+test("buildTaskInferenceDirective: endpoint infers local-service + validation", () => {
+  const { lines, inferred, objective } = buildTaskInferenceDirective({
+    objective: "Habilitar endpoint /health",
+    requirements: [{ title: "Habilitar endpoint /health", description: "Enable /health" }],
+  });
+  assert.equal(objective, "Habilitar endpoint /health");
+  assert.ok(inferred.length >= 1);
+  const types = inferred.flatMap((t) => t.completionCriteria.map((c) => c.type));
+  assert.ok(types.includes(COMPLETION_TYPE.LOCAL_SERVICE));
+  assert.ok(types.includes(COMPLETION_TYPE.VALIDATION));
+  assert.ok(lines.some((l) => l.includes("10%")));
+  assert.ok(lines.some((l) => l.toLowerCase().includes("local")));
+});
+
+test("buildTaskInferenceDirective: no requirements → empty directive", () => {
+  const { lines, inferred, objective } = buildTaskInferenceDirective({ objective: "Empty" });
+  assert.equal(lines.length, 0);
+  assert.equal(inferred.length, 0);
+  assert.equal(objective, "Empty");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

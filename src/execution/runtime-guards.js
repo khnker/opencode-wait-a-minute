@@ -1,6 +1,10 @@
 import { findRepeatedExperiment, hasRepetitiveFailure } from "../cognition/cognition-store.js";
+import { readLedger } from "../context/session-file-read-ledger.js";
+import { evaluateDiscovery } from "../policy/discovery-classifier.js";
 import { evaluateAction } from "../policy/risk-engine.js";
 import { getCapability, CAPABILITY_LEVELS } from "../policy/action-capabilities.js";
+import { guardSubagentDispatch, loadModelRegistry } from "../skills/subagent-model-availability.js";
+import fs from "node:fs";
 
 const HARD_DELETE_RE =
   /\b(rmdir|unlink|shred|truncate)\b|\brm\s+(-[a-zA-Z]*f|--force)|\bgit\s+reset\s+--hard\b|\b(DROP|TRUNCATE)\s+(TABLE|DATABASE)\b/i;
@@ -41,6 +45,48 @@ export async function guardAction(tool, args, taskRoot, taskId) {
       level: "BLOCKED",
       reason: `fail-closed: herramienta no catalogada (${tool})`,
     };
+  }
+
+  // Session File Read Ledger Guard
+  if (tool === "read") {
+    const path = args.filePath || args.path || args.file;
+    if (path && fs.existsSync(path)) {
+      try {
+        const content = fs.readFileSync(path, 'utf8');
+        const redundant = readLedger.isRedundant(path, content);
+        readLedger.recordRead(path, content);
+        if (redundant) {
+          return {
+            allowed: true,
+            level: "INFO",
+            nudge: `redundant read: ${path} unchanged since last read in this session`,
+          };
+        }
+      } catch (e) {}
+    }
+  } else if (tool === "edit") {
+    const path = args.filePath || args.path;
+    if (path && fs.existsSync(path)) {
+      try {
+        const content = fs.readFileSync(path, 'utf8');
+        if (readLedger.checkStale(path, content)) {
+          return {
+            allowed: false,
+            level: "BLOCKED",
+            reason: `stale buffer: ${path} changed since last read; re-read the file before editing`,
+          };
+        }
+      } catch (e) {
+        console.error("Ledger check error:", e);
+      }
+    }
+  }
+
+  if (tool === "task" || tool === "subagent") {
+    const registry = loadModelRegistry({ configPath: process.env.WAM_MODEL_ROUTER_CONFIG });
+    const maxDepth = parseInt(process.env.WAM_SUBAGENT_MAX_DEPTH || "1", 10);
+    const guardResult = guardSubagentDispatch(tool, args, { registry, maxDepth });
+    if (!guardResult.allowed) return guardResult;
   }
 
   if (isHardDelete(tool, args)) {
@@ -86,21 +132,36 @@ export async function guardAction(tool, args, taskRoot, taskId) {
 
   const repeated = findRepeatedExperiment(taskRoot, taskId, probe);
 
+  // Insert discovery evaluation after repetitive checks
+  let discovery = null;
+  if (tool === "bash" || tool === "sh") {
+    try {
+      discovery = evaluateDiscovery(tool, args, taskRoot, taskId);
+    } catch (e) {
+      // Fail open: if classification throws, we allow the action
+      discovery = null;
+    }
+  }
+
+  const baseReturn = { allowed: true, level: risk.level };
+  if (discovery) {
+    if (discovery.nudge) baseReturn.nudge = discovery.nudge;
+    if (discovery.workdir) baseReturn.workdirSuggestion = discovery.workdir;
+  }
+
   if (risk.level === "GUARDED" && !args?.hypothesisId) {
     return {
-      allowed: true,
-      level: risk.level,
+      ...baseReturn,
       warning: "GUARDED action without hypothesisId — attach hypothesis before mutating.",
     };
   }
 
   if (repeated) {
     return {
-      allowed: true,
-      level: risk.level,
+      ...baseReturn,
       warning: `Repetición detectada: ya se intentó ${repeated.status}. Considera replanificar.`,
     };
   }
 
-  return { allowed: true, level: risk.level };
+  return baseReturn;
 }

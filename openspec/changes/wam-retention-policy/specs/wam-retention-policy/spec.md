@@ -1,5 +1,15 @@
 # spec: wam-retention-policy
 
+## ADDED Requirements
+
+### Requirement: Retention Management
+The WAM system MUST provide a garbage collection mechanism to prevent task directory accumulation.
+
+#### Scenario: Purge Eligibility
+- **WHEN** the plugin starts or `openspec gc` is called
+- **THEN** it identifies tasks with `status: COMPLETED` or `status: ARCHIVED` older than WAM_RETENTION_TTL_DAYS
+- **AND** it ensures tasks with `status: RUNNING` or `PENDING` are never purged.
+
 ## Scope
 `.wam/tasks/` — gestionar acumulación de directorios de tareas.
 

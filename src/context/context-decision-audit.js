@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { logger } from "../integration/logger.js";
+import { createAuditCoalescer } from "../persistence/audit-coalescer.js";
 
 /**
  * ContextDecisionTracer
@@ -19,17 +20,34 @@ export class ContextDecisionTracer {
       timestamp: new Date().toISOString(),
       entries: [],
     };
+    // Coalesce per-entry trace writes (hot loop: _persist ran on every entry).
+    // Config via WAM_AUDIT_BATCH_SIZE / WAM_AUDIT_IDLE_MS / WAM_TASK_DIR_MAX.
+    this._coalescer = createAuditCoalescer({
+      maxEntries: Number(process.env.WAM_AUDIT_BATCH_SIZE) || 50,
+      maxBytes: 65536,
+      idleMs: Number(process.env.WAM_AUDIT_IDLE_MS) || 2000,
+      dirPath: path.join(this.projectRoot, ".wam", "traces"),
+      filePath: path.join(this.projectRoot, ".wam", "traces", `${this.traceId}.json`),
+      maxTaskDirs: Number(process.env.WAM_TASK_DIR_MAX) || 500,
+      now: Date.now,
+      fs,
+      log: (msg) => logger.info("AuditPersist", msg),
+      // Each persist is a complete ledger snapshot -> keep only the latest.
+      state: true,
+      // The tracer owns its traces dir; create it on first flush.
+      createIfMissing: true,
+    });
   }
 
   _getTraceFile() {
     let current = this.projectRoot;
-    
+
     while (current !== path.parse(current).root) {
       if (fs.existsSync(path.join(current, ".wam"))) {
         // Verify this is a project root to avoid accidental jumps
-        const isProjectRoot = fs.existsSync(path.join(current, "package.json")) || 
+        const isProjectRoot = fs.existsSync(path.join(current, "package.json")) ||
                              fs.existsSync(path.join(current, ".opencode.jsonc"));
-        
+
         if (isProjectRoot) {
           const traceDir = path.join(current, ".wam", "traces");
           if (!fs.existsSync(traceDir)) {
@@ -49,19 +67,23 @@ export class ContextDecisionTracer {
     return path.join(traceDir, `${this.traceId}.json`);
   }
 
+  /**
+   * Public flush for tests and external callers that need synchronous
+   * persistence before proceeding.  Fail-open: never throws.
+   */
+  flush() {
+    this._coalescer.flush();
+  }
+
   _persist() {
-    let tracePath;
-    try {
-      tracePath = this._getTraceFile();
-      logger.info("AuditPersist", `traceId: ${this.traceId}, entries: ${this.ledger.entries.length}, path: ${tracePath}`);
-      if (this.ledger.entries.length === 0) {
-        logger.warn("AuditEmpty", `Attempting to persist empty ledger for trace ${this.traceId}`);
-      }
-      fs.writeFileSync(tracePath, JSON.stringify(this.ledger, null, 2));
-      logger.info("AuditSuccess", `Persisted trace to: ${tracePath}`);
-    } catch (err) {
-      logger.error("AuditFail", `Path: ${tracePath ?? "<unresolved>"} | Error: ${err?.message ?? err}`);
-    }
+    // Route through the audit coalescer: batches writes, skips when
+    // .wam/traces is missing/unwritable, skips idempotent (unchanged)
+    // content, and emits a single summary line per flush. Fail-open.
+    this._coalescer.push(this.ledger);
+    this._coalescer.capTaskDirs(
+      path.join(this.projectRoot, ".wam", "tasks"),
+      Number(process.env.WAM_TASK_DIR_MAX) || 500,
+    );
   }
 
   _addEntry(type, data) {

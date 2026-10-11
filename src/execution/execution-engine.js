@@ -21,6 +21,7 @@ import {
   archiveHypothesis,
   HYPOTHESIS_STATUS,
 } from "../cognition/cognition-store.js";
+import { createLoopBudgetGuard } from "./loop-budget-guard.js";
 import { guardAction } from "./runtime-guards.js";
 import { rejectHypothesis } from "../cognition/cognitive-state.js";
 import { assessObservation, AssessmentResult } from "../policy/assessment-engine.js";
@@ -29,6 +30,13 @@ import { getTaskState, persistTaskState } from "../skills/engine.js";
 
 // Re-exported as public API surface of the execution entry point.
 export { assessObservation };
+
+// Module-level guard instance (session scoped).
+const loopGuard = createLoopBudgetGuard({});
+
+export function preflightLoopGuard(tool, input) {
+  return loopGuard.record(tool, input);
+}
 
 import {
   recordRawObservation,
@@ -121,6 +129,23 @@ export async function startExperiment(taskRoot, taskId, { statement, tool, args 
   if (!guard.allowed) {
     archiveHypothesis(taskRoot, taskId, hypothesis.id, guard.reason || "blocked by policy");
     return { ok: false, hypothesis, guard };
+  }
+
+  const loopResult = loopGuard.record(tool, input);
+  if (loopResult.directive || loopResult.budgetExhausted) {
+    const reason = `loop guard triggered: directive=${loopResult.directive}, count=${loopResult.count}`;
+    archiveHypothesis(taskRoot, taskId, hypothesis.id, reason);
+    return {
+      ok: false,
+      hypothesis,
+      guard: {
+        allowed: false,
+        level: loopResult.directive === "STOP_CHECKPOINT" ? "BLOCKED" : "WARN",
+        reason,
+        directive: loopResult.directive,
+        loopCount: loopResult.count,
+      },
+    };
   }
 
   const actionDescription = describe(tool, args);

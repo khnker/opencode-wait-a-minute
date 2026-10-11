@@ -42,6 +42,7 @@ test("ContextDecisionTracer persists log entries under .wam/traces/<traceId>.jso
   const root = makeTempProject();
   const tracer = new ContextDecisionTracer("trace-test-1", root);
   tracer.logConceptExtraction("auth", { surface: "login" });
+  tracer.flush(); // coalescer batches writes; flush to make them synchronous
 
   const traceFile = path.join(root, ".wam", "traces", "trace-test-1.json");
   assert.ok(fs.existsSync(traceFile), "trace file should be created");
@@ -63,6 +64,8 @@ test("ContextDecisionTracer logs technical decisions with alternatives and evide
     [{ type: "benchmark", value: "12ms p95" }],
     { latencyMs: 12 },
   );
+  tracer.flush(); // ensure persistence for assertion
+
   const traceFile = path.join(root, ".wam", "traces", "trace-tech.json");
   const data = JSON.parse(fs.readFileSync(traceFile, "utf8"));
   assert.equal(data.entries[0].type, "TECHNICAL_DECISION");
@@ -74,7 +77,7 @@ test("ContextDecisionTracer logs technical decisions with alternatives and evide
 test("ContextDecisionTracer does not throw on persist failure (graceful degrade)", () => {
   // pass an invalid project root that has no writable .wam path -> should not throw
   const tracer = new ContextDecisionTracer("trace-fail", "/dev/null/forbidden");
-  // We expect no throw even when write fails (logger.error swallowed)
+  // We expect no throw even when write fails (coalescer is fail-open)
   assert.doesNotThrow(() => {
     tracer.logSelectionDecision("c1", "direct", "best match", { score: 0.9 });
   });

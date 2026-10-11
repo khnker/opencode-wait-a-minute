@@ -18,7 +18,7 @@ import path from "node:path";
 import { generateContract, evaluateContract, mergeAssumptions } from "./sufficiency-contract.js";
 import { retrieveWithCqe } from "./cqe-adapter.js";
 
-function detectFileSearchIntent(task) {
+export function detectFileSearchIntent(task) {
   const q = task.toLowerCase();
   return /\b(find|search|grep|locate|where is)\b/.test(q);
 }
