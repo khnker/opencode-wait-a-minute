@@ -1,9 +1,8 @@
 /**
  * Outcome Evaluator
  *
- * Implements outcome-based completion: verifying that the requested outcome
- * satisfies acceptance criteria with sufficient traceable evidence, rather than
- * relying solely on task execution or tests finishing.
+ * Verifies that a task's requested outcome satisfies acceptance criteria
+ * through traceable, temporally-ordered evidence.
  */
 
 export const OUTCOME_STATUSES = {
@@ -13,20 +12,107 @@ export const OUTCOME_STATUSES = {
   UNVERIFIED: 'UNVERIFIED',
 };
 
+export const EVIDENCE_TYPES = {
+  EVIDENCE: 'evidence',
+  OBSERVATION: 'observation',
+  TEST: 'test',
+  MEASUREMENT: 'measurement',
+  NARRATIVE: 'narrative',
+};
+
 export function validateOutcomeContract(contract) {
   if (!contract || typeof contract !== 'object') {
     return { valid: false, error: 'Contract must be an object' };
   }
-  if (!contract.taskId || typeof contract.taskId !== 'string') {
-    return { valid: false, error: 'Contract requires taskId (string)' };
+  if (!contract.taskId || typeof contract.taskId !== 'string' || !contract.taskId.trim()) {
+    return { valid: false, error: 'Contract requires non-empty taskId (string)' };
   }
-  if (!contract.objective || typeof contract.objective !== 'string') {
-    return { valid: false, error: 'Contract requires objective (string)' };
+  if (!contract.objective || typeof contract.objective !== 'string' || !contract.objective.trim()) {
+    return { valid: false, error: 'Contract requires non-empty objective (string)' };
   }
   if (!Array.isArray(contract.acceptanceCriteria) || contract.acceptanceCriteria.length === 0) {
     return { valid: false, error: 'Contract requires non-empty acceptanceCriteria array' };
   }
+  if (!contract.acceptanceCriteria.every((c) => typeof c === 'object')) {
+    return { valid: false, error: 'Each acceptance criterion must be an object' };
+  }
   return { valid: true };
+}
+
+/**
+ * Determine criterion status from time-ordered evidence and observations.
+ *
+ * @param {Array} items - Evidence/observations, sorted oldest -> newest
+ * @param {Object} criterion - { mandatory, ... }
+ * @returns {Object} { status, detail, resolution, finalItem }
+ */
+function evaluateCriterionItems(items) {
+  let satisfied = false;
+  let failed = false;
+  let unresolved = false;
+  let detail = 'No evidence found';
+  let finalItem = null;
+  let resolution = 'unresolved';
+
+  // Sort by timestamp ascending; fallback to array order.
+  const ordered = items
+    .filter((i) => i && (i.timestamp || i.createdAt))
+    .sort(
+      (a, b) =>
+        new Date(a.timestamp || a.createdAt || 0).getTime() -
+        new Date(b.timestamp || b.createdAt || 0).getTime()
+    );
+
+  for (const item of ordered) {
+    finalItem = item;
+    const status = item.status;
+    const type = item.type || item.evidenceType;
+    const isValidated = status === 'VERIFIED' || status === 'VALID' || item.verified === true;
+
+    // Explicit invalidation always takes precedence.
+    if (status === 'INVALID' || status === 'INVALIDATED' || item.invalidated === true) {
+      resolution = 'explicitly_invalidated';
+      failed = true;
+      satisfied = false;
+      detail = `Item invalidated: ${item.description || 'invalid evidence'}`;
+      continue;
+    }
+
+    // Unverified items never satisfy; they keep the criterion unresolved.
+    if (type === EVIDENCE_TYPES.NARRATIVE || (type === EVIDENCE_TYPES.OBSERVATION && !isValidated)) {
+      if (!isValidated) {
+        resolution = 'unverified';
+        detail = 'Evidence/observation is not verified';
+      }
+      // Only update detail to a more specific reason.
+      if (!satisfied && !failed) {
+        detail = `Unverified ${type} for criterion`;
+      }
+      continue;
+    }
+
+    if (status === 'FAILED' || status === 'INVALID' || item.verified === false) {
+      failed = true;
+      satisfied = false;
+      detail = `Failed evidence (timestamp=${finalItem.timestamp || finalItem.createdAt})`;
+      resolution = 'failed';
+      continue;
+    }
+
+    if (isValidated) {
+      satisfied = true;
+      failed = false;
+      detail = `Verified ${type} (timestamp=${finalItem.timestamp || finalItem.createdAt})`;
+      resolution = 'verified';
+    }
+  }
+
+  if (ordered.length === 0) {
+    return { status: 'UNVERIFIED', detail, resolution, finalItem };
+  }
+  if (satisfied) return { status: 'SATISFIED', detail, resolution, finalItem };
+  if (failed) return { status: 'FAILED', detail, resolution, finalItem };
+  return { status: 'UNVERIFIED', detail, resolution, finalItem };
 }
 
 export function evaluateOutcome(contract, evidenceList = [], observations = []) {
@@ -40,73 +126,82 @@ export function evaluateOutcome(contract, evidenceList = [], observations = []) 
     };
   }
 
-  const criteria = contract.acceptanceCriteria;
+  // Merge evidence and observations into a single time-ordered item list per criterion.
+  const contractId = contract.taskId;
+  const itemMap = new Map();
+  const getItemsFor = (id) => {
+    if (!itemMap.has(id)) itemMap.set(id, []);
+    return itemMap.get(id);
+  };
+
+  for (const e of evidenceList || []) {
+    if (!e) continue;
+    const key = e.criterionId || e.requirementId || contractId;
+    getItemsFor(key).push({
+      ...e,
+      kind: e.kind || 'evidence',
+      type: e.type || EVIDENCE_TYPES.EVIDENCE,
+      timestamp: e.timestamp || e.createdAt || Date.now(),
+    });
+  }
+  for (const o of observations || []) {
+    if (!o) continue;
+    const key = o.criterionId || o.requirementId || contractId;
+    getItemsFor(key).push({
+      ...o,
+      kind: 'observation',
+      type: EVIDENCE_TYPES.OBSERVATION,
+      timestamp: o.timestamp || o.createdAt || Date.now(),
+    });
+  }
+
+  const criteria = contract.acceptanceCriteria || [];
   const criteriaResults = [];
-  let achievedCount = 0;
-  let failedCount = 0;
-  let unverifiedCount = 0;
+  let mandatoryUnmet = 0;
+  let mandatoryFailed = 0;
+  let mandatoryVerified = 0;
+  let optionalResults = [];
 
   for (const criterion of criteria) {
-    const cId = criterion.id || criterion.description;
+    const cId = criterion.id || String(criterion.description || Math.random()).slice(0, 12);
     const isMandatory = criterion.mandatory !== false;
+    const items = getItemsFor(cId);
 
-    const supportingEvidence = evidenceList.filter(
-      (e) => e && (e.criterionId === cId || e.requirementId === cId || e.description?.includes(cId))
-    );
+    const { status, detail, resolution, finalItem } = evaluateCriterionItems(items);
 
-    const matchingObs = observations.filter(
-      (o) => o && (o.criterionId === cId || o.description?.includes(cId))
-    );
-
-    let status = 'UNVERIFIED';
-    let detail = 'No supporting evidence or observation found';
-
-    if (supportingEvidence.length > 0) {
-      const hasInvalidating = supportingEvidence.some((e) => e && (e.status === 'FAILED' || e.status === 'INVALID' || e.verified === false));
-      const hasVerified = supportingEvidence.some((e) => e && (e.status === 'VERIFIED' || e.verified === true || e.status === 'PASSED'));
-
-      if (hasInvalidating) {
-        status = 'FAILED';
-        detail = 'Evidence indicates failure or invalidation';
-      } else if (hasVerified) {
-        status = 'SATISFIED';
-        detail = 'Supported by verified evidence';
-      } else {
-        status = 'UNVERIFIED';
-        detail = 'Evidence present but unverified';
-      }
-    } else if (matchingObs.length > 0) {
-      status = 'SATISFIED';
-      detail = 'Supported by observation';
-    }
-
-    if (status === 'SATISFIED') {
-      achievedCount++;
-    } else if (status === 'FAILED') {
-      failedCount++;
-    } else {
-      unverifiedCount++;
-    }
-
-    criteriaResults.push({
+    const result = {
       criterionId: cId,
       mandatory: isMandatory,
       status,
       detail,
-      evidenceCount: supportingEvidence.length,
-      observationCount: matchingObs.length,
-    });
+      resolution,
+      evidenceCount: items.filter((i) => i.kind === 'evidence' || i.type === EVIDENCE_TYPES.EVIDENCE).length,
+      observationCount: items.filter((i) => i.kind === 'observation' || i.type === EVIDENCE_TYPES.OBSERVATION).length,
+      lastEvaluation: finalItem?.timestamp || null,
+    };
+
+    if (isMandatory) {
+      if (status === 'SATISFIED') mandatoryVerified++;
+      else if (status === 'FAILED') mandatoryFailed++;
+      else mandatoryUnmet++;
+    } else {
+      optionalResults.push(result);
+    }
+
+    criteriaResults.push(result);
   }
 
   let outcomeStatus = OUTCOME_STATUSES.UNVERIFIED;
   let canComplete = false;
 
-  if (failedCount > 0) {
+  if (mandatoryFailed > 0) {
     outcomeStatus = OUTCOME_STATUSES.NOT_ACHIEVED;
-  } else if (achievedCount === criteria.length && failedCount === 0 && unverifiedCount === 0) {
+  } else if (mandatoryVerified > 0 && mandatoryUnmet === 0 && mandatoryFailed === 0) {
     outcomeStatus = OUTCOME_STATUSES.ACHIEVED;
     canComplete = true;
-  } else if (achievedCount > 0 && (unverifiedCount > 0 || failedCount === 0)) {
+  } else if (mandatoryVerified > 0 && mandatoryUnmet === 0) {
+    outcomeStatus = OUTCOME_STATUSES.PARTIAL;
+  } else if (mandatoryVerified === 0 && mandatoryUnmet > 0) {
     outcomeStatus = OUTCOME_STATUSES.PARTIAL;
   } else {
     outcomeStatus = OUTCOME_STATUSES.UNVERIFIED;
@@ -116,12 +211,15 @@ export function evaluateOutcome(contract, evidenceList = [], observations = []) 
     contract,
     status: outcomeStatus,
     canComplete,
+    mandatoryCriteria: criteria.filter((c) => c.mandatory !== false).length,
+    optionalCriteria: criteria.filter((c) => c.mandatory === false).length,
     criteriaResults,
+    optionalCriteriaResults: optionalResults,
     summary: {
       total: criteria.length,
-      achieved: achievedCount,
-      failed: failedCount,
-      unverified: unverifiedCount,
+      mandatorySatisfied: mandatoryVerified,
+      mandatoryFailed: mandatoryFailed,
+      mandatoryUnverified: mandatoryUnmet,
     },
   };
 }

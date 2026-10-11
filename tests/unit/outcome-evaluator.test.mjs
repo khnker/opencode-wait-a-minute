@@ -15,38 +15,38 @@ test('validateOutcomeContract validates required fields', () => {
     }).valid,
     true
   );
+  // Reject empty taskId
+  assert.equal(validateOutcomeContract({ taskId: '', objective: 'x', acceptanceCriteria: [{ id: 'c1' }] }).valid, false);
+  // Reject empty objective
+  assert.equal(validateOutcomeContract({ taskId: 't1', objective: '', acceptanceCriteria: [{ id: 'c1' }] }).valid, false);
+  // Reject empty criteria array
+  assert.equal(validateOutcomeContract({ taskId: 't1', objective: 'x', acceptanceCriteria: [] }).valid, false);
 });
 
-test('evaluateOutcome returns ACHIEVED when all criteria have verified evidence', () => {
+test('evaluateOutcome returns ACHIEVED when all mandatory criteria have verified evidence', () => {
   const contract = {
     taskId: 't1',
     objective: 'Fix bug',
-    acceptanceCriteria: [
-      { id: 'c1', description: 'Bug fixed' },
-    ],
+    acceptanceCriteria: [{ id: 'c1', description: 'Bug fixed', mandatory: true }],
   };
-  const evidence = [
-    { criterionId: 'c1', status: 'VERIFIED' },
-  ];
+  const evidence = [{ criterionId: 'c1', status: 'VERIFIED', timestamp: Date.now() }];
   const result = evaluateOutcome(contract, evidence, []);
   assert.equal(result.status, OUTCOME_STATUSES.ACHIEVED);
   assert.equal(result.canComplete, true);
 });
 
-test('evaluateOutcome returns PARTIAL when some criteria lack evidence', () => {
+test('evaluateOutcome returns UNVERIFIED when a mandatory criterion is missing evidence', () => {
   const contract = {
     taskId: 't1',
     objective: 'Do two things',
     acceptanceCriteria: [
-      { id: 'c1', description: 'First' },
-      { id: 'c2', description: 'Second' },
+      { id: 'c1', description: 'First', mandatory: true },
+      { id: 'c2', description: 'Second', mandatory: true },
     ],
   };
-  const evidence = [
-    { criterionId: 'c1', status: 'VERIFIED' },
-  ];
+  const evidence = [{ criterionId: 'c1', status: 'VERIFIED', timestamp: Date.now() }];
   const result = evaluateOutcome(contract, evidence, []);
-  assert.equal(result.status, OUTCOME_STATUSES.PARTIAL);
+  assert.equal(result.status, OUTCOME_STATUSES.UNVERIFIED);
   assert.equal(result.canComplete, false);
 });
 
@@ -54,14 +54,73 @@ test('evaluateOutcome returns NOT_ACHIEVED when evidence shows failure', () => {
   const contract = {
     taskId: 't1',
     objective: 'Fail case',
-    acceptanceCriteria: [
-      { id: 'c1', description: 'Should fail' },
-    ],
+    acceptanceCriteria: [{ id: 'c1', description: 'Should fail', mandatory: true }],
   };
-  const evidence = [
-    { criterionId: 'c1', status: 'FAILED' },
-  ];
+  const evidence = [{ criterionId: 'c1', status: 'FAILED', timestamp: Date.now() }];
   const result = evaluateOutcome(contract, evidence, []);
   assert.equal(result.status, OUTCOME_STATUSES.NOT_ACHIEVED);
   assert.equal(result.canComplete, false);
+});
+
+test('evaluateOutcome treats optional criteria as non-blocking', () => {
+  const contract = {
+    taskId: 't1',
+    objective: 'Main + stretch',
+    acceptanceCriteria: [
+      { id: 'c1', description: 'Main', mandatory: true },
+      { id: 'c2', description: 'Stretch', mandatory: false },
+    ],
+  };
+  // Only main is verified; stretch is missing
+  const evidence = [{ criterionId: 'c1', status: 'VERIFIED', timestamp: Date.now() }];
+  const result = evaluateOutcome(contract, evidence, []);
+  assert.equal(result.status, OUTCOME_STATUSES.ACHIEVED);
+  assert.equal(result.canComplete, true);
+  assert.equal(result.mandatoryCriteria, 1);
+  assert.equal(result.optionalCriteria, 1);
+});
+
+test('evaluateOutcome: unverified observation does not satisfy criterion', () => {
+  const contract = {
+    taskId: 't1',
+    objective: 'Obs test',
+    acceptanceCriteria: [
+      { id: 'c1', description: 'Observed', mandatory: true },
+      { id: 'c2', description: 'Second mandatory', mandatory: true },
+    ],
+  };
+  const observations = [{ criterionId: 'c1', status: 'UNVERIFIED', timestamp: Date.now() }];
+  const result = evaluateOutcome(contract, [], observations);
+  assert.equal(result.status, OUTCOME_STATUSES.PARTIAL);
+  assert.equal(result.canComplete, false);
+});
+
+test('evaluateOutcome: verified observation satisfies criterion', () => {
+  const contract = {
+    taskId: 't1',
+    objective: 'Obs test',
+    acceptanceCriteria: [{ id: 'c1', description: 'Observed', mandatory: true }],
+  };
+  const observations = [{ criterionId: 'c1', status: 'VERIFIED', timestamp: Date.now() }];
+  const result = evaluateOutcome(contract, [], observations);
+  assert.equal(result.status, OUTCOME_STATUSES.ACHIEVED);
+  assert.equal(result.canComplete, true);
+});
+
+test('evaluateOutcome: newer verified evidence overrides older failed evidence', () => {
+  const contract = {
+    taskId: 't1',
+    objective: 'Temporal test',
+    acceptanceCriteria: [{ id: 'c1', description: 'Fixed', mandatory: true }],
+  };
+  const old = Date.now() - 10000;
+  const now = Date.now();
+  const evidence = [
+    { criterionId: 'c1', status: 'FAILED', timestamp: old },
+    { criterionId: 'c1', status: 'VERIFIED', timestamp: now },
+  ];
+  const result = evaluateOutcome(contract, evidence, []);
+  // Newest VERIFIED should win
+  assert.equal(result.status, OUTCOME_STATUSES.ACHIEVED);
+  assert.equal(result.canComplete, true);
 });
