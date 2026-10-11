@@ -32,6 +32,17 @@ export function switchTo(taskId, newPhase, root) {
     throw new Error(`cannot transition from terminal phase ${state.phase}`);
   }
 
+  if (newPhase === "DONE") {
+    const result = canComplete(root, taskId);
+    if (!result.allowed) {
+      throw new Error(
+        `Cannot transition task ${taskId} to DONE: ${result.reason}. Blockers: ${result.blockers
+          .map((b) => `${b.requirementId}: ${b.reason}`)
+          .join("; ")}`
+      );
+    }
+  }
+
   state.phase = newPhase;
   state.updatedAt = Date.now();
   saveTask(taskId, state, root);

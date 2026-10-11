@@ -1,24 +1,26 @@
 # Tasks: Enforce Outcome-Based Done
 
 ## Evaluator Fixes
-- [ ] Refine `evaluateOutcome` to require `status: 'VERIFIED'` for observations/criteria satisfaction.
-- [ ] Separate mandatory and optional criteria evaluation; outcome status depends only on mandatory.
-- [ ] Add `timestamp` ordering to evidence resolution.
-- [ ] Refine `validateOutcomeContract` to require stable IDs and boolean `mandatory`.
+- [x] Refine `evaluateOutcome` to require `status: 'VERIFIED'` for observations/criteria satisfaction.
+- [x] Separate mandatory and optional criteria evaluation; outcome status depends only on mandatory.
+- [x] Add `timestamp` ordering to evidence resolution.
+- [x] Refine `validateOutcomeContract` to require stable IDs and boolean `mandatory`.
 
 ## Integration
-- [ ] Import outcome evaluator into the completion gate.
-- [ ] Make `canComplete` call evaluateOutcome and block unless `ACHIEVED`.
-- [ ] Handle tasks without outcome contracts as `UNVERIFIED` (blocked).
-- [ ] Add blockers with outcome-specific reasons.
+- [x] Import outcome evaluator into the completion gate.
+- [x] Make `canComplete` call evaluateOutcome and block unless `ACHIEVED`.
+- [x] Handle tasks without outcome contracts as `UNVERIFIED` (blocked).
+- [x] Add blockers with outcome-specific reasons.
+- [x] Unify completion gate delegation in `index.js` to `src/integration/orchestration.js`.
+- [x] Protect `switchTo(..., "DONE", ...)` and `complete(taskId, root)` via `canComplete` gate.
 
 ## Tests
-- [ ] Update unit tests for optional criteria, temporal evidence, contradictory evidence.
-- [ ] Add integration tests for completion gate + outcome gate.
-- [ ] Add E2E lifecycle test.
-- [ ] Extend benchmark scenarios.
+- [x] Update unit tests for optional criteria, temporal evidence, contradictory evidence.
+- [x] Add integration tests for completion gate + outcome gate.
+- [x] Add E2E lifecycle test.
+- [x] Extend benchmark scenarios.
 
 ## Acceptance
-- [ ] `npm test` passes.
-- [ ] Integration tests prove completion gate blocks `DONE` when outcome not verified.
-- [ ] Existing tests and invariants remain valid.
+- [x] `npm test` passes.
+- [x] Integration tests prove completion gate blocks `DONE` when outcome not verified.
+- [x] Existing tests and invariants remain valid.
