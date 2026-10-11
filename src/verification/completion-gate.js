@@ -32,6 +32,7 @@ import {
   getAllEvidence,
   getEvidenceForRequirement,
 } from "../evidence/evidence-lineage.js";
+import { evaluateOutcome, OUTCOME_STATUSES } from "./outcome-evaluator.js";
 
 /**
  * Read all evidence for a task (regardless of status). Tolerates errors.
@@ -154,6 +155,31 @@ export function canComplete(taskRoot, taskId) {
   for (const req of requirements) {
     const blocker = findBlocker(req, allEvidence);
     if (blocker) blockers.push(blocker);
+  }
+
+  // Outcome-based completion check (enforce-outcome-based-done)
+  try {
+    const contract = taskState.outcomeContract || {
+      taskId,
+      objective: taskState.objective || `Task ${taskId} outcome completion`,
+      acceptanceCriteria: requirements.map((req) => ({
+        id: req.id,
+        description: req.description || req.id,
+        mandatory: true,
+      })),
+    };
+    const outcome = evaluateOutcome(contract, allEvidence, taskState.observations || []);
+    if (!outcome.canComplete || outcome.status !== OUTCOME_STATUSES.ACHIEVED) {
+      blockers.push({
+        requirementId: 'outcome-evaluation',
+        reason: `Outcome not achieved (status=${outcome.status}): ${outcome.reasons?.join(', ') || 'mandatory criteria unsatisfied'}`,
+      });
+    }
+  } catch (err) {
+    blockers.push({
+      requirementId: 'outcome-evaluation',
+      reason: `Outcome evaluator error (fail-closed): ${err.message}`,
+    });
   }
 
   const summary = summarizeRequirements(requirements);
