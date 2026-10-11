@@ -34,7 +34,6 @@
     "benchmark:suite": "node benchmarks/cli.mjs",
     "bench:retrieval": "node benchmarks/retrieval/run-ab.mjs",
     "bench:coupling": "node benchmarks/retrieval/cqe-latency.mjs",
-    "bench:coupling": "node benchmarks/retrieval/cqe-latency.mjs",
     "report:rc1": "node benchmarks/reports/generate-rc1.mjs",
     "pack:test": "node scripts/verify-package.mjs",
     "verify:package": "node scripts/verify-package.mjs",
@@ -55,7 +54,9 @@
     "test:e2e:migration": "node tests/e2e/migration/run.mjs",
     "test:isolation": "node tests/isolation/run.mjs",
     "perf:sanity": "node scripts/performance-sanity.mjs",
-    "wam:next": "node scripts/autonomous-task-runner.mjs --all"
+    "wam:next": "node scripts/autonomous-task-runner.mjs --all",
+    "bench:lifecycle": "node benchmarks/lifecycle-token-savings.mjs",
+    "bench:guards": "node benchmarks/guard-metrics-suite.mjs"
   },
   "repository": {
     "type": "git",
