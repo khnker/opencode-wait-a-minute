@@ -9,13 +9,13 @@ import { setLoggingEnabled, wamLog, wamError } from "./src/shared/wam-log.js";
 
 import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
 import { purgeTasks } from "./src/persistence/retention-manager.js";
-import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules } from "./src/context/context.js";
+import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, selectContextWithCqe, detectFileSearchIntent, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules } from "./src/context/context.js";
 import { assembleContext } from "./src/context/assembly.js";
 import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./src/verification/verification.js";
 import { ContextDecisionTracer } from "./src/context/context-decision-audit.js";
 import { guardAction } from "./src/execution/runtime-guards.js";
 import { WamPolicyBlock, evaluateAction } from "./src/policy/risk-engine.js";
-import { enforceGovernance } from "./src/policy/governance-enforcement.js";
+import { enforceGovernance, enforceReadDelegation } from "./src/policy/governance-enforcement.js";
 import { classifyByCapabilities, buildCandidate } from "./src/policy/strategy-capabilities.js";
 import { getStatusReport } from "./src/execution/execution-state.js";
 import { createSnapshot, checkContinuation, rebuildScope } from "./src/context/context-snapshot.js";
@@ -728,6 +728,8 @@ async function postToolExecution(input, output) {
         readLiveContext,
         persistLiveContext,
         assembleContext,
+        selectContextWithCqe,
+        detectFileSearchIntent,
         createSnapshot,
         checkContinuation,
         rebuildScope,
@@ -862,6 +864,7 @@ async function postToolExecution(input, output) {
         // override explícito (WAM_GOVERNANCE=off), fase terminal, ASKING, y
         // cambios triviales declarados. Solo se gatea la sesión main con un
         // contrato tracked y no aprobado.
+        const isSubagent = sessionParents.has(sid);
         try {
           const contractFiles = st?.contract?.files || st?.contract?.declaredFiles || [];
           const declaredFiles = contractFiles.length ? contractFiles : targetFilesOf(input);
@@ -874,7 +877,6 @@ async function postToolExecution(input, output) {
           // An unresolved session is a "main session in progress" — not a
           // subagent — and should be governed normally. Real subagents carry
           // a non-null parentID in sessionParents.
-          const isSubagent = sessionParents.has(sid);
           try {
             enforceGovernance(tool, st, {
               isSubagent,
@@ -893,10 +895,24 @@ async function postToolExecution(input, output) {
             }
             throw err;
           }
-        } catch (err) {
-          if (err?.wamPolicyBlock) input.output = err.message;
-          throw err;
-        }
+         } catch (err) {
+           if (err?.wamPolicyBlock) input.output = err.message;
+           throw err;
+         }
+
+         // Read Delegation Gate: force main session to delegate read-only exploration to @fast
+         const readDel = enforceReadDelegation(tool, { isSubagent, enforcementEnabled: cfg.enforcement !== false });
+         if (!readDel.allowed) {
+           const mode = process.env.WAM_READ_DELEGATION || "off";
+           if (mode === "warn") {
+             input.output = readDel.directive;
+             wamLog(`[wait-a-minute] SOFT READ DELEGATION (${tool}): ${readDel.directive}`);
+            } else if (mode === "enforce") {
+              throw new WamPolicyBlock(readDel.directive, {
+                tool, reason: readDel.reason, level: "BLOCKED", source: "read-delegation",
+              });
+            }
+         }
 
         if (st?.phase !== "ASKING") return;
         // git read-only (status/diff/log) es investigación: permitido aun en ASKING.
