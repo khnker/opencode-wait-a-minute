@@ -4,12 +4,6 @@
  * Implements outcome-based completion: verifying that the requested outcome
  * satisfies acceptance criteria with sufficient traceable evidence, rather than
  * relying solely on task execution or tests finishing.
- *
- * Outcome Statuses:
- *   - ACHIEVED: all mandatory criteria satisfied by sufficient evidence.
- *   - PARTIAL: some criteria satisfied, but at least one mandatory criterion unmet.
- *   - NOT_ACHIEVED: evidence demonstrates the objective was not achieved.
- *   - UNVERIFIED: evidence is insufficient to determine outcome.
  */
 
 export const OUTCOME_STATUSES = {
@@ -35,14 +29,6 @@ export function validateOutcomeContract(contract) {
   return { valid: true };
 }
 
-/**
- * Evaluate outcome against contract, evidence, and observations.
- *
- * @param {Object} contract - Outcome contract { taskId, objective, acceptanceCriteria, ... }
- * @param {Array} evidenceList - Array of evidence items linked to the task
- * @param {Array} observations - Array of observed facts/measurements
- * @returns {Object} Outcome evaluation record
- */
 export function evaluateOutcome(contract, evidenceList = [], observations = []) {
   const validation = validateOutcomeContract(contract);
   if (!validation.valid) {
@@ -57,19 +43,17 @@ export function evaluateOutcome(contract, evidenceList = [], observations = []) 
   const criteria = contract.acceptanceCriteria;
   const criteriaResults = [];
   let achievedCount = 0;
-  let unmetCount = 0;
+  let failedCount = 0;
   let unverifiedCount = 0;
 
   for (const criterion of criteria) {
     const cId = criterion.id || criterion.description;
     const isMandatory = criterion.mandatory !== false;
 
-    // Find supporting evidence for this criterion
     const supportingEvidence = evidenceList.filter(
       (e) => e && (e.criterionId === cId || e.requirementId === cId || e.description?.includes(cId))
     );
 
-    // Find matching observations
     const matchingObs = observations.filter(
       (o) => o && (o.criterionId === cId || o.description?.includes(cId))
     );
@@ -78,15 +62,18 @@ export function evaluateOutcome(contract, evidenceList = [], observations = []) 
     let detail = 'No supporting evidence or observation found';
 
     if (supportingEvidence.length > 0) {
-      const hasInvalidating = supportingEvidence.some((e) => e.status === 'INVALID' || e.status === 'FAILED');
-      const hasVerified = supportingEvidence.some((e) => e.status === 'VERIFIED' || e.verified === true || e.status === 'PASSED');
+      const hasInvalidating = supportingEvidence.some((e) => e && (e.status === 'FAILED' || e.status === 'INVALID' || e.verified === false));
+      const hasVerified = supportingEvidence.some((e) => e && (e.status === 'VERIFIED' || e.verified === true || e.status === 'PASSED'));
 
       if (hasInvalidating) {
         status = 'FAILED';
         detail = 'Evidence indicates failure or invalidation';
-      } else if (hasVerified || supportingEvidence.length > 0) {
+      } else if (hasVerified) {
         status = 'SATISFIED';
-        detail = 'Supported by evidence';
+        detail = 'Supported by verified evidence';
+      } else {
+        status = 'UNVERIFIED';
+        detail = 'Evidence present but unverified';
       }
     } else if (matchingObs.length > 0) {
       status = 'SATISFIED';
@@ -96,10 +83,9 @@ export function evaluateOutcome(contract, evidenceList = [], observations = []) 
     if (status === 'SATISFIED') {
       achievedCount++;
     } else if (status === 'FAILED') {
-      unmetCount++;
+      failedCount++;
     } else {
       unverifiedCount++;
-      if (isMandatory) unmetCount++;
     }
 
     criteriaResults.push({
@@ -115,15 +101,15 @@ export function evaluateOutcome(contract, evidenceList = [], observations = []) 
   let outcomeStatus = OUTCOME_STATUSES.UNVERIFIED;
   let canComplete = false;
 
-  if (unmetCount > 0 && achievedCount === 0) {
+  if (failedCount > 0) {
     outcomeStatus = OUTCOME_STATUSES.NOT_ACHIEVED;
-  } else if (unmetCount > 0 || unverifiedCount > 0) {
-    outcomeStatus = OUTCOME_STATUSES.PARTIAL;
-  } else if (achievedCount === criteria.length && unmetCount === 0) {
+  } else if (achievedCount === criteria.length && failedCount === 0 && unverifiedCount === 0) {
     outcomeStatus = OUTCOME_STATUSES.ACHIEVED;
     canComplete = true;
-  } else {
+  } else if (achievedCount > 0 && (unverifiedCount > 0 || failedCount === 0)) {
     outcomeStatus = OUTCOME_STATUSES.PARTIAL;
+  } else {
+    outcomeStatus = OUTCOME_STATUSES.UNVERIFIED;
   }
 
   return {
@@ -134,7 +120,7 @@ export function evaluateOutcome(contract, evidenceList = [], observations = []) 
     summary: {
       total: criteria.length,
       achieved: achievedCount,
-      unmet: unmetCount,
+      failed: failedCount,
       unverified: unverifiedCount,
     },
   };
