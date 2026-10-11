@@ -6,6 +6,7 @@ import { injectWamParts } from "./src/integration/part-provenance.js";
 import { loadWamConfig } from "./src/config/wam-config.js";
 import { configureLogger } from "./src/integration/logger.js";
 import { setLoggingEnabled, wamLog, wamError } from "./src/shared/wam-log.js";
+import { evaluateCompletionGate, applyPhaseTransition } from "./src/integration/orchestration.js";
 
 import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
 import { purgeTasks } from "./src/persistence/retention-manager.js";
@@ -1478,91 +1479,12 @@ const waitAMinute = {
     persistTaskState(taskId, fresh, root);
     return fresh;
   },
-
-  /**
-   * Completion Gate: detecta claims de fin de tarea y bloquea si hay requisitos pendientes.
-   */
-  evaluateCompletionGate: function(state, prompt) {
-    const lower = (prompt || "").toLowerCase().trim();
-    if (lower.includes("aprobar contrato") || lower.includes("continuar")) {
-      return { blocked: false, allDone: false, autoApprove: true };
-    }
-    const doneClaims =
-      /(^|\s)(done|finish|finished|complete|completed|terminate|terminated|listo|termin[eé]|complet[ao]|finalizad[oa])\b|(task|tarea)\s+(complete|complet(a|ada|o)|terminad(a|o))|declare.*done/i;
-    if (!doneClaims.test(lower)) return { blocked: false };
-    const blockingUnknowns = (state?.contract?.unknowns || []).filter((u) => u.status === "blocking");
-    if (blockingUnknowns.length > 0) {
-      return {
-        blocked: true,
-        pending: blockingUnknowns.map((u) => `${u.id} — ${u.question} (DECISION_CRITICAL sin responder)`),
-      };
-    }
-    const blockingAssumptions = (state?.contract?.assumptions || []).filter(
-      (a) => a.classification === "DECISION_CRITICAL" && a.status !== "resolved"
-    );
-    if (blockingAssumptions.length > 0) {
-      return {
-        blocked: true,
-        pending: blockingAssumptions.map((a) => `${a.id} — ${a.statement} (DECISION_CRITICAL sin resolver)`),
-      };
-    }
-    const pending = (state?.requirements || []).filter(
-      (r) =>
-        (r.status !== "done" && r.status !== "verified") ||
-        (r.status === "done" && !(r.evidence || []).length)
-    );
-    if (pending.length > 0) {
-      return {
-        blocked: true,
-        pending: pending.map((r) => {
-          const missingEvidence = r.status === "done" && !(r.evidence || []).length;
-          return `${r.id} — ${r.title}${missingEvidence ? " (sin evidencia)" : ""}`;
-        }),
-      };
-    }
-
-    const failingCriteria = (state?.completionContract?.criteria || []).filter(
-      (c) => c.status === "FAIL" || c.status === "UNKNOWN"
-    );
-    if (failingCriteria.length > 0) {
-      return {
-        blocked: true,
-        pending: failingCriteria.map((c) => `${c.id} — ${c.criterion} (${c.status})`),
-      };
-    }
-
-    if (state?.contract?.status !== "APPROVED") {
-      return {
-        blocked: true,
-        pending: [`contrato ${state.contract?.status || "PROPOSED"} — aprobar con /wam contract approve antes de DONE`],
-      };
-    }
-    const unverified = (state?.requirements || []).filter((r) => r.status !== "verified");
-    if (unverified.length > 0) {
-      return {
-        blocked: true,
-        verifying: true,
-        pending: unverified.map((r) => `${r.id} — ${r.title} (verificar: /wam progress ${r.id} verified <evidencia>)`),
-      };
-    }
-    const checks = state?.contract?.checks || [];
-    if (checks.length > 0) {
-      const byReq = new Map();
-      for (const c of checks) {
-        if (!byReq.has(c.reqId)) byReq.set(c.reqId, []);
-        byReq.get(c.reqId).push(c);
-      }
-      const checkFailures = [];
-      for (const [reqId, list] of byReq) {
-        const verdict = evaluateRequirementChecks(list, list);
-        if (verdict.status !== "VERIFIED") checkFailures.push(`${reqId}: ${verdict.reason || "checks pendientes"}`);
-      }
-      if (checkFailures.length > 0) {
-        return { blocked: true, verifying: true, pending: checkFailures };
-      }
-    }
-    return { blocked: false, allDone: true };
-  },
+   /**
+    * Completion Gate: detecta claims de fin de tarea y bloquea si hay requisitos pendientes.
+    * Delegado a la política única en src/integration/orchestration.js
+    * para evitar divergencia con la política de finalización.
+    */
+   evaluateCompletionGate: evaluateCompletionGate,
 
   /** Transición de fase basada en el resultado del Completion Gate. */
   applyPhaseTransition: function(state, gate) {

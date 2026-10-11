@@ -2,7 +2,7 @@
  * Task Lifecycle — Task state transitions (Create, Resume, Switch, Pause, Complete, Block).
  */
 
-import { createState, normalizeState, validateState } from "./task-state.js";
+import { canComplete } from "../verification/completion-gate.js";
 import { loadTask, saveTask, taskExists, deleteTask } from "./task-store.js";
 
 const TERMINAL_PHASES = new Set(["DONE"]);
@@ -43,6 +43,14 @@ export function pause(taskId, root) {
 }
 
 export function complete(taskId, root) {
+  const result = canComplete(root, taskId);
+  if (!result.allowed) {
+    throw new Error(
+      `Cannot complete task ${taskId}: ${result.reason}. Blockers: ${result.blockers
+        .map((b) => `${b.requirementId}: ${b.reason}`)
+        .join("; ")}`
+    );
+  }
   return switchTo(taskId, "DONE", root);
 }
 
