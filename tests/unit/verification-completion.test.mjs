@@ -76,14 +76,47 @@ test("evaluateCompletionGate bloquea DONE si hay checks FAIL", () => {
   assert.ok(Array.isArray(g.pending) && g.pending.length > 0);
 });
 
-test("evaluateCompletionGate permite DONE cuando todos los checks están PASS", () => {
+test("evaluateCompletionGate requiere outcomeContract para permitir DONE", () => {
+  // Sin outcomeContract el gate debe bloquear (sin contrato implícito)
   const state = makeState({
     checks: [{ reqId: "R1", type: "command", status: "PASS" }],
     reqStatus: "verified",
   });
   const g = pluginDefault.evaluateCompletionGate(state, "task complete");
-  assert.equal(g.blocked, false, "gate debe permitir");
-  assert.equal(g.allDone, true);
+  assert.equal(g.blocked, true, "gate debe bloquear sin outcomeContract");
+  assert.ok(Array.isArray(g.pending) && g.pending.length > 0);
+
+  // Con outcomeContract válido y ACHIEVED el gate permite DONE
+  const state2 = makeState({
+    checks: [{ reqId: "R1", type: "command", status: "PASS" }],
+    reqStatus: "verified",
+  });
+  state2.outcomeContract = {
+    taskId: "t1",
+    objective: "Fix bug",
+    acceptanceCriteria: [
+      { id: "c1", description: "Bug fixed", mandatory: true },
+    ],
+  };
+  state2.evidence = [{ criterionId: "c1", status: "VERIFIED", timestamp: Date.now() }];
+  const g2 = pluginDefault.evaluateCompletionGate(state2, "task complete");
+  assert.equal(g2.blocked, false, "gate debe permitir con ACHIEVED");
+  assert.equal(g2.allDone, true);
+
+  // Con outcomeContract NO_ACHIEVED el gate debe bloquear
+  const state3 = makeState({
+    checks: [{ reqId: "R1", type: "command", status: "PASS" }],
+    reqStatus: "verified",
+  });
+  state3.outcomeContract = {
+    taskId: "t3",
+    objective: "Fail case",
+    acceptanceCriteria: [{ id: "c1", description: "Should fail", mandatory: true }],
+  };
+  state3.evidence = [{ criterionId: "c1", status: "FAILED", timestamp: Date.now() }];
+  const g3 = pluginDefault.evaluateCompletionGate(state3, "task complete");
+  assert.equal(g3.blocked, true, "gate debe bloquear con NOT_ACHIEVED");
+  assert.ok(Array.isArray(g3.pending) && g3.pending.length > 0);
 });
 
 test("textual evidence NO produce VERIFIED si hay checks requeridos (sanity)", () => {

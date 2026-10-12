@@ -4,6 +4,7 @@
 
 import { canComplete } from "../verification/completion-gate.js";
 import { loadTask, saveTask, taskExists, deleteTask } from "./task-store.js";
+import { createState, normalizeState, validateState } from "./task-state.js";
 
 const TERMINAL_PHASES = new Set(["DONE"]);
 

@@ -43,6 +43,9 @@ export function validateOutcomeContract(contract) {
     if (!c.description || typeof c.description !== 'string' || !c.description.trim()) {
       return { valid: false, error: 'Each acceptance criterion requires a non-empty string description' };
     }
+    if (typeof c.mandatory !== 'boolean') {
+      return { valid: false, error: 'Each acceptance criterion requires a boolean mandatory field' };
+    }
     if (ids.has(c.id)) {
       return { valid: false, error: `Duplicate acceptance criterion id: ${c.id}` };
     }
@@ -70,16 +73,18 @@ function evaluateCriterionItems(items) {
   const ordered = items
     .filter((i) => i && (i.timestamp || i.createdAt))
     .sort(
-      (a, b) =>
-        new Date(a.timestamp || a.createdAt || 0).getTime() -
-        new Date(b.timestamp || b.createdAt || 0).getTime()
+      (a, b) => {
+        const aTime = new Date(a.timestamp || a.createdAt || 0).getTime();
+        const bTime = new Date(b.timestamp || b.createdAt || 0).getTime();
+        return aTime - bTime;
+      }
     );
 
   for (const item of ordered) {
     finalItem = item;
     const status = item.status;
     const type = item.type || item.evidenceType;
-    const isValidated = status === 'VERIFIED' || status === 'VALID' || item.verified === true;
+    const isValidated = status === 'VERIFIED';
 
     // Explicit invalidation always takes precedence.
     if (status === 'INVALID' || status === 'INVALIDATED' || item.invalidated === true) {
@@ -157,7 +162,7 @@ export function evaluateOutcome(contract, evidenceList = [], observations = []) 
       ...e,
       kind: e.kind || 'evidence',
       type: e.type || EVIDENCE_TYPES.EVIDENCE,
-      timestamp: e.timestamp || e.createdAt || Date.now(),
+      timestamp: e.timestamp || e.createdAt || null,
     });
   }
   for (const o of observations || []) {
@@ -167,7 +172,7 @@ export function evaluateOutcome(contract, evidenceList = [], observations = []) 
       ...o,
       kind: 'observation',
       type: EVIDENCE_TYPES.OBSERVATION,
-      timestamp: o.timestamp || o.createdAt || Date.now(),
+      timestamp: o.timestamp || o.createdAt || null,
     });
   }
 

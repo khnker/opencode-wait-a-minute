@@ -138,7 +138,9 @@ export function canComplete(taskRoot, taskId) {
 
   const requirements = Array.isArray(taskState.requirements)
     ? taskState.requirements
-    : [];
+    : (Array.isArray(taskState?.contract?.requirements)
+        ? taskState.contract.requirements
+        : []);
 
   if (requirements.length === 0) {
     return {
