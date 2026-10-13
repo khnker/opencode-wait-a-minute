@@ -18,13 +18,16 @@ export async function runBaselineTurn({ scenario, turn, turnIndex, provider, rep
   const rawContext = sortedNodes.map(n => `[Type: ${n.type}]\n${n.content}\n---`).join("\n");
   const prompt = `${rawContext}\n\n[Task]\n${turn.prompt}`;
   
+  const startedAt = performance.now();
   const { text, usage } = await provider.complete({
     messages: [{ role: "user", content: prompt }],
     maxTokens: 4096
   });
+  const latencyMs = Math.max(0, Math.round(performance.now() - startedAt));
 
   return {
     arm: "baseline",
+    latencyMs,
     scenarioId: scenario.id,
     turnIndex,
     repoCommit,

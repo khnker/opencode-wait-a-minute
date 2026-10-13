@@ -54,7 +54,7 @@ export async function runRealSuite({ provider, scenarios, root, timestamp, trial
  * scenario × trial × ablation). Returns paired deltas plus a `summarize`
  * of aggregate metrics.
  */
-function buildStatistics(suite, model, provider) {
+export function buildStatistics(suite, model, provider) {
   const runs = suite.results.flatMap((sessionResult) =>
     normalizeRuns(sessionResult, { model, provider })
   );
@@ -69,6 +69,15 @@ function buildStatistics(suite, model, provider) {
   const pairs = Array.from(pairMap.values());
   const baselineArr = pairs.map((p) => p.baseline);
   const wamArr = pairs.map((p) => p.wam);
+
+  const baselineLatencyArr = [];
+  const wamLatencyArr = [];
+  for (const sessionResult of suite.results) {
+    for (const t of sessionResult?.turns ?? []) {
+      if (typeof t?.baseline?.latencyMs === "number") baselineLatencyArr.push(t.baseline.latencyMs);
+      if (typeof t?.wam?.latencyMs === "number") wamLatencyArr.push(t.wam.latencyMs);
+    }
+  }
 
   const metrics = suite.metrics ?? {};
   const metricSummary = {};
@@ -85,6 +94,9 @@ function buildStatistics(suite, model, provider) {
   return {
     baselineInputTokens: summarize(baselineArr),
     wamInputTokens: summarize(wamArr),
+    baselineLatencyMs: summarize(baselineLatencyArr),
+    wamLatencyMs: summarize(wamLatencyArr),
+    latencyMs: summarize([...baselineLatencyArr, ...wamLatencyArr]),
     paired: pairedDelta(baselineArr, wamArr),
     metrics: metricSummary
   };
@@ -182,6 +194,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(`[run-real] dry-run complete → ${dir}`);
     console.log("netInputSavings:", report.netInputSavings, "breakEvenTurn:", report.breakEvenTurn);
     console.log("trialStats.n:", report.trialStats?.n);
+    console.log("latencyMs.mean baseline:", report.statistics?.baselineLatencyMs?.mean, "wam:", report.statistics?.wamLatencyMs?.mean);
     console.log("manifest:", manifest.schema, "runs:", manifest.counts.runs, "trials:", manifest.counts.trials);
     if (ablationFlag) {
       console.log("ablation:", report.ablation.map((a) => a.name).join(","));
@@ -230,4 +243,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2));
 
   console.log("Metrics:", suite.metrics);
+  console.log("latencyMs.mean baseline:", report.statistics?.baselineLatencyMs?.mean, "wam:", report.statistics?.wamLatencyMs?.mean);
 }

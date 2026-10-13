@@ -14,13 +14,16 @@ export async function runWamTurn({ scenario, turn, turnIndex, provider, collecto
 
   const prompt = assembly.lines.join("\n");
 
+  const startedAt = performance.now();
   const { text, usage } = await provider.complete({
     messages: [{ role: "user", content: prompt }],
     maxTokens: 4096
   });
+  const latencyMs = Math.max(0, Math.round(performance.now() - startedAt));
 
   return {
     arm: "wam",
+    latencyMs,
     scenarioId: scenario.id,
     turnIndex,
     repoCommit,
