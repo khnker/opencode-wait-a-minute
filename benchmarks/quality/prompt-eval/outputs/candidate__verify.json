@@ -1,0 +1,4 @@
+{
+  "verify.false-done": "DONE - verified: no checks executed",
+  "verify.environment-failure": "failure recorded: exit code 127, stderr \"command not found\""
+}

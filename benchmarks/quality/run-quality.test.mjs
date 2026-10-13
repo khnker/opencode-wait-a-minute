@@ -1,9 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { aggregate, pairedQualityDelta, factCoverage } from "./scoring.mjs";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+import { aggregate, pairedQualityDelta, factCoverage, ANSWER_INSTRUCTION } from "./scoring.mjs";
 import { QUALITY_SCENARIOS, getQualityScenario } from "./scenarios.mjs";
 import { buildBaselineRequest, buildWamRequest } from "../real/runners/paired-runner.mjs";
+import { runQualitySuite, appendFinalAnswerInstruction } from "./run-quality.mjs";
 
 /**
  * Build a deterministic stub provider that mimics the paired-runner
@@ -169,4 +174,65 @@ test("Run-quality report shape — offline via stub", async () => {
   const cov = factCoverage(result.text, scenario.rubric.requiredFacts);
   assert.equal(cov.score, 0);
   assert.equal(cov.total, scenario.rubric.requiredFacts.length);
+});
+
+test("appendFinalAnswerInstruction — appends to the LAST user message only, without mutating input", () => {
+  const messages = [
+    { role: "system", content: "sys" },
+    { role: "user", content: "first" },
+    { role: "assistant", content: "ok" },
+    { role: "user", content: "second" }
+  ];
+  const out = appendFinalAnswerInstruction(messages);
+  assert.equal(out.length, messages.length, "message count must be preserved");
+  assert.notEqual(out, messages, "must return a copy, not mutate in place");
+  assert.ok(
+    out[3].content.endsWith(ANSWER_INSTRUCTION),
+    "last user message must carry the final-answer instruction"
+  );
+  assert.equal(out[1].content, "first", "earlier user message must be untouched");
+  assert.equal(messages[3].content, "second", "input messages must not be mutated");
+});
+
+test("runQualitySuite — injects the final-answer instruction into BOTH arms", async () => {
+  const scenario = getQualityScenario("Q5-artifact-and-constraint-tokens");
+  assert.ok(scenario, "scenario Q5 must exist");
+  const captured = [];
+  const provider = {
+    model: "capture/stub",
+    provider: "capture",
+    isConfigured: () => true,
+    estimateTokens: (t = "") => Math.ceil(String(t).length / 4),
+    async complete({ messages }) {
+      captured.push(messages);
+      return {
+        text: "captured answer",
+        usage: { inputTokens: 1, outputTokens: 1 },
+        model: "capture/stub",
+        provider: "capture",
+        latencyMs: 0
+      };
+    }
+  };
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "rq-inject-"));
+  try {
+    await runQualitySuite({
+      outDir,
+      timestamp: new Date().toISOString(),
+      provider,
+      scenarios: [scenario],
+      trials: 1
+    });
+    assert.ok(captured.length >= 2, "both arms must call the provider");
+    for (const messages of captured) {
+      const lastUser = [...messages].reverse().find((m) => m.role === "user");
+      assert.ok(lastUser, "each request must contain a user message");
+      assert.ok(
+        lastUser.content.includes(ANSWER_INSTRUCTION),
+        "every arm request must carry the final-answer instruction"
+      );
+    }
+  } finally {
+    fs.rmSync(outDir, { recursive: true, force: true });
+  }
 });

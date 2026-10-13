@@ -79,7 +79,8 @@ things, and the report states that no single net-savings number is claimed.
 node benchmarks/cli.mjs --suite=deterministic --out=/tmp/rc1-run
 node benchmarks/cli.mjs --suite=validation    --out=/tmp/rc1-run
 node benchmarks/cli.mjs --suite=real          --out=/tmp/rc1-run
-# or all three
+node benchmarks/cli.mjs --suite=quality       --out=/tmp/rc1-run
+# or all four
 node benchmarks/cli.mjs --suite=all --out=/tmp/rc1-run
 
 # 2. report

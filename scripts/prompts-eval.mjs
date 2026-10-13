@@ -56,10 +56,27 @@ for (const ref of allPromptRefs) {
   promptContents[label][ref] = loadPrompt(ref);
 }
 
+// Load recorded outputs from fixtures
+const outputsByLabel = {};
+const outputsDir = path.join(root, "benchmarks/quality/prompt-eval/outputs");
+const labelsToLoad = [label]; // Could be extended to all labels if needed
+
+for (const l of labelsToLoad) {
+  outputsByLabel[l] = {};
+  for (const suite of suites) {
+    const fixturePath = path.join(outputsDir, `${l}__${suite.id}.json`);
+    if (fs.existsSync(fixturePath)) {
+      const fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+      Object.assign(outputsByLabel[l], fixture);
+    }
+  }
+}
+
 const { runId } = runEvaluation({
   labels: [label],
   suites,
   promptContents,
+  outputsByLabel,
   root
 });
 

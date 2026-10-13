@@ -2,45 +2,122 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { evaluateCriterion, evaluateScenario } from "./deterministic.mjs";
 
-const criterion = {
-  id: "test.criterion",
-  kind: "must",
-  required: true,
-  check: "complete",
-};
+function crit(overrides) {
+  return {
+    id: "test.criterion",
+    required: true,
+    description: "human intent text (NEVER matched)",
+    oracle: { kind: "includes-all", values: ["complete"], flags: "i" },
+    ...overrides,
+  };
+}
 
 describe("prompt-eval deterministic evaluator", () => {
-  it("PQ-005: missing output is not evaluable", async () => {
-    const verdict = evaluateCriterion(criterion, "");
-    assert.strictEqual(verdict.passed, false);
-    assert.strictEqual(verdict.evaluable, false);
-    assert.ok(verdict.evidence.length > 0);
-  });
-
-  it("passes a criterion when required keyphrase present", async () => {
-    const verdict = evaluateCriterion(criterion, "Task is complete");
+  it("PQ-ORACLE-01: includes-any passes on a different accepted phrasing", async () => {
+    const criterion = crit({
+      id: "c1",
+      oracle: { kind: "includes-any", values: ["complete", "finished", "done"], flags: "i" },
+    });
+    const verdict = evaluateCriterion(criterion, "Task is finished");
     assert.strictEqual(verdict.passed, true);
     assert.strictEqual(verdict.evaluable, true);
+    assert.ok(verdict.evidence.includes("finished"));
   });
 
-  it("fails a must criterion when keyphrase absent", async () => {
-    const verdict = evaluateCriterion(criterion, "Task is pending");
+  it("PQ-ORACLE-02: output equal to description (no observable evidence) fails", async () => {
+    const description = "human intent text (NEVER matched)";
+    const criterion = crit({
+      id: "c2",
+      description,
+      oracle: { kind: "includes-any", values: ["observable evidence"], flags: "i" },
+    });
+    const verdict = evaluateCriterion(criterion, description);
     assert.strictEqual(verdict.passed, false);
     assert.strictEqual(verdict.evaluable, true);
+    assert.ok(verdict.evidence.includes("None of the required values present"));
   });
 
-  it("must-not criterion fails when forbidden phrase appears", async () => {
-    const forbidden = { id: "test.forbidden", kind: "must-not", required: true, check: "DONE" };
-    const verdict = evaluateCriterion(forbidden, "Declared DONE early");
+  it("PQ-ORACLE-03: excludes-any detects forbidden observable and fails", async () => {
+    const criterion = crit({
+      id: "c3",
+      oracle: { kind: "excludes-any", values: ["DONE", "verified"], flags: "i" },
+    });
+    const verdict = evaluateCriterion(criterion, "Declared DONE early");
+    assert.strictEqual(verdict.passed, false);
+    assert.strictEqual(verdict.evaluable, true);
+    assert.ok(verdict.evidence.toLowerCase().includes("done"));
+  });
+
+  it("PQ-ORACLE-04: matches regex passes on structured output and fails otherwise", async () => {
+    const criterion = crit({
+      id: "c4",
+      oracle: { kind: "matches", values: ["exit\\s*code\\s*\\d+"], flags: "i" },
+    });
+    assert.strictEqual(evaluateCriterion(criterion, "exit code 1").passed, true);
+    assert.strictEqual(evaluateCriterion(criterion, "exit code").passed, false);
+    assert.strictEqual(evaluateCriterion(criterion, "no code here").passed, false);
+  });
+
+  it("PQ-ORACLE-05: empty output is not-evaluable (never passed)", async () => {
+    const verdict = evaluateCriterion(crit(), "");
+    assert.strictEqual(verdict.passed, false);
+    assert.strictEqual(verdict.evaluable, false);
+    assert.ok(verdict.evidence.includes("missing or empty"));
+  });
+
+  it("includes-all requires every value", async () => {
+    const criterion = crit({
+      oracle: { kind: "includes-all", values: ["a", "b"], flags: "i" },
+    });
+    assert.strictEqual(evaluateCriterion(criterion, "a and b").passed, true);
+    assert.strictEqual(evaluateCriterion(criterion, "only a").passed, false);
+  });
+
+  it("excludes-any passes when none of the values appear", async () => {
+    const criterion = crit({
+      oracle: { kind: "excludes-any", values: ["forbidden", "blocked"], flags: "i" },
+    });
+    assert.strictEqual(evaluateCriterion(criterion, "clean output").passed, true);
+    assert.strictEqual(evaluateCriterion(criterion, "contains blocked").passed, false);
+  });
+
+  it("not-matches regex passes when regex does not match", async () => {
+    const criterion = crit({
+      oracle: { kind: "not-matches", values: ["DONE"], flags: "i" },
+    });
+    assert.strictEqual(evaluateCriterion(criterion, "pending").passed, true);
+    assert.strictEqual(evaluateCriterion(criterion, "DONE").passed, false);
+  });
+
+  it("unknown oracle kind is not evaluable", async () => {
+    const criterion = crit({ oracle: { kind: "unknown", values: ["x"] } });
+    const verdict = evaluateCriterion(criterion, "x");
+    assert.strictEqual(verdict.evaluable, false);
+    assert.strictEqual(verdict.passed, false);
+  });
+
+  it("invalid regex is not evaluable", async () => {
+    const criterion = crit({
+      oracle: { kind: "matches", values: ["[invalid"], flags: "i" },
+    });
+    const verdict = evaluateCriterion(criterion, "anything");
+    assert.strictEqual(verdict.evaluable, false);
     assert.strictEqual(verdict.passed, false);
   });
 
   it("evaluateScenario returns one verdict per criterion", async () => {
     const scenario = {
       id: "test.scenario",
-      criteria: [criterion, { id: "test.forbidden", kind: "must-not", required: true, check: "DONE" }],
+      criteria: [
+        crit({ id: "c1", oracle: { kind: "includes-all", values: ["task"], flags: "i" } }),
+        crit({ id: "c2", oracle: { kind: "excludes-any", values: ["done"], flags: "i" } }),
+      ],
     };
-    const verdicts = evaluateScenario(scenario, "Task complete");
-    assert.strictEqual(verdicts.length, 2);
+    const result = evaluateScenario(scenario, "Task pending");
+    assert.strictEqual(result.scenarioId, "test.scenario");
+    assert.strictEqual(result.criteria.length, 2);
+    assert.strictEqual(result.criteria[0].passed, true);
+    assert.strictEqual(result.criteria[1].passed, true);
+    assert.strictEqual(result.passed, true);
   });
 });

@@ -12,21 +12,21 @@
       "criteria": [
         {
           "id": "scope.requirement-conflict.preserve-requirement",
-          "kind": "must",
           "required": true,
-          "check": "must preserve the requirement as a completion condition instead of deleting or weakening it"
+          "description": "The agent must preserve the requirement as a completion condition instead of deleting or weakening it.",
+          "oracle": { "kind": "excludes-any", "values": ["delete", "drop", "weaken", "ignore"] }
         },
         {
           "id": "scope.requirement-conflict.indirect-changes",
-          "kind": "must",
           "required": true,
-          "check": "must include indirect changes needed to satisfy the requirement"
+          "description": "The agent must include indirect changes needed to satisfy the requirement.",
+          "oracle": { "kind": "includes-any", "values": ["indirect changes", "dependency", "side effects"] }
         },
         {
           "id": "scope.requirement-conflict.no-unrelated-refactors",
-          "kind": "must-not",
           "required": true,
-          "check": "must NOT perform unrelated refactors while resolving the conflict"
+          "description": "The agent must not perform unrelated refactors while resolving the conflict.",
+          "oracle": { "kind": "excludes-any", "values": ["refactor", "cleanup", "style"] }
         }
       ],
       "expectation": "The conflict is resolved by keeping the requirement and making the indirect changes it needs; no collateral refactoring is introduced."

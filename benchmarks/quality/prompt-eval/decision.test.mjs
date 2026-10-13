@@ -43,4 +43,58 @@ describe("prompt-eval decision rules", () => {
     const result = classify({ metrics: metrics({ evaluableCount: 0 }), details: [] }, { metrics: metrics({ evaluableCount: 0 }), details: [] });
     assert.strictEqual(result.decision, DECISIONS.INCONCLUSIVE);
   });
+
+  it("PQ-EXEC-02: deliberate critical regression => REGRESSION", async () => {
+    const baseline = {
+      metrics: metrics({ evaluableCount: 1, totalScenarios: 1, criticalRegressions: 0 }),
+      details: [{ scenarioId: "s1", severity: "critical", passed: true, evaluable: true, criteria: [] }],
+    };
+    const candidate = {
+      metrics: metrics({ evaluableCount: 1, totalScenarios: 1, criticalRegressions: 1 }),
+      details: [{ scenarioId: "s1", severity: "critical", passed: false, evaluable: true, criteria: [] }],
+    };
+    const result = classify(baseline, candidate);
+    assert.strictEqual(result.decision, DECISIONS.REGRESSION);
+    assert.ok(result.evidence.includes("critical"));
+  });
+
+  it("PQ-EXEC-04: identical outputs => NO_CHANGE", async () => {
+    const baseline = {
+      metrics: metrics({ evaluableCount: 1, totalScenarios: 1, mandatoryCompliance: 100, targetChecksPassed: 10, criticalRegressions: 0 }),
+      details: [{ scenarioId: "s1", severity: "low", passed: true, evaluable: true, criteria: [] }],
+    };
+    const candidate = {
+      metrics: metrics({ evaluableCount: 1, totalScenarios: 1, mandatoryCompliance: 100, targetChecksPassed: 10, criticalRegressions: 0 }),
+      details: [{ scenarioId: "s1", severity: "low", passed: true, evaluable: true, criteria: [] }],
+    };
+    const result = classify(baseline, candidate);
+    assert.strictEqual(result.decision, DECISIONS.NO_CHANGE);
+  });
+
+  it("PQ-EXEC-03: empty/missing output => INCONCLUSIVE", async () => {
+    const baseline = {
+      metrics: metrics({ evaluableCount: 1, totalScenarios: 1 }),
+      details: [{ scenarioId: "s1", severity: "low", passed: true, evaluable: true, criteria: [] }],
+    };
+    const candidate = {
+      metrics: metrics({ evaluableCount: 0, totalScenarios: 1 }),
+      details: [{ scenarioId: "s1", severity: "low", passed: false, evaluable: false, criteria: [] }],
+    };
+    const result = classify(baseline, candidate);
+    assert.strictEqual(result.decision, DECISIONS.INCONCLUSIVE);
+  });
+
+  it("PQ-EXEC-05: savings + critical regression => REGRESSION (never IMPROVED)", async () => {
+    const baseline = {
+      metrics: metrics({ evaluableCount: 1, totalScenarios: 1, targetChecksPassed: 10, criticalRegressions: 0 }),
+      details: [{ scenarioId: "s1", severity: "critical", passed: true, evaluable: true, criteria: [] }],
+    };
+    const candidate = {
+      metrics: metrics({ evaluableCount: 1, totalScenarios: 1, targetChecksPassed: 12, criticalRegressions: 1 }),
+      details: [{ scenarioId: "s1", severity: "critical", passed: false, evaluable: true, criteria: [] }],
+    };
+    const result = classify(baseline, candidate);
+    assert.strictEqual(result.decision, DECISIONS.REGRESSION);
+    assert.notStrictEqual(result.decision, DECISIONS.IMPROVED);
+  });
 });

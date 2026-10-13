@@ -1,0 +1,7 @@
+{
+  "verify.false-done": "identified missing checks: no verification executed",
+  "verify.environment-failure": "failure recorded: exit code 127, stderr \"command not found\"",
+  "scope.requirement-conflict": "kept requirement as completion condition; indirect changes needed for dependency",
+  "simplify.coupling-tradeoff": "weighed responsibilities, coupling, and guarantees; chose behavior-preserving path",
+  "delegation.missing-evidence": "requested artifact evidence; stays pending until contract met"
+}

@@ -90,7 +90,22 @@ export async function runQualitySuite(options) {
   // paired runner can call. Defaults to the offline mock so runs never reach
   // the network unless a real provider is explicitly configured.
   const resolvedProvider =
-    provider === "mock" ? createMockProvider() : resolveProvider();
+    provider === "mock"
+      ? createMockProvider()
+      : typeof provider === "object" && provider !== null
+        ? provider
+        : resolveProvider();
+
+  // Apply the identical final-answer instruction to BOTH arms so the A/B
+  // comparison stays fair while forcing a machine-extractable final answer.
+  const injectedProvider = {
+    ...resolvedProvider,
+    complete: (request) =>
+      resolvedProvider.complete({
+        ...request,
+        messages: appendFinalAnswerInstruction(request?.messages)
+      })
+  };
 
   // We'll collect results for each scenario and trial
   const allResults = [];
@@ -109,7 +124,7 @@ export async function runQualitySuite(options) {
 
       const res = await runPairedScenario({
         scenario,
-        provider: resolvedProvider,
+        provider: injectedProvider,
         root,
         trialId,
         ablation: ablationConfig,
@@ -383,12 +398,10 @@ async function armCallWithRetry(armFn, retriesRef, armName) {
  * Applied to BOTH arms so the A/B stays fair while making
  * the model commit to a machine-extractable final answer.
  */
-function appendFinalAnswerInstruction(messages) {
+export function appendFinalAnswerInstruction(messages) {
   if (!Array.isArray(messages) || messages.length === 0) return messages;
   const copied = [...messages];
-  const lastUserIdx = copied.lastIndexOf(
-    copied.findLastIndex((m) => m.role === "user")
-  );
+  const lastUserIdx = copied.findLastIndex((m) => m.role === "user");
   if (lastUserIdx >= 0) {
     copied[lastUserIdx] = {
       ...copied[lastUserIdx],

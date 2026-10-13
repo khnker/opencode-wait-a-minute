@@ -33,7 +33,7 @@ export function classify(baseline, candidate) {
   if (cMet.criticalRegressions > bMet.criticalRegressions) {
     const regressed = cDet
       .filter((d, i) => d.severity === "critical" && !d.passed && bDet[i].passed)
-      .map((d) => d.scenarioId);
+      .map((d) => `${d.scenarioId} critical criterion`);
     return {
       decision: DECISIONS.REGRESSION,
       evidence: `critical regressions detected in: ${regressed.join(", ")}`,

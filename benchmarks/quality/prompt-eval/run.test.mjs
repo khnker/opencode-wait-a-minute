@@ -23,7 +23,7 @@ describe("prompt-eval run", () => {
         severity: "low",
         context: "x",
         promptRef: "p1",
-        criteria: [{ id: "c1", kind: "must", required: true, check: "x" }],
+        criteria: [{ id: "c1", required: true, description: "must contain x", oracle: { kind: "includes-all", values: ["x"], flags: "i" } }],
         expectation: "x"
       }]
     }];
@@ -55,7 +55,7 @@ describe("prompt-eval run", () => {
 
     const suitesFull = [{
       id: "s", version: "1",
-      scenarios: [{ id: "sc1", suite: "s", severity: "low", context: "x", promptRef: "p1", criteria: [{id:"c", kind:"must", required:true, check:"x"}], expectation: "x" }]
+      scenarios: [{ id: "sc1", suite: "s", severity: "low", context: "x", promptRef: "p1",         criteria: [{id:"c", required:true, description:"must contain x", oracle:{kind:"includes-all", values:["x"], flags:"i"}}], expectation: "x" }]
     }];
 
     const res1 = runEvaluation({ labels: ["baseline"], suites: suitesFull, promptContents, outDir: outDir1 });

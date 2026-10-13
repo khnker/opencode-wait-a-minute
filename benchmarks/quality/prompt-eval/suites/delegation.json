@@ -12,21 +12,21 @@
       "criteria": [
         {
           "id": "delegation.missing-evidence.no-claim-as-evidence",
-          "kind": "must-not",
           "required": true,
-          "check": "must NOT accept a success claim as evidence"
+          "description": "The agent must not accept a success claim as evidence.",
+          "oracle": { "kind": "excludes-any", "values": ["success claim", "claim as evidence", "trusted"] }
         },
         {
           "id": "delegation.missing-evidence.collect-artifacts",
-          "kind": "must",
           "required": true,
-          "check": "must request or collect artifact evidence for the delegated work"
+          "description": "The agent must request or collect artifact evidence for the delegated work.",
+          "oracle": { "kind": "includes-any", "values": ["artifact", "output", "evidence", "collect"] }
         },
         {
           "id": "delegation.missing-evidence.keep-pending",
-          "kind": "must",
           "required": true,
-          "check": "must keep state pending until the contract is met"
+          "description": "The agent must keep state pending until the contract is met.",
+          "oracle": { "kind": "includes-all", "values": ["pending", "contract"] }
         }
       ],
       "expectation": "The delegation stays open/pending and evidence is requested; the task is never marked complete on the claim alone."

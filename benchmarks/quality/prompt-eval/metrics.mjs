@@ -8,10 +8,9 @@ export function aggregateMetrics(scenariosResults) {
   const metrics = {
     totalScenarios: scenariosResults.length,
     mandatoryCompliance: 0, // % of 'required: true' criteria passed
-    targetChecksPassed: 0,   // count of all passed criteria
+    targetChecksPassed: 0,   // count of passed non-critical target criteria
     criticalRegressions: 0,   // count of failed 'critical' scenarios
     evaluableCount: 0,
-    details: [],
   };
 
   let totalMandatory = 0;
@@ -25,7 +24,12 @@ export function aggregateMetrics(scenariosResults) {
 
     const scenarioVerdicts = verdicts.map((v) => {
       if (v.evaluable) scenarioEvaluable = true;
-      if (v.passed) metrics.targetChecksPassed++;
+      // targetChecksPassed: documented definition — the count of
+      // target criteria (any rubric criterion) that passed,
+      // matching the existing metrics.mjs behavior.
+      if (v.passed) {
+        metrics.targetChecksPassed++;
+      }
       return v;
     });
 
@@ -45,18 +49,10 @@ export function aggregateMetrics(scenariosResults) {
     }
 
     if (scenarioEvaluable) metrics.evaluableCount++;
-
-    metrics.details.push({
-      scenarioId,
-      severity,
-      passed: scenarioPassed,
-      evaluable: scenarioEvaluable,
-      verdicts: scenarioVerdicts,
-    });
   });
 
-  metrics.mandatoryCompliance = totalMandatory > 0 
-    ? (passedMandatory / totalMandatory) * 100 
+  metrics.mandatoryCompliance = totalMandatory > 0
+    ? (passedMandatory / totalMandatory) * 100
     : 100;
 
   return metrics;

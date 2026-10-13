@@ -9,8 +9,8 @@ function scenarioResult(id, severity, criteria, verdicts) {
 describe("prompt-eval metrics aggregation", () => {
   it("computes mandatory compliance and evaluability counts", async () => {
     const criteria = [
-      { id: "c1", kind: "must", required: true, check: "a" },
-      { id: "c2", kind: "must", required: false, check: "b" },
+      { id: "c1", required: true, description: "a", oracle: { kind: "includes-all", values: ["a"], flags: "i" } },
+      { id: "c2", required: false, description: "b", oracle: { kind: "includes-all", values: ["b"], flags: "i" } },
     ];
     const results = [
       scenarioResult("s1", "critical", criteria, [
@@ -27,7 +27,7 @@ describe("prompt-eval metrics aggregation", () => {
   });
 
   it("counts critical regression when critical scenario fails required criterion", async () => {
-    const criteria = [{ id: "c1", kind: "must", required: true, check: "a" }];
+    const criteria = [{ id: "c1", required: true, description: "a", oracle: { kind: "includes-all", values: ["a"], flags: "i" } }];
     const results = [
       scenarioResult("s1", "critical", criteria, [
         { criterionId: "c1", passed: false, evaluable: true, evidence: "missing" },
@@ -39,7 +39,7 @@ describe("prompt-eval metrics aggregation", () => {
   });
 
   it("ignores non-evaluable scenarios for evaluableCount", async () => {
-    const criteria = [{ id: "c1", kind: "must", required: true, check: "a" }];
+    const criteria = [{ id: "c1", required: true, description: "a", oracle: { kind: "includes-all", values: ["a"], flags: "i" } }];
     const results = [
       scenarioResult("s1", "low", criteria, [
         { criterionId: "c1", passed: false, evaluable: false, evidence: "empty" },

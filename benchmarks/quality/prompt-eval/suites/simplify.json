@@ -12,21 +12,21 @@
       "criteria": [
         {
           "id": "simplify.coupling-tradeoff.no-loc-only-reuse",
-          "kind": "must-not",
           "required": true,
-          "check": "must NOT pick reuse solely to reduce lines of code"
+          "description": "The agent must not pick reuse solely to reduce lines of code.",
+          "oracle": { "kind": "excludes-any", "values": ["reduce lines", "loc", "lines of code"] }
         },
         {
           "id": "simplify.coupling-tradeoff.weigh-factors",
-          "kind": "must",
           "required": true,
-          "check": "must weigh responsibilities, coupling, and guarantees before consolidating"
+          "description": "The agent must weigh responsibilities, coupling, and guarantees before consolidating.",
+          "oracle": { "kind": "includes-all", "values": ["responsibilities", "coupling", "guarantees"] }
         },
         {
           "id": "simplify.coupling-tradeoff.simplest-behavior-preserving",
-          "kind": "must",
           "required": true,
-          "check": "must prefer the simplest alternative that preserves behavior"
+          "description": "The agent must prefer the simplest alternative that preserves behavior.",
+          "oracle": { "kind": "matches", "values": ["simplest", "behavior-preserving"], "flags": "i" }
         }
       ],
       "expectation": "The decision names the trade-off factors and picks the behavior-preserving alternative, not the lowest-LOC one."

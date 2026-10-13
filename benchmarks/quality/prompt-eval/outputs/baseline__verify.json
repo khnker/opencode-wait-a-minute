@@ -1,0 +1,4 @@
+{
+  "verify.false-done": "must identify the specific checks that are missing before completion can be claimed (including execution logs and test results)",
+  "verify.environment-failure": "failure documented with exit code: 1, stderr: \"tool not found\" and state blocked"
+}

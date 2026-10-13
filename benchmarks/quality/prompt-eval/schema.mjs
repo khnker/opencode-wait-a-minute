@@ -24,9 +24,16 @@ export class PromptEvalSchemaError extends Error {
 export const SEVERITIES = Object.freeze(["critical", "high", "medium", "low"]);
 export const CRITERION_KINDS = Object.freeze(["must", "must-not"]);
 export const SUITE_SCHEMA = "wam.prompt-eval.suite/1";
+export const CRITERION_ORACLE_KINDS = Object.freeze([
+  "includes-all",
+  "includes-any",
+  "excludes-any",
+  "matches",
+  "not-matches",
+]);
 
 const SCENARIO_STRING_FIELDS = ["id", "suite", "severity", "context", "promptRef", "expectation"];
-const CRITERION_STRING_FIELDS = ["id", "kind", "check"];
+const CRITERION_STRING_FIELDS = ["id", "required", "description"];
 
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
@@ -47,22 +54,42 @@ function validateCriterion(criterion, where, seenIds, errors) {
     errors.push(`${where} must be an object`);
     return;
   }
-  for (const field of CRITERION_STRING_FIELDS) {
-    if (!isNonEmptyString(criterion[field])) {
-      errors.push(`${where}.${field} is a mandatory field and must be a non-empty string`);
-    }
+
+  if (!isNonEmptyString(criterion.id)) {
+    errors.push(`${where}.id is a mandatory field and must be a non-empty string`);
   }
+
   if (typeof criterion.required !== "boolean") {
     errors.push(`${where}.required is a mandatory field and must be a boolean`);
   }
-  if (isNonEmptyString(criterion.kind) && !CRITERION_KINDS.includes(criterion.kind)) {
-    errors.push(`${where}.kind "${criterion.kind}" must be one of ${CRITERION_KINDS.join(" | ")}`);
+
+  if (!isNonEmptyString(criterion.description)) {
+    errors.push(`${where}.description is a mandatory field and must be a non-empty string`);
   }
+
   if (isNonEmptyString(criterion.id)) {
     if (seenIds.has(criterion.id)) {
       errors.push(`${where}.id "${criterion.id}" is a duplicate criterion id`);
     }
     seenIds.add(criterion.id);
+  }
+
+  const oracle = criterion.oracle;
+  if (!oracle || typeof oracle !== "object" || Array.isArray(oracle)) {
+    errors.push(`${where}.oracle is a mandatory field and must be an object`);
+    return;
+  }
+
+  if (!isNonEmptyString(oracle.kind) || !CRITERION_ORACLE_KINDS.includes(oracle.kind)) {
+    errors.push(`${where}.oracle.kind is a mandatory field and must be one of ${CRITERION_ORACLE_KINDS.join(" | ")}`);
+  }
+
+  if (!Array.isArray(oracle.values) || oracle.values.length === 0 || oracle.values.some((v) => typeof v !== "string" || v.trim().length === 0)) {
+    errors.push(`${where}.oracle.values is a mandatory field and must be a non-empty array of non-empty strings`);
+  }
+
+  if (typeof oracle.flags !== "undefined" && typeof oracle.flags !== "string") {
+    errors.push(`${where}.oracle.flags must be a string if present`);
   }
 }
 

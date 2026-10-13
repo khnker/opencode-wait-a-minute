@@ -1,0 +1,3 @@
+{
+  "simplify.coupling-tradeoff": "reduced lines of code without considering coupling or guarantees"
+}
