@@ -10,6 +10,7 @@
  *
  * Usage:
  *   node scripts/prompts-calibrate.mjs [--gold <dir|version>] [--out <path>] [--json]
+ *   node scripts/prompts-calibrate.mjs --help
  *
  * Defaults: gold=benchmarks/quality/prompt-eval/gold/v1-provisional,
  * out=benchmarks/quality/prompt-eval/calibration.json.
@@ -34,12 +35,27 @@ const EVAL_DIR = path.join(ROOT, "benchmarks", "quality", "prompt-eval");
 const DEFAULT_GOLD = path.join(EVAL_DIR, "gold", GOLD_VERSION);
 const DEFAULT_OUT = path.join(EVAL_DIR, "calibration.json");
 
+export const USAGE = [
+  "Usage: node scripts/prompts-calibrate.mjs [options]",
+  "",
+  "Loads the frozen gold fixture (labels), recomputes the deterministic",
+  "oracle verdicts over the frozen raw outputs, computes Cohen's kappa",
+  "and writes the deterministic calibration report.",
+  "",
+  "Options:",
+  "  --gold <dir|version>  Gold fixture dir or version (default: gold/<version>)",
+  "  --out <path>          Output report path (default: calibration.json)",
+  "  --json                Print the calibration report as JSON",
+  "  -h, --help            Print this usage and exit (no calibration, no writes)",
+].join("\n");
+
 export function parseArgs(argv) {
-  const result = { json: false };
+  const result = { json: false, help: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     const valueOf = () => (arg.includes("=") ? arg.split("=")[1] : argv[++i]);
-    if (arg.startsWith("--gold")) result.gold = valueOf();
+    if (arg === "--help" || arg === "-h") result.help = true;
+    else if (arg.startsWith("--gold")) result.gold = valueOf();
     else if (arg.startsWith("--out")) result.out = valueOf();
     else if (arg === "--json") result.json = true;
   }
@@ -119,6 +135,10 @@ export function runCalibration({ gold, out } = {}) {
 
 function main(argv) {
   const args = parseArgs(argv);
+  if (args.help) {
+    console.log(USAGE);
+    return;
+  }
   const { cal, outPath, goldDir } = runCalibration({ gold: args.gold, out: args.out });
 
   if (args.json) {
