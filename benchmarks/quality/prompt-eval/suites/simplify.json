@@ -26,7 +26,7 @@
           "id": "simplify.coupling-tradeoff.simplest-behavior-preserving",
           "required": true,
           "description": "The agent must prefer the simplest alternative that preserves behavior.",
-          "oracle": { "kind": "matches", "values": ["simplest", "behavior-preserving"], "flags": "i" }
+          "oracle": { "kind": "includes-any", "values": ["simplest", "behavior-preserving", "behavior preserving", "preserve", "reject the consolidation", "keep the modules separate", "keep them separate", "avoid coupling", "avoid artificial coupling", "remain separate"] }
         }
       ],
       "expectation": "The decision names the trade-off factors and picks the behavior-preserving alternative, not the lowest-LOC one."

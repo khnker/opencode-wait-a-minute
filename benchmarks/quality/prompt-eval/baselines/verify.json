@@ -4,7 +4,7 @@
   "suite": {
     "id": "verify",
     "version": "1.0.0",
-    "hash": "35de6c767ee6b07f9b6504a6c56ae54cd91666965a41850db075439914290938"
+    "hash": "a91fadf6aa9c66be4288e26684b22b59946fce3447198b18c617f80d5cd66d17"
   },
   "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
   "coverage": {

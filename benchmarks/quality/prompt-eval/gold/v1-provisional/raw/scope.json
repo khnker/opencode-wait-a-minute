@@ -1,0 +1,21 @@
+{
+  "suite": "scope",
+  "model": "cost-saver",
+  "temperature": 0,
+  "outputs": {
+    "scope.requirement-conflict": "### Concrete Actions\n1. Analyzed the exact points of friction between the two conflicting requirements, explicitly rejecting the shortcut to drop either requirement.\n2. Implemented a minimal, localized indirect change ("
+  },
+  "usage": {
+    "tokens": {
+      "input": 257,
+      "output": 1020,
+      "total": 1277
+    },
+    "latencyMs": {
+      "sum": 62.48966999999999,
+      "mean": 62.48966999999999,
+      "n": 1
+    },
+    "executionFailures": 0
+  }
+}

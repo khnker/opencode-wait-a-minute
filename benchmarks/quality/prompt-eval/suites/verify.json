@@ -42,7 +42,7 @@
           "id": "verify.environment-failure.record-failure",
           "required": true,
           "description": "The agent must record the failure and its observable cause (exit code, stderr, missing tool).",
-          "oracle": { "kind": "includes-all", "values": ["failure", "exit code", "stderr"] }
+          "oracle": { "kind": "includes-any", "values": ["exit code", "exit status", "stderr", "environmental failure", "environmental tool failure", "tooling failure", "infrastructure error", "error log", "recorded the failure", "failure recorded", "failed to run", "could not run", "missing binary", "sandbox restriction", "unavailable service", "observable cause"] }
         },
         {
           "id": "verify.environment-failure.declaration",

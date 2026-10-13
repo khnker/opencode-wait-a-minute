@@ -1,0 +1,21 @@
+{
+  "suite": "delegation",
+  "model": "cost-saver",
+  "temperature": 0,
+  "outputs": {
+    "delegation.missing-evidence": "[wam delegation] Reqs pendientes → delegar en PARALELO via Task (agente: el apropiado según config del entorno). Mutación directa de archivos desde la sesión principal está BLOQUEADA — solo un subagente ejecuta write/edit."
+  },
+  "usage": {
+    "tokens": {
+      "input": 335,
+      "output": 261,
+      "total": 596
+    },
+    "latencyMs": {
+      "sum": 144.967113,
+      "mean": 144.967113,
+      "n": 1
+    },
+    "executionFailures": 0
+  }
+}

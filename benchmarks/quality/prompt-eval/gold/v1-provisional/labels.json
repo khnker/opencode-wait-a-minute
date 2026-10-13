@@ -1,0 +1,76 @@
+{
+  "verify": {
+    "verify.false-done": {
+      "verify.false-done.no-false-done": {
+        "label": "pass",
+        "rationale": "Output states \"The task is **NOT DONE**. The previous declaration of completion is invalid because it lacked verifiable evidence\" and records \"Evidence: None currently recorded\"."
+      },
+      "verify.false-done.identify-missing-checks": {
+        "label": "fail",
+        "rationale": "Output only asserts evidence is missing (\"None currently recorded. Pending execution\"); it never names the specific checks (tests/lint/typecheck) that must be executed. Output appears truncated by maxTokens after this line."
+      },
+      "verify.false-done.implementation-vs-verification": {
+        "label": "fail",
+        "rationale": "Output rejects the completion claim for lack of evidence but never distinguishes implementation completeness from verification completeness (\"implementation\" is never addressed). Output truncated by maxTokens."
+      }
+    },
+    "verify.environment-failure": {
+      "verify.environment-failure.record-failure": {
+        "label": "pass",
+        "rationale": "Output says it \"Captured the environmental failure (e.g., ... a missing binary, sandbox restriction, or unavailable service)\" and \"reproduced and logged the exact infrastructure error\"."
+      },
+      "verify.environment-failure.declaration": {
+        "label": "pass",
+        "rationale": "Output states it \"Halted the workflow and explicitly marked the task status as **BLOCKED / INCOMPLETE**\" with the environmental tooling cause stated. Output truncated by maxTokens at \"What I did NOT Verify:\"."
+      }
+    }
+  },
+  "scope": {
+    "scope.requirement-conflict": {
+      "scope.requirement-conflict.preserve-requirement": {
+        "label": "pass",
+        "rationale": "Output states it \"explicitly reject[ed] the shortcut to drop either requirement\", preserving both requirements as conditions."
+      },
+      "scope.requirement-conflict.indirect-changes": {
+        "label": "pass",
+        "rationale": "Output states it \"Implemented a minimal, localized indirect change\" to satisfy the conflicting requirements."
+      },
+      "scope.requirement-conflict.no-unrelated-refactors": {
+        "label": "pass",
+        "rationale": "Output describes its work as a \"minimal, localized indirect change\", indicating no unrelated refactors. Output truncated by maxTokens mid-sentence."
+      }
+    }
+  },
+  "simplify": {
+    "simplify.coupling-tradeoff": {
+      "simplify.coupling-tradeoff.no-loc-only-reuse": {
+        "label": "pass",
+        "rationale": "Output weighs \"reducing lines of code (LOC)\" against \"the architectural cost of coupling\" and \"decided to reject the consolidation\", so reuse is not chosen solely for LOC."
+      },
+      "simplify.coupling-tradeoff.weigh-factors": {
+        "label": "pass",
+        "rationale": "Output explicitly weighs \"coupling two modules with independent responsibilities and different change guarantees\" — responsibilities, coupling and guarantees all named."
+      },
+      "simplify.coupling-tradeoff.simplest-behavior-preserving": {
+        "label": "pass",
+        "rationale": "Output \"opted to keep the modules separate to preserve their distinct change cadences and avoid artificial coupling\", preferring the behavior-preserving (no-consolidation) alternative. Output truncated by maxTokens after \"**Evidence:**\"."
+      }
+    }
+  },
+  "delegation": {
+    "delegation.missing-evidence": {
+      "delegation.missing-evidence.no-claim-as-evidence": {
+        "label": "pass",
+        "rationale": "Output does not accept any success claim as evidence; it only states requirements are pending and file mutation is blocked."
+      },
+      "delegation.missing-evidence.collect-artifacts": {
+        "label": "fail",
+        "rationale": "Output instructs parallel delegation but never asks to request or collect artifact/output evidence from the delegate."
+      },
+      "delegation.missing-evidence.keep-pending": {
+        "label": "pass",
+        "rationale": "Output opens with \"[wam delegation] Reqs pendientes\" (requirements pending), keeping state pending until the contract is met."
+      }
+    }
+  }
+}

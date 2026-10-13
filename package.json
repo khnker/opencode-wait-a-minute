@@ -32,6 +32,8 @@
     "prompts:eval": "node scripts/prompts-eval.mjs",
     "prompts:compare": "node scripts/prompts-compare.mjs",
     "prompts:report": "node scripts/prompts-report.mjs",
+    "prompts:calibrate": "node scripts/prompts-calibrate.mjs",
+    "benchmark:calibrate": "node scripts/prompts-calibrate.mjs",
     "validate": "node scripts/release-gate.mjs",
     "production:gate": "node scripts/release-gate.mjs",
     "release:check": "node scripts/release-gate.mjs",

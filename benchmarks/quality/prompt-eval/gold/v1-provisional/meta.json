@@ -1,0 +1,7 @@
+{
+  "schema": "wam.prompt-eval.gold/1",
+  "version": "v1-provisional",
+  "provenance": "agent-authored single-annotator (PROVISIONAL)",
+  "model": "cost-saver",
+  "temperature": 0
+}

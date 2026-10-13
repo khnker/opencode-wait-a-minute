@@ -40,6 +40,9 @@ const GATES = [
   { name: "Package E2E", cmd: "npm run test:e2e:package", required: true, timeout: 300000 },
   { name: "Docs Check", cmd: "node scripts/docs-check.mjs", required: true },
   { name: "Prompt Catalog Integrity", cmd: "npm run prompts:check", required: true },
+  // Prompt-eval calibration gate: runs offline against frozen gold fixtures
+  // (benchmarks/quality/prompt-eval/gold/), required — non-zero on κ failure.
+  { name: "Prompt Eval Calibration", cmd: "npm run benchmark:calibrate", required: true },
   // Bench evidence audit reads `benchmarks/results/<latest>/raw.json`, a
   // provider-generated artifact that is gitignored and therefore absent on a
   // fresh CI checkout. It is validated locally (where the benchmark has run),

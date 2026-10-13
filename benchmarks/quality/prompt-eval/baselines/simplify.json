@@ -4,7 +4,7 @@
   "suite": {
     "id": "simplify",
     "version": "1.0.0",
-    "hash": "362509f1fd9d8df61f70435702aaa3f4f6837c304b62e4e83838b992cabb9bf9"
+    "hash": "f5cdd361c465e37cd60248f28396447a6bccf9abddc8f0a9c5f6157fb42018da"
   },
   "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
   "coverage": {

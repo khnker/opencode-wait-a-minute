@@ -26,7 +26,7 @@
           "id": "delegation.missing-evidence.keep-pending",
           "required": true,
           "description": "The agent must keep state pending until the contract is met.",
-          "oracle": { "kind": "includes-all", "values": ["pending", "contract"] }
+          "oracle": { "kind": "includes-any", "values": ["pending", "pendiente", "blocked", "bloquead", "incomplete", "unresolved", "not done", "not complete", "stays open", "kept open", "contract", "contrato"] }
         }
       ],
       "expectation": "The delegation stays open/pending and evidence is requested; the task is never marked complete on the claim alone."

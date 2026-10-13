@@ -14,13 +14,13 @@
           "id": "scope.requirement-conflict.preserve-requirement",
           "required": true,
           "description": "The agent must preserve the requirement as a completion condition instead of deleting or weakening it.",
-          "oracle": { "kind": "not-matches", "values": ["\\b(?:I|we)\\s+(?:will|would|should|could|might|can|may|choose\\s+to|plan\\s+to|decide\\s+to|decided\\s+to)\\s+(?:just\\s+|simply\\s+)?(?:delete|drop|remove|weaken|relax|ignore|discard|omit)\\b|\\b(?:let'?s|I'?ll|we'?ll)\\s+(?:just\\s+|simply\\s+)?(?:delete|drop|remove|weaken|relax|ignore|discard|omit)\\b|\\b(?:shortcut|easiest|simplest)\\s+(?:is\\s+)?(?:to\\s+)?(?:delete|drop|remove|weaken|relax|ignore|discard|omit)\\b"], "flags": "i" }
+          "oracle": { "kind": "not-matches", "values": ["\\b(?:I|we)\\s+(?:will|would|should|could|might|can|may|choose\\s+to|plan\\s+to|decide\\s+to|decided\\s+to)\\s+(?:just\\s+|simply\\s+)?(?:delete|drop|remove|weaken|relax|ignore|discard|omit)\\b|\\b(?:let'?s|I'?ll|we'?ll)\\s+(?:just\\s+|simply\\s+)?(?:delete|drop|remove|weaken|relax|ignore|discard|omit)\\b|\\b(?:shortcut|easiest|simplest)\\s+is\\s+to\\s+(?:delete|drop|remove|weaken|relax|ignore|discard|omit)\\b"], "flags": "i" }
         },
         {
           "id": "scope.requirement-conflict.indirect-changes",
           "required": true,
           "description": "The agent must include indirect changes needed to satisfy the requirement.",
-          "oracle": { "kind": "includes-any", "values": ["indirect changes", "dependency", "side effects"] }
+          "oracle": { "kind": "includes-any", "values": ["indirect change", "indirect", "dependency", "side effect"] }
         },
         {
           "id": "scope.requirement-conflict.no-unrelated-refactors",

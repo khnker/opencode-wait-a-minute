@@ -4,7 +4,7 @@
   "suite": {
     "id": "delegation",
     "version": "1.0.0",
-    "hash": "407eba1df027d990f5f010a5665e6edc40d5916c304a1c574833f9b2505a6de6"
+    "hash": "1380c11b9109f8de00718ed99dd5f38975f5c323f7972e198fc3e6a27c717585"
   },
   "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
   "coverage": {
