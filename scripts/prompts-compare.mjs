@@ -12,23 +12,27 @@ function parseArgs(args) {
       result.baseline = arg.includes("=") ? arg.split("=")[1] : args[++i];
     } else if (arg.startsWith("--candidate")) {
       result.candidate = arg.includes("=") ? arg.split("=")[1] : args[++i];
+    } else if (arg.startsWith("--label")) {
+      result.label = arg.includes("=") ? arg.split("=")[1] : args[++i];
+    } else if (arg.startsWith("--outDir")) {
+      result.outDir = arg.includes("=") ? arg.split("=")[1] : args[++i];
     }
   }
   return result;
 }
 
 const args = process.argv.slice(2);
-const { baseline: baselineId, candidate: candidateId } = parseArgs(args);
+const { baseline: baselineId, candidate: candidateId, label, outDir } = parseArgs(args);
 
 if (!baselineId || !candidateId) {
-  console.error("Usage: node scripts/prompts-compare.mjs --baseline <run-id> --candidate <run-id>");
+  console.error("Usage: node scripts/prompts-compare.mjs --baseline <run-id> --candidate <run-id> [--label <label>] [--outDir <dir>]");
   process.exit(1);
 }
 
 const root = path.resolve(fileURLToPath(new URL("../", import.meta.url)));
-
-const baselinePath = path.join(root, "benchmarks/quality/prompt-eval/runs", baselineId, "run.json");
-const candidatePath = path.join(root, "benchmarks/quality/prompt-eval/runs", candidateId, "run.json");
+const runsRoot = outDir ? path.resolve(outDir) : path.join(root, "benchmarks/quality/prompt-eval/runs");
+const baselinePath = path.join(runsRoot, baselineId, "run.json");
+const candidatePath = path.join(runsRoot, candidateId, "run.json");
 
 if (!fs.existsSync(baselinePath)) {
   console.error(`Baseline run not found: ${baselinePath}`);
@@ -43,7 +47,7 @@ const baselineRun = JSON.parse(fs.readFileSync(baselinePath, "utf8"));
 const candidateRun = JSON.parse(fs.readFileSync(candidatePath, "utf8"));
 
 try {
-  const result = compareRuns(baselineRun, candidateRun);
+  const result = compareRuns(baselineRun, candidateRun, { label });
   console.log(JSON.stringify(result, null, 2));
   process.exit(0);
 } catch (error) {

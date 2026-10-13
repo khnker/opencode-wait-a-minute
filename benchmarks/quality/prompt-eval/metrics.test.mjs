@@ -48,4 +48,20 @@ describe("prompt-eval metrics aggregation", () => {
     const metrics = aggregateMetrics(results);
     assert.strictEqual(metrics.evaluableCount, 0);
   });
+
+  it("mandatory non-evaluable criterion lowers compliance and fails critical scenario", async () => {
+    const criteria = [
+      { id: "c1", required: true, description: "a", oracle: { kind: "includes-all", values: ["a"], flags: "i" } },
+      { id: "c2", required: true, description: "b", oracle: { kind: "includes-all", values: ["b"], flags: "i" } },
+    ];
+    const results = [
+      scenarioResult("s1", "critical", criteria, [
+        { criterionId: "c1", passed: true, evaluable: true, evidence: "ok" },
+        { criterionId: "c2", passed: false, evaluable: false, evidence: "empty" },
+      ]),
+    ];
+    const metrics = aggregateMetrics(results);
+    assert.strictEqual(metrics.mandatoryCompliance, 50);
+    assert.strictEqual(metrics.criticalRegressions, 1);
+  });
 });

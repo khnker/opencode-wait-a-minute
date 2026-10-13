@@ -148,13 +148,11 @@ export function evaluateScenario(scenario, output) {
   const verdicts = criteria.map((criterion) => evaluateCriterion(criterion, output));
 
   const evaluableVerdicts = verdicts.filter((v) => v.evaluable);
-  const mandatoryVerdicts = verdicts.filter(
-    (v, idx) => criteria[idx]?.required && v.evaluable
-  );
+  const requiredVerdicts = verdicts.filter((v, idx) => criteria[idx]?.required);
 
-  const mandatoryPassed = mandatoryVerdicts.length > 0 && mandatoryVerdicts.every((v) => v.passed);
-  const passed = evaluableVerdicts.length > 0 && evaluableVerdicts.every((v) => v.passed);
-  const evaluable = evaluableVerdicts.length > 0;
+  const mandatoryPassed = requiredVerdicts.length > 0 && requiredVerdicts.every((v) => v.evaluable && v.passed);
+  const passed = mandatoryPassed && evaluableVerdicts.every((v) => v.passed);
+  const evaluable = requiredVerdicts.some((v) => v.evaluable);
 
   return {
     scenarioId: scenario?.id,

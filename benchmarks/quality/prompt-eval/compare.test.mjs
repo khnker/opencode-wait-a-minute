@@ -67,4 +67,37 @@ describe("prompt-eval compare", () => {
     assert.strictEqual(result.decision.decision, "REGRESSION");
     assert.ok(result.decision.evidence.includes("critical"));
   });
+
+  it("PQ-CORR-06: coverage mismatch throws (different scenario sets)", async () => {
+    const baseline = buildRunFixture("r1", "baseline", "verify", "config", { evaluableCount: 1, totalScenarios: 2, mandatoryCompliance: 100, targetChecksPassed: 1, criticalRegressions: 0 }, [
+      { scenarioId: "s1", severity: "critical", passed: true },
+      { scenarioId: "s2", severity: "high", passed: true },
+    ]);
+    const candidate = buildRunFixture("r2", "candidate", "verify", "config", { evaluableCount: 1, totalScenarios: 1, mandatoryCompliance: 100, targetChecksPassed: 1, criticalRegressions: 0 }, [
+      { scenarioId: "s1", severity: "critical", passed: true },
+    ]);
+    assert.throws(() => compareRuns(baseline, candidate), /coverage mismatch/);
+  });
+
+  it("PQ-CORR-07: coverage mismatch throws (different required criterion ids)", async () => {
+    const baseline = buildRunFixture("r1", "baseline", "verify", "config", { evaluableCount: 1, totalScenarios: 1, mandatoryCompliance: 100, targetChecksPassed: 1, criticalRegressions: 0 }, [
+      { scenarioId: "s1", severity: "critical", passed: true, criteria: [{ criterionId: "c1", required: true }] },
+    ]);
+    const candidate = buildRunFixture("r2", "candidate", "verify", "config", { evaluableCount: 1, totalScenarios: 1, mandatoryCompliance: 100, targetChecksPassed: 1, criticalRegressions: 0 }, [
+      { scenarioId: "s1", severity: "critical", passed: true, criteria: [{ criterionId: "c2", required: true }] },
+    ]);
+    assert.throws(() => compareRuns(baseline, candidate), /coverage mismatch/);
+  });
+
+  it("PQ-CORR-08: suite id/version mismatch throws", async () => {
+    const baseline = buildRunFixture("r1", "baseline", "verify", "1.0.0", "config", { evaluableCount: 1, totalScenarios: 1, mandatoryCompliance: 100, targetChecksPassed: 1, criticalRegressions: 0 });
+    const candidate = buildRunFixture("r2", "candidate", "scope", "1.0.0", "config", { evaluableCount: 1, totalScenarios: 1, mandatoryCompliance: 100, targetChecksPassed: 1, criticalRegressions: 0 });
+    assert.throws(() => compareRuns(baseline, candidate), /different suites/);
+  });
+
+  it("PQ-CORR-08b: config mismatch throws", async () => {
+    const baseline = buildRunFixture("r1", "baseline", "verify", "config-a", { evaluableCount: 1, totalScenarios: 1, mandatoryCompliance: 100, targetChecksPassed: 1, criticalRegressions: 0 });
+    const candidate = buildRunFixture("r2", "candidate", "verify", "config-b", { evaluableCount: 1, totalScenarios: 1, mandatoryCompliance: 100, targetChecksPassed: 1, criticalRegressions: 0 });
+    assert.throws(() => compareRuns(baseline, candidate), /config mismatch/);
+  });
 });

@@ -39,8 +39,8 @@ export function aggregateMetrics(scenariosResults) {
       const verdict = scenarioVerdicts[i];
       if (crit.required) {
         totalMandatory++;
-        if (verdict.passed) passedMandatory++;
-        if (!verdict.passed) scenarioPassed = false;
+        if (verdict.evaluable && verdict.passed) passedMandatory++;
+        if (!verdict.evaluable || !verdict.passed) scenarioPassed = false;
       }
     });
 

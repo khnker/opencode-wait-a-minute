@@ -132,6 +132,7 @@ export function runEvaluation({
           evaluable: cr.evaluable,
           evidence: cr.evidence,
         })),
+        result,
       });
     }
   }
@@ -142,26 +143,24 @@ export function runEvaluation({
     const labelMetrics = aggregateMetrics(labelResults);
     const labelDetails = [];
     for (const r of labelResults) {
+      const criteria = r.scenario.criteria;
       labelDetails.push({
         scenarioId: r.scenario.id,
         severity: r.scenario.severity,
-        passed: r.verdicts.every(v => {
-          const crit = r.scenario.criteria.find(c => c.id === v.criterionId);
-          if (!crit || !crit.required) return true;
-          return v.passed;
-        }) && r.verdicts.every(v => {
-          const crit = r.scenario.criteria.find(c => c.id === v.criterionId);
-          if (crit && crit.kind === 'must-not') return v.passed;
-          return true;
+        passed: r.result.passed,
+        evaluable: r.result.evaluable,
+        mandatoryPassed: r.result.mandatoryPassed,
+        criteria: r.verdicts.map(v => {
+          const crit = criteria.find(c => c.id === v.criterionId);
+          return {
+            criterionId: v.criterionId,
+            kind: crit?.oracle?.kind,
+            required: !!crit?.required,
+            passed: v.passed,
+            evaluable: v.evaluable,
+            evidence: v.evidence,
+          };
         }),
-        evaluable: r.verdicts.some(v => v.evaluable),
-        criteria: r.verdicts.map(v => ({
-          criterionId: v.criterionId,
-          kind: r.scenario.criteria.find(c => c.id === v.criterionId).kind,
-          passed: v.passed,
-          evaluable: v.evaluable,
-          evidence: v.evidence,
-        })),
       });
     }
     runRecords[labelIdx].metrics = {
@@ -183,8 +182,14 @@ export function runEvaluation({
   const runPath = path.join(resolvedOutDir, runId, "run.json");
   const reportPath = path.join(resolvedOutDir, runId, "report.json");
   
+  const reportRecord = {
+    runId,
+    labels: runRecord.labels.map(l => l.label),
+    scenarios: runRecords.flatMap(l => l.details),
+  };
+
   writeArtifact(runPath, serializeReport(runRecord));
-  writeArtifact(reportPath, serializeReport({ runId, labels: runRecord.labels.map(l => l.label), scenarios: [] }));
+  writeArtifact(reportPath, serializeReport(reportRecord));
 
   if (writeWallclock) {
     const wallclockPath = path.join(resolvedOutDir, runId, "wallclock.json");

@@ -120,4 +120,52 @@ describe("prompt-eval deterministic evaluator", () => {
     assert.strictEqual(result.criteria[1].passed, true);
     assert.strictEqual(result.passed, true);
   });
+
+  it("PQ-CORR-01: required non-evaluable criterion fails the scenario", async () => {
+    const scenario = {
+      id: "s.corr-01",
+      severity: "critical",
+      criteria: [
+        crit({ id: "c1", required: true, oracle: { kind: "unknown-kind", values: ["x"], flags: "i" } }),
+        crit({ id: "c2", required: false, oracle: { kind: "includes-all", values: ["complete"], flags: "i" } }),
+      ],
+    };
+    const result = evaluateScenario(scenario, "complete output");
+    assert.strictEqual(result.passed, false);
+    assert.strictEqual(result.evaluable, false);
+    assert.strictEqual(result.mandatoryPassed, false);
+    const c1 = result.criteria.find((c) => c.criterionId === "c1");
+    assert.ok(c1.evidence.includes("Unknown oracle kind"));
+  });
+
+  it("PQ-CORR-02: empty output is never a pass", async () => {
+    const scenario = {
+      id: "s.corr-02",
+      severity: "critical",
+      criteria: [
+        crit({ id: "c1", required: true, oracle: { kind: "includes-all", values: ["complete"], flags: "i" } }),
+      ],
+    };
+    for (const output of ["", "   ", null, undefined]) {
+      const result = evaluateScenario(scenario, output);
+      assert.strictEqual(result.passed, false, `output=${JSON.stringify(output)}`);
+      assert.strictEqual(result.evaluable, false, `output=${JSON.stringify(output)}`);
+    }
+  });
+
+  it("PQ-CORR-03: all required criteria passing yields a pass", async () => {
+    const scenario = {
+      id: "s.corr-03",
+      severity: "high",
+      criteria: [
+        crit({ id: "c1", required: true, oracle: { kind: "includes-all", values: ["alpha"], flags: "i" } }),
+        crit({ id: "c2", required: true, oracle: { kind: "includes-all", values: ["beta"], flags: "i" } }),
+        crit({ id: "c3", required: false, oracle: { kind: "excludes-any", values: ["gamma"], flags: "i" } }),
+      ],
+    };
+    const result = evaluateScenario(scenario, "alpha beta");
+    assert.strictEqual(result.passed, true);
+    assert.strictEqual(result.evaluable, true);
+    assert.strictEqual(result.mandatoryPassed, true);
+  });
 });

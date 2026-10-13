@@ -13,16 +13,18 @@ function parseArgs(args) {
       result.suite = arg.includes("=") ? arg.split("=")[1] : args[++i];
     } else if (arg.startsWith("--label")) {
       result.label = arg.includes("=") ? arg.split("=")[1] : args[++i];
+    } else if (arg.startsWith("--outDir")) {
+      result.outDir = arg.includes("=") ? arg.split("=")[1] : args[++i];
     }
   }
   return result;
 }
 
 const args = process.argv.slice(2);
-const { suite: suiteName, label } = parseArgs(args);
+const { suite: suiteName, label, outDir } = parseArgs(args);
 
 if (!suiteName || !label) {
-  console.error("Usage: node scripts/prompts-eval.mjs --suite <name|core> --label <label>");
+  console.error("Usage: node scripts/prompts-eval.mjs --suite <name|core> --label <label> [--outDir <dir>]");
   process.exit(1);
 }
 
@@ -77,7 +79,7 @@ const { runId } = runEvaluation({
   suites,
   promptContents,
   outputsByLabel,
-  root
+  root,
+  ...(outDir ? { outDir: path.resolve(outDir) } : {})
 });
-
 console.log(`Run completed: ${runId}`);
