@@ -1,0 +1,10 @@
+{
+  "id": "policy.simplify.rules",
+  "vars": {},
+  "mustContain": [
+    "YAGNI",
+    "Reusar código y abstracciones existentes",
+    "Abstracción solo cuando el requerimiento la exige ahora"
+  ],
+  "mustNotContain": []
+}

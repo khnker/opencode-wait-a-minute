@@ -1,0 +1,5 @@
+schema: spec-driven
+created: 2026-10-13
+goal: "Make prompts/index.json a checkable contract: catalog, files,
+  interpolation vars, consumers, testRefs and usage must all agree or validation
+  fails."

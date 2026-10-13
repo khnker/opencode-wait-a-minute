@@ -85,3 +85,48 @@ node --test src/prompts # loader + characterization tests
 - No interpolation logic in prompt files beyond `{{var}}`.
 - Prompt ids are stable dot-separated keys; consumers reference them by id only.
 - `prompts/` is published (`package.json#files`); never move it outside the package.
+
+## Iteration & regression
+
+Prompt edits are behavior changes. Before/while rewriting a prompt, compare the
+current prompt (base) against your candidate over **fixed inputs** so the result
+is reproducible.
+
+Fixtures live in `prompts/fixtures/<slug>.json` where `slug` is the prompt id
+with `.` replaced by `__` (e.g. `notice.pending_task` →
+`notice__pending_task.json`). Every registered prompt MUST have a fixture; a
+test enforces 100% coverage. Schema:
+
+```json
+{
+  "id": "notice.pending_task",
+  "vars": { "active": "task-1", "phase": "RUNNING" },
+  "mustContain": ["tarea pendiente: task-1", "no asumo intención"],
+  "mustNotContain": []
+}
+```
+
+- `vars` — concrete interpolation values. Prompts without `{{vars}}` use `{}`.
+- `mustContain` — stable substrings that encode the prompt's core restriction.
+- `mustNotContain` — substrings the render must never contain.
+
+Usage:
+
+```bash
+npm run prompts:diff                              # every prompt, base vs base (no-op)
+npm run prompts:diff -- --id notice.pending_task  # one id
+npm run prompts:diff -- --id notice.pending_task --candidate /tmp/candidate.md
+npm run prompts:diff -- --json                    # { results, summary }
+npm run prompts:diff -- --eval                    # opt-in real-model (not configured; skipped)
+```
+
+The harness renders base via `loadPrompt(id, vars)` (byte-identical to runtime)
+and the candidate with the same interpolation contract, then reports the unified
+diff, token delta, placeholder parity, restriction integrity and whether the base
+contract is preserved. It exits `1` if any verdict is `reject`.
+
+**Quality over token count:** a token reduction is reported but NEVER counts as
+an improvement. `accept` requires placeholder parity **and** restriction
+integrity (and a non-empty, contract-preserving render); otherwise the verdict is
+`reject`. This is a developer tool — it is deliberately NOT part of the release
+gate; the deterministic `prompts-diff.test.mjs` suite is enough.

@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-10-13
+goal: Audit every model-directed instruction and determine whether it is
+  centralized, duplicated, or legitimately deterministic code.

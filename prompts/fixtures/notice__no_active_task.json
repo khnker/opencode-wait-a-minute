@@ -1,0 +1,9 @@
+{
+  "id": "notice.no_active_task",
+  "vars": {},
+  "mustContain": [
+    "No hay tarea activa",
+    "no asumo intención previa"
+  ],
+  "mustNotContain": []
+}

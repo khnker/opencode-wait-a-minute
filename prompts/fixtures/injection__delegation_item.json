@@ -1,0 +1,14 @@
+{
+  "id": "injection.delegation_item",
+  "vars": {
+    "id": "R1",
+    "title": "Implement API",
+    "hint": " [hint: x]"
+  },
+  "mustContain": [
+    "R1 → Task(parallel)",
+    "Implement API",
+    "[hint: x]"
+  ],
+  "mustNotContain": []
+}

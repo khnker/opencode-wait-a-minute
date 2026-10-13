@@ -1,0 +1,10 @@
+{
+  "id": "policy.verify.rules",
+  "vars": {},
+  "mustContain": [
+    "resultado verificable",
+    "Ninguna tarea se marca DONE sin evidencia satisfecha",
+    "Verificar consumidores de los cambios"
+  ],
+  "mustNotContain": []
+}

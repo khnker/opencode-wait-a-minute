@@ -1,0 +1,12 @@
+# Tasks: Prompt Iteration and Regression Harness
+- [x] Create the OpenSpec change (proposal, design, spec, tasks).
+- [x] Document the fixture schema (design.md + prompts/README.md).
+- [x] Create `prompts/fixtures/<slug>.json` for all 33 registered prompts (slug = id with `.` → `__`).
+- [x] Implement `scripts/prompts-diff.mjs` with `runDiff({ id, candidatePath, root })` and CLI flags `--id`, `--candidate`, `--json`, `--eval`, `--out`.
+- [x] Compute changed/diff, token delta (chars/4), placeholder parity, restriction integrity, preserved, and verdict (quality over tokens).
+- [x] Deterministic, offline output; `--eval` prints a skip notice and performs no network I/O.
+- [x] Exit code 0 for all accept/unchanged, 1 for any reject.
+- [x] Add `scripts/prompts-diff.test.mjs`: fixture coverage, self-diff unchanged, dropped-restriction reject, token-reduction-but-reject, `--eval` skip notice.
+- [x] Add `prompts:diff` script to package.json.
+- [x] Update `prompts/README.md` with the "Iteration & regression" section.
+- [x] (verify) `node scripts/prompts-diff.mjs --json` OK, `node --test scripts/prompts-diff.test.mjs` green, `openspec validate prompt-iteration-and-regression-harness` valid.

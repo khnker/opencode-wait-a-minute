@@ -1,0 +1,11 @@
+{
+  "id": "notice.blocked_prefix",
+  "vars": {
+    "directive": "Implementa X"
+  },
+  "mustContain": [
+    "prompt de implementación no consumido como respuesta",
+    "Implementa X"
+  ],
+  "mustNotContain": []
+}

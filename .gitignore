@@ -19,6 +19,8 @@ node_modules/
 # Generated benchmark evidence (not source)
 /benchmarks/results/
 /benchmarks/validation/audit.json
+# Prompt audit generated reports (stdout-only by default; --out writes here)
+prompts/audit-report.*
 
 # Local benchmark secrets/credentials
 .env

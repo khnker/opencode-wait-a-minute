@@ -39,6 +39,7 @@ const GATES = [
     : [{ name: "OpenCode Smoke E2E", cmd: "node tests/e2e/opencode/smoke.mjs", required: true, timeout: 300000 }]),
   { name: "Package E2E", cmd: "npm run test:e2e:package", required: true, timeout: 300000 },
   { name: "Docs Check", cmd: "node scripts/docs-check.mjs", required: true },
+  { name: "Prompt Catalog Integrity", cmd: "npm run prompts:check", required: true },
   // Bench evidence audit reads `benchmarks/results/<latest>/raw.json`, a
   // provider-generated artifact that is gitignored and therefore absent on a
   // fresh CI checkout. It is validated locally (where the benchmark has run),

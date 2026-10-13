@@ -1,0 +1,12 @@
+{
+  "id": "warning.runtime.repetition",
+  "vars": {
+    "status": "RUNNING"
+  },
+  "mustContain": [
+    "Repetición detectada",
+    "ya se intentó RUNNING",
+    "Considera replanificar"
+  ],
+  "mustNotContain": []
+}

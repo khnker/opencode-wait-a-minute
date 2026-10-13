@@ -1,0 +1,12 @@
+{
+  "id": "nudge.discovery.workdir",
+  "vars": {
+    "dir": "src/components"
+  },
+  "mustContain": [
+    "'workdir' parameter",
+    "src/components",
+    "instead of"
+  ],
+  "mustNotContain": []
+}

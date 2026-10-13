@@ -27,6 +27,8 @@
     "docs:check": "node scripts/docs-check.mjs",
     "prompts:check": "node scripts/prompts-check.mjs",
     "prompts:list": "node scripts/prompts-list.mjs",
+    "prompts:audit": "node scripts/prompts-audit.mjs",
+    "prompts:diff": "node scripts/prompts-diff.mjs",
     "validate": "node scripts/release-gate.mjs",
     "production:gate": "node scripts/release-gate.mjs",
     "release:check": "node scripts/release-gate.mjs",

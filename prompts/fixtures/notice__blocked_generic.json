@@ -1,0 +1,8 @@
+{
+  "id": "notice.blocked_generic",
+  "vars": {},
+  "mustContain": [
+    "BLOQUEADO: Tienes preguntas sin responder"
+  ],
+  "mustNotContain": []
+}
