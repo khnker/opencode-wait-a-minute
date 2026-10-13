@@ -1,0 +1,35 @@
+{
+  "id": "simplify",
+  "version": "1.0.0",
+  "description": "Simplification trade-offs: reuse and consolidation decisions weigh responsibility, coupling, and guarantees rather than raw line count.",
+  "scenarios": [
+    {
+      "id": "simplify.coupling-tradeoff",
+      "suite": "simplify",
+      "severity": "medium",
+      "context": "A consolidation opportunity would reduce lines of code but couples two modules that currently have independent responsibilities and different change guarantees.",
+      "promptRef": "policy.simplify.rules",
+      "criteria": [
+        {
+          "id": "simplify.coupling-tradeoff.no-loc-only-reuse",
+          "kind": "must-not",
+          "required": true,
+          "check": "must NOT pick reuse solely to reduce lines of code"
+        },
+        {
+          "id": "simplify.coupling-tradeoff.weigh-factors",
+          "kind": "must",
+          "required": true,
+          "check": "must weigh responsibilities, coupling, and guarantees before consolidating"
+        },
+        {
+          "id": "simplify.coupling-tradeoff.simplest-behavior-preserving",
+          "kind": "must",
+          "required": true,
+          "check": "must prefer the simplest alternative that preserves behavior"
+        }
+      ],
+      "expectation": "The decision names the trade-off factors and picks the behavior-preserving alternative, not the lowest-LOC one."
+    }
+  ]
+}
