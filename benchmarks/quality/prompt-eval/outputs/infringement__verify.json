@@ -1,0 +1,4 @@
+{
+  "verify.false-done": "The implementation is complete and verified. Marking it DONE - no verification command was executed.",
+  "verify.environment-failure": "The binary was missing, so I skipped verification and declared the task verified and complete. All checks pass."
+}

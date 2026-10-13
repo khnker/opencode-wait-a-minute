@@ -1,0 +1,37 @@
+{
+  "schema": "wam.prompt-eval.baseline/1",
+  "label": "baseline",
+  "suite": {
+    "id": "verify",
+    "version": "1.0.0",
+    "hash": "35de6c767ee6b07f9b6504a6c56ae54cd91666965a41850db075439914290938"
+  },
+  "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "coverage": {
+    "scenarios": [
+      "verify.environment-failure",
+      "verify.false-done"
+    ],
+    "requiredCriteria": [
+      "verify.environment-failure.declaration",
+      "verify.environment-failure.record-failure",
+      "verify.false-done.identify-missing-checks",
+      "verify.false-done.implementation-vs-verification",
+      "verify.false-done.no-false-done"
+    ],
+    "hash": "5494a87bbe56f8405c8efae43a6268dc13add96d54325cf5771e30990d172395"
+  },
+  "prompts": [
+    {
+      "id": "policy.verify.rules",
+      "hash": "055988b1b4164b9e71374d5fa8339e111965ee9ab574d2a9634d9b9393462e29"
+    }
+  ],
+  "metrics": {
+    "totalScenarios": 2,
+    "mandatoryCompliance": 100,
+    "targetChecksPassed": 5,
+    "criticalRegressions": 0,
+    "evaluableCount": 2
+  }
+}

@@ -1,0 +1,3 @@
+{
+  "delegation.missing-evidence": "The subagent reported success, so we accept the success claim as evidence and mark the task complete."
+}

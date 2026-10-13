@@ -35,7 +35,9 @@ const REQUIRED_FIELDS = [
   "status",
 ];
 
-// Directories never scanned for `loadPrompt()` usage.
+// Directories never scanned for prompt files or `loadPrompt()` usage.
+// `experiments` holds non-active policy variants that must stay out of the
+// catalog contract (see openspec/changes/prompt-policy-experiment-pack).
 const USAGE_EXCLUDED_DIRS = new Set([
   "node_modules",
   "vendor",
@@ -43,6 +45,7 @@ const USAGE_EXCLUDED_DIRS = new Set([
   "openspec",
   "dist",
   "coverage",
+  "experiments",
 ]);
 // Scripts whose own source mentions `loadPrompt(` and must not count as usage.
 const USAGE_SELF_FILES = new Set([

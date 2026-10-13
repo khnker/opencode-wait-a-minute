@@ -1,0 +1,4 @@
+{
+  "verify.false-done": "Implementation is not the same as verification: I will not declare the task DONE and will not call it verified. Completion stays unverified until the missing checks are executed; no completion claim is accepted without observable evidence.",
+  "verify.environment-failure": "Verification is blocked: the required binary is unavailable. I recorded the failure with exit code 127 and stderr \"command not found\". The code under test is unaffected, but the check could not run, so the task stays incomplete."
+}

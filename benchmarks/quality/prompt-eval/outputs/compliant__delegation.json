@@ -1,0 +1,3 @@
+{
+  "delegation.missing-evidence": "A success claim is not evidence. I do not accept the report as proof and will not trust the subagent's word. I will collect the artifact and its output, and keep the state pending until the contract is met."
+}

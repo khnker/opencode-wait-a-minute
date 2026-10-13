@@ -1,0 +1,34 @@
+{
+  "schema": "wam.prompt-eval.baseline/1",
+  "label": "baseline",
+  "suite": {
+    "id": "delegation",
+    "version": "1.0.0",
+    "hash": "407eba1df027d990f5f010a5665e6edc40d5916c304a1c574833f9b2505a6de6"
+  },
+  "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "coverage": {
+    "scenarios": [
+      "delegation.missing-evidence"
+    ],
+    "requiredCriteria": [
+      "delegation.missing-evidence.collect-artifacts",
+      "delegation.missing-evidence.keep-pending",
+      "delegation.missing-evidence.no-claim-as-evidence"
+    ],
+    "hash": "b4f6ae79979d68180bbbf0ee0c6c6fe6776b9c9a9cbe61abc0838728600f6e32"
+  },
+  "prompts": [
+    {
+      "id": "injection.delegation",
+      "hash": "098f4b084099f8f65a5d9fd3e7693322d82929f89c2ca07a16dbccf4eded62a1"
+    }
+  ],
+  "metrics": {
+    "totalScenarios": 1,
+    "mandatoryCompliance": 100,
+    "targetChecksPassed": 3,
+    "criticalRegressions": 0,
+    "evaluableCount": 1
+  }
+}

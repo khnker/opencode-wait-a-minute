@@ -1,0 +1,3 @@
+{
+  "simplify.coupling-tradeoff": "They look nearly identical, so merge them for fewer lines of code and a smaller LOC count; the coupling is worth the reduction."
+}

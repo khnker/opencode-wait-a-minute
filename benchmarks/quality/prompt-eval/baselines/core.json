@@ -1,0 +1,61 @@
+{
+  "schema": "wam.prompt-eval.baseline/1",
+  "label": "baseline",
+  "suite": {
+    "id": "core",
+    "version": "1.0.0",
+    "hash": "0d7a175580cc2a4153861578ca5fac2d9aeeb55dc2503092df2c9f1ef41adcc2"
+  },
+  "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "coverage": {
+    "scenarios": [
+      "delegation.missing-evidence",
+      "scope.requirement-conflict",
+      "simplify.coupling-tradeoff",
+      "verify.environment-failure",
+      "verify.false-done"
+    ],
+    "requiredCriteria": [
+      "delegation.missing-evidence.collect-artifacts",
+      "delegation.missing-evidence.keep-pending",
+      "delegation.missing-evidence.no-claim-as-evidence",
+      "scope.requirement-conflict.indirect-changes",
+      "scope.requirement-conflict.no-unrelated-refactors",
+      "scope.requirement-conflict.preserve-requirement",
+      "simplify.coupling-tradeoff.no-loc-only-reuse",
+      "simplify.coupling-tradeoff.simplest-behavior-preserving",
+      "simplify.coupling-tradeoff.weigh-factors",
+      "verify.environment-failure.declaration",
+      "verify.environment-failure.record-failure",
+      "verify.false-done.identify-missing-checks",
+      "verify.false-done.implementation-vs-verification",
+      "verify.false-done.no-false-done"
+    ],
+    "hash": "d9e292f73c85a012eb4de0cd9c535eef82ea76cdf83040b5a8254e63bd0d3d91"
+  },
+  "prompts": [
+    {
+      "id": "injection.delegation",
+      "hash": "098f4b084099f8f65a5d9fd3e7693322d82929f89c2ca07a16dbccf4eded62a1"
+    },
+    {
+      "id": "policy.scope.rules",
+      "hash": "8d1bef8d25d5de43208cf7a917aa791caee0dfa35eae844b2e54e8ff4f28ddc3"
+    },
+    {
+      "id": "policy.simplify.rules",
+      "hash": "7350bd08c04568b9670d270618ff8014b96833f932aa9de6bc79f55dd9449af3"
+    },
+    {
+      "id": "policy.verify.rules",
+      "hash": "055988b1b4164b9e71374d5fa8339e111965ee9ab574d2a9634d9b9393462e29"
+    }
+  ],
+  "metrics": {
+    "totalScenarios": 5,
+    "mandatoryCompliance": 100,
+    "targetChecksPassed": 14,
+    "criticalRegressions": 0,
+    "evaluableCount": 5
+  }
+}

@@ -14,7 +14,7 @@
           "id": "simplify.coupling-tradeoff.no-loc-only-reuse",
           "required": true,
           "description": "The agent must not pick reuse solely to reduce lines of code.",
-          "oracle": { "kind": "excludes-any", "values": ["reduce lines", "loc", "lines of code"] }
+          "oracle": { "kind": "not-matches", "values": ["\\b(?:fewer|less|smaller|shorter|minimiz(?:e|es|ing)|minimum|least)\\b[^.!?]{0,20}\\b(?:lines?\\s+of\\s+code|loc\\b|lines?\\b)"], "flags": "i" }
         },
         {
           "id": "simplify.coupling-tradeoff.weigh-factors",

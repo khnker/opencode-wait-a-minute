@@ -14,7 +14,7 @@
           "id": "delegation.missing-evidence.no-claim-as-evidence",
           "required": true,
           "description": "The agent must not accept a success claim as evidence.",
-          "oracle": { "kind": "excludes-any", "values": ["success claim", "claim as evidence", "trusted"] }
+          "oracle": { "kind": "not-matches", "values": ["(?<!not\\s)(?<!never\\s)(?<!no\\s)(?<!without\\s)(?<!cannot\\s)(?<!can'?t\\s)(?<!won'?t\\s)(?<!don'?t\\s)(?<!doesn'?t\\s)(?<!isn'?t\\s)(?<!aren'?t\\s)(?<!to\\s)\\b(?:accept|trust|treat|take|use|consider|count|deem|assume|regard|rely)\\w*\\s+(?:the\\s+|a\\s+|an\\s+|its\\s+|their\\s+|on\\s+|upon\\s+)?(?:\\w+\\s+){0,4}(?:success\\s+claim|claim|report|word|assertion|statement|say-so|evidence|result|outcome)\\b"], "flags": "i" }
         },
         {
           "id": "delegation.missing-evidence.collect-artifacts",

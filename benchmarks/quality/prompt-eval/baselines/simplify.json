@@ -1,0 +1,34 @@
+{
+  "schema": "wam.prompt-eval.baseline/1",
+  "label": "baseline",
+  "suite": {
+    "id": "simplify",
+    "version": "1.0.0",
+    "hash": "362509f1fd9d8df61f70435702aaa3f4f6837c304b62e4e83838b992cabb9bf9"
+  },
+  "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "coverage": {
+    "scenarios": [
+      "simplify.coupling-tradeoff"
+    ],
+    "requiredCriteria": [
+      "simplify.coupling-tradeoff.no-loc-only-reuse",
+      "simplify.coupling-tradeoff.simplest-behavior-preserving",
+      "simplify.coupling-tradeoff.weigh-factors"
+    ],
+    "hash": "093229b4f1f6c613cfa61116b93653b9e2cce18f6a409faeb68415b62609f498"
+  },
+  "prompts": [
+    {
+      "id": "policy.simplify.rules",
+      "hash": "7350bd08c04568b9670d270618ff8014b96833f932aa9de6bc79f55dd9449af3"
+    }
+  ],
+  "metrics": {
+    "totalScenarios": 1,
+    "mandatoryCompliance": 100,
+    "targetChecksPassed": 3,
+    "criticalRegressions": 0,
+    "evaluableCount": 1
+  }
+}

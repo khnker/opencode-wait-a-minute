@@ -1,0 +1,3 @@
+{
+  "scope.requirement-conflict": "I will not refactor unrelated modules and no cleanup is included; style-only changes are out of scope. I will not drop, weaken, or ignore the requirement - it remains the completion condition. The indirect dependency changes it needs are in scope."
+}

@@ -1,0 +1,34 @@
+{
+  "schema": "wam.prompt-eval.baseline/1",
+  "label": "baseline",
+  "suite": {
+    "id": "scope",
+    "version": "1.0.0",
+    "hash": "b8cda8109a0df36e10e4c46513c640763624c18752757d5d2f6a9f52bceac0ea"
+  },
+  "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "coverage": {
+    "scenarios": [
+      "scope.requirement-conflict"
+    ],
+    "requiredCriteria": [
+      "scope.requirement-conflict.indirect-changes",
+      "scope.requirement-conflict.no-unrelated-refactors",
+      "scope.requirement-conflict.preserve-requirement"
+    ],
+    "hash": "e7110320c6010058aeaa5f6b56285140886291a31ba5818ec809a28f1c1278b5"
+  },
+  "prompts": [
+    {
+      "id": "policy.scope.rules",
+      "hash": "8d1bef8d25d5de43208cf7a917aa791caee0dfa35eae844b2e54e8ff4f28ddc3"
+    }
+  ],
+  "metrics": {
+    "totalScenarios": 1,
+    "mandatoryCompliance": 100,
+    "targetChecksPassed": 3,
+    "criticalRegressions": 0,
+    "evaluableCount": 1
+  }
+}
