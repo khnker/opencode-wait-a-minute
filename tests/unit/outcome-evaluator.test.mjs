@@ -11,7 +11,7 @@ test('validateOutcomeContract validates required fields', () => {
     validateOutcomeContract({
       taskId: 't1',
       objective: 'test',
-      acceptanceCriteria: [{ id: 'c1', description: 'works' }],
+      acceptanceCriteria: [{ id: 'c1', description: 'works', mandatory: true }],
     }).valid,
     true
   );

@@ -97,13 +97,12 @@ export function nextActionFrom(state) {
 export function evaluateCompletionGate(state, promptText) {
   const lower = (promptText || "").toLowerCase().trim();
 
-  if (lower.includes("aprobar contrato") || lower.includes("continuar")) {
-    return { blocked: false, allDone: false, autoApprove: true };
-  }
-
-  const doneClaims =
-    /(^|\s)(done|finish|finished|complete|completed|terminate|terminated|listo|termin[eé]|complet[ao]|finalizad[oa])\b|(task|tarea)\s+(complete|complet(a|ada|o)|terminad(a|o))|declare.*done/i;
-  if (!doneClaims.test(lower)) return { blocked: false };
+  // Deny-by-default: only an explicit continuation/implementation instruction
+  // may skip the checks. No "aprobar contrato" / "continuar" escape — contract
+  // approval happens exclusively via `/wam contract approve`.
+  // ponytail: lexical fast-path, fail-closed. A missed synonym gates a genuine
+  // continuation (slower); it never lets an unlisted DONE claim bypass checks.
+  // P1-A: removed continuation early return. Now all prompts go through gate checks.
 
   // 1. Blocking unknowns
   const blockingUnknowns = (state?.contract?.unknowns || []).filter(
@@ -214,7 +213,23 @@ export function evaluateCompletionGate(state, promptText) {
      };
    }
    try {
-     const outcomeResult = evaluateOutcome(outcomeContract, state?.evidence || [], state?.observations || []);
+     // ponytail: prod seed declares a single mandatory criterion; requirement
+     // evidence is mapped onto it. Upgrade to per-criterion tagging if a
+     // multi-criterion outcome contract ever appears.
+     const outcomeCriterionId = (outcomeContract.acceptanceCriteria || [])[0]?.id;
+     const requirementEvidence = (state?.requirements || []).flatMap((r) =>
+       (r.evidence || []).map((ev) => ({
+         criterionId: outcomeCriterionId,
+         status: r.status === "verified" ? "VERIFIED" : "UNVERIFIED",
+         timestamp: r.verifiedAt || r.updatedAt || state?.updatedAt || Date.now(),
+         description: typeof ev === "string" ? ev : ev?.description || "",
+       }))
+     );
+     const outcomeResult = evaluateOutcome(
+       outcomeContract,
+       [...(state?.evidence || []), ...requirementEvidence],
+       state?.observations || []
+     );
      if (!outcomeResult.canComplete || outcomeResult.status !== OUTCOME_STATUSES.ACHIEVED) {
        return {
          blocked: true,

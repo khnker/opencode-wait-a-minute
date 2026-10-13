@@ -2,7 +2,7 @@
  * Requirement State Machine
  *
  * Formalizes the lifecycle states of a requirement and the legal transitions
- * between them. Used by completion-gate to determine whether a requirement can
+ * between them. Used by the completion gate (`evaluateCompletionGate`) to determine whether a requirement can
  * be considered complete.
  *
  * States:

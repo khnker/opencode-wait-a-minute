@@ -16,3 +16,8 @@ The plugin MUST intercept tool calls: a BLOCKED result is rejected with an expla
 #### Scenario: GUARDED action triggers scope validation
 - **WHEN** evaluateAction returns GUARDED
 - **THEN** additional checks (scope validation) run before the action is allowed
+### Requirement: Scope Boundary
+The risk envelope MUST apply only to actions with blast radius on the project. Agent runtime/meta tools that do not mutate the repository (e.g. context pruning `compress`, delegation `delegate_task`/`call_agent`) MUST bypass risk classification and MUST NOT be blocked by fail-closed.
+#### Scenario: Runtime meta-tool is not blocked
+- **WHEN** a runtime/meta tool with no project mutation (context pruning, delegation) is invoked
+- **THEN** it is not classified BLOCKED by the envelope

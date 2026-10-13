@@ -2,7 +2,6 @@
  * Task Lifecycle — Task state transitions (Create, Resume, Switch, Pause, Complete, Block).
  */
 
-import { canComplete } from "../verification/completion-gate.js";
 import { loadTask, saveTask, taskExists, deleteTask } from "./task-store.js";
 import { createState, normalizeState, validateState } from "./task-state.js";
 
@@ -33,17 +32,9 @@ export function switchTo(taskId, newPhase, root) {
     throw new Error(`cannot transition from terminal phase ${state.phase}`);
   }
 
-  if (newPhase === "DONE") {
-    const result = canComplete(root, taskId);
-    if (!result.allowed) {
-      throw new Error(
-        `Cannot transition task ${taskId} to DONE: ${result.reason}. Blockers: ${result.blockers
-          .map((b) => `${b.requirementId}: ${b.reason}`)
-          .join("; ")}`
-      );
-    }
-  }
-
+  // ponytail: low-level transition only. The authoritative completion gate
+  // lives in src/integration/orchestration.js and is applied at the integration
+  // layer (message-handler / index), not here.
   state.phase = newPhase;
   state.updatedAt = Date.now();
   saveTask(taskId, state, root);
@@ -55,14 +46,6 @@ export function pause(taskId, root) {
 }
 
 export function complete(taskId, root) {
-  const result = canComplete(root, taskId);
-  if (!result.allowed) {
-    throw new Error(
-      `Cannot complete task ${taskId}: ${result.reason}. Blockers: ${result.blockers
-        .map((b) => `${b.requirementId}: ${b.reason}`)
-        .join("; ")}`
-    );
-  }
   return switchTo(taskId, "DONE", root);
 }
 

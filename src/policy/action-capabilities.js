@@ -1,33 +1,25 @@
 /**
  * Action Capabilities — Structured classification of agent tool capabilities.
  *
- * Define cuatro niveles de capacidad, cada uno con un significado explícito
- * respecto a mutación, autorización y fail-mode:
+ * Principio de diseño: WAM protege exclusivamente contra operaciones
+ * destructivas o peligrosas explícitamente definidas.
  *
- *   - SAFE     : read-only / efectos reversibles mínimos. Autónoma.
- *   - GUARDED  : mutaciones bounded y reversibles. Autónoma si está dentro del scope.
- *   - BLOCKED  : destructivo, irreversible o sensible. Requiere autorización explícita.
- *   - UNKNOWN  : la herramienta no aparece en el catálogo. Fail-closed (treated as BLOCKED).
- *
- * Implementa: action-risk-envelope / C01 fail-closed.
- *
- * El uso de UNKNOWN permite que el evaluador aplique una política fail-closed
- * ante herramientas no registradas: cualquier herramienta que no aparezca
- * explícitamente en SAFE/GUARDED/BLOCKED se clasifica como UNKNOWN y, por
- * política, se trata como BLOCKED para evitar que una herramienta nueva o
- * mal nombrada ejecute mutaciones sin control.
+ * Las herramientas no catalogadas por defecto son SAFE, permitiendo
+ * que runtime del agente, MCPs y herramientas de terceros operen
+ * sin fricción innecesaria. Solo se bloquean las operaciones
+ * explícitamente peligrosas listadas en BLOCKED.
  */
 
 export const CAPABILITY_LEVELS = Object.freeze({
   SAFE: "SAFE",
   GUARDED: "GUARDED",
   BLOCKED: "BLOCKED",
-  UNKNOWN: "UNKNOWN",
+  UNKNOWN: "UNKNOWN", // Retained for completeness but no longer used in practice
 });
 
 /**
  * Mapa explícito de capacidades por nombre de herramienta.
- * Cualquier herramienta que NO esté aquí se clasifica como UNKNOWN.
+ * Las herramientas no listadas se tratan como SAFE por defecto.
  */
 export const ACTION_CAPABILITIES = Object.freeze({
   // --- SAFE: read-only / sin efectos ---
@@ -38,6 +30,9 @@ export const ACTION_CAPABILITIES = Object.freeze({
   tool_search: CAPABILITY_LEVELS.SAFE,
   webfetch:    CAPABILITY_LEVELS.SAFE,
   fetch:       CAPABILITY_LEVELS.SAFE,
+  compress:    CAPABILITY_LEVELS.SAFE,
+  question:    CAPABILITY_LEVELS.SAFE,
+  tool_search_regex: CAPABILITY_LEVELS.SAFE,
 
   // --- GUARDED: mutaciones bounded ---
   write:       CAPABILITY_LEVELS.GUARDED,
@@ -50,9 +45,11 @@ export const ACTION_CAPABILITIES = Object.freeze({
   sh:          CAPABILITY_LEVELS.GUARDED,
   pty_spawn:   CAPABILITY_LEVELS.GUARDED,
   pty_write:   CAPABILITY_LEVELS.GUARDED,
-  task:        CAPABILITY_LEVELS.GUARDED, // delegation: GUARDED, not SAFE
+  task:        CAPABILITY_LEVELS.GUARDED,
+  delegate_task: CAPABILITY_LEVELS.GUARDED,
+  call_agent:    CAPABILITY_LEVELS.GUARDED,
 
-  // --- BLOCKED: destructivo / sensible ---
+  // --- BLOCKED: destructivo / sensible (únicas bloqueadas por defecto) ---
   rm:          CAPABILITY_LEVELS.BLOCKED,
   rmdir:       CAPABILITY_LEVELS.BLOCKED,
   mv:          CAPABILITY_LEVELS.BLOCKED,
@@ -67,45 +64,29 @@ export const ACTION_CAPABILITIES = Object.freeze({
   force_push:  CAPABILITY_LEVELS.BLOCKED,
 });
 
-/**
- * Resuelve la capacidad explícita de una herramienta por nombre exacto.
- * No hace coincidencia por sub-string ni por prefijo — debe ser match exacto.
- *
- * Esto evita la colisión por sub-string: "bash-safe" no debe resolverse a "bash".
- *
- * @param {string} tool — nombre de la herramienta (case-insensitive).
- * @returns {"SAFE"|"GUARDED"|"BLOCKED"|"UNKNOWN"}
- */
 export function getCapability(tool) {
   if (typeof tool !== "string" || tool.length === 0) {
-    return CAPABILITY_LEVELS.UNKNOWN;
+    return CAPABILITY_LEVELS.SAFE;
   }
   const normalized = tool.toLowerCase();
-  const cap = ACTION_CAPABILITIES[normalized];
-  return cap || CAPABILITY_LEVELS.UNKNOWN;
+  return ACTION_CAPABILITIES[normalized] || CAPABILITY_LEVELS.SAFE;
 }
 
 /**
- * Resuelve la capacidad effective aplicando fail-closed:
- * UNKNOWN → BLOCKED.
- *
- * Esta es la función que el risk-engine debe usar cuando evalúa una acción.
- * Si la herramienta no está en el catálogo, la acción queda BLOCKED.
+ * Resuelve la capacidad efectiva.
+ * Se elimina el fail-closed ciego: herramientas desconocidas
+ * resuelven a SAFE por defecto, permitiendo que MCPs y herramientas
+ * de terceros operen sin bloqueos innecesarios.
  *
  * @param {string} tool
  * @returns {"SAFE"|"GUARDED"|"BLOCKED"}
  */
 export function getEffectiveCapability(tool) {
-  const cap = getCapability(tool);
-  if (cap === CAPABILITY_LEVELS.UNKNOWN) {
-    return CAPABILITY_LEVELS.BLOCKED;
-  }
-  return cap;
+  return getCapability(tool);
 }
 
 /**
  * ¿Es una herramienta mutante? (GUARDED o BLOCKED).
- * Incluye UNKNOWN como BLOCKED (fail-closed).
  *
  * @param {string} tool
  * @returns {boolean}

@@ -131,7 +131,7 @@ All 124 production modules in `src/` are assigned exactly one owner.
 
 ## verification (15)
 
-- `src/verification/completion-gate.js`
+- `src/verification/outcome-evaluator.js`
 - `src/verification/contradiction-resolution.js`
 - `src/evidence/evidence.js`
 - `src/evidence/evidence-engine.js`
@@ -191,8 +191,8 @@ Reclassifications made to reach 0 violations:
 | `src/context/assembly.js` | context | `src/cognition/cognitive-state.js` | task |
 | `src/context/assembly.js` | context | `src/persistence/memory.js` | task |
 | `src/execution/claim-interception.js` | execution | `src/verification/false-completion-prevention.js` | verification |
-| `src/verification/completion-gate.js` | verification | `src/skills/engine.js` | skills |
-| `src/verification/completion-gate.js` | verification | `src/state/requirement-state.js` | task |
+| `src/verification/outcome-evaluator.js` | verification | `src/skills/engine.js` | skills |
+| `src/verification/outcome-evaluator.js` | verification | `src/state/requirement-state.js` | task |
 | `src/context/context-history-relevance.js` | context | `src/skills/engine.js` | skills |
 | `src/context/context-history-relevance.js` | context | `src/state/task-dependencies.js` | task |
 | `src/context/context-history-relevance.js` | context | `src/state/task-runs.js` | task |

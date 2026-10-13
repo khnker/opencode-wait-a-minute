@@ -443,8 +443,7 @@ export async function handleMessage(input, output, deps) {
     const trimmed = promptText.trim();
     const userConfirms =
       !highUncertainty ||
-      /^(s[ií]|ok|okey|dale|hazlo|adelante|continuar|continua|aprobar|confirmo|correcto|perfecto|bueno|va|listo|sigue)\b/i.test(trimmed) ||
-      trimmed.includes("aprobar contrato");
+      /^(s[ií]|ok|okey|dale|hazlo|adelante|continuar|continua|aprobar|confirmo|correcto|perfecto|bueno|va|listo|sigue)\b/i.test(trimmed);
 
     if (state.contract?.status === "PROPOSED" && state.phase === "PROPOSED" && userConfirms) {
       waitAMinute.approveContract(taskId, wamRoot);

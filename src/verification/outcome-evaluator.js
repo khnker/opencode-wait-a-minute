@@ -19,6 +19,27 @@ export const EVIDENCE_TYPES = {
   MEASUREMENT: 'measurement',
   NARRATIVE: 'narrative',
 };
+
+// Evidence types from evidence.js (for task quality contract)
+export const TASK_EVIDENCE_TYPES = {
+  DIRECT: "DIRECT",
+  DERIVED: "DERIVED",
+  INFERRED: "INFERRED",
+  NEGATIVE: "NEGATIVE",
+  ENVIRONMENT: "ENVIRONMENT",
+  TOOL_OUTPUT: "TOOL_OUTPUT",
+  TEST_RESULT: "TEST_RESULT",
+  USER_CONFIRMATION: "USER_CONFIRMATION"
+};
+
+// Evidence strength levels from evidence.js (for task quality contract)
+export const TASK_EVIDENCE_STRENGTH = {
+  L0_CLAIM: "L0_CLAIM",
+  L1_INFERENCE: "L1_INFERENCE",
+  L2_OBSERVATION: "L2_OBSERVATION",
+  L3_DIRECT: "L3_DIRECT",
+  L4_VERIFICATION: "L4_VERIFICATION"
+};
 export function validateOutcomeContract(contract) {
   if (!contract || typeof contract !== 'object') {
     return { valid: false, error: 'Contract must be an object' };
@@ -46,6 +67,33 @@ export function validateOutcomeContract(contract) {
     if (typeof c.mandatory !== 'boolean') {
       return { valid: false, error: 'Each acceptance criterion requires a boolean mandatory field' };
     }
+    // Validate evidenceRequirements if present
+    if (c.evidenceRequirements !== undefined) {
+      const er = c.evidenceRequirements;
+      if (typeof er !== 'object' || er === null) {
+        return { valid: false, error: `Acceptance criterion ${c.id}: evidenceRequirements must be an object` };
+      }
+      if (er.types !== undefined) {
+        if (!Array.isArray(er.types)) {
+          return { valid: false, error: `Acceptance criterion ${c.id}: evidenceRequirements.types must be an array` };
+        }
+        for (const type of er.types) {
+          if (!Object.values(TASK_EVIDENCE_TYPES).includes(type)) {
+            return { valid: false, error: `Acceptance criterion ${c.id}: invalid evidence type '${type}'` };
+          }
+        }
+      }
+      if (er.minStrength !== undefined) {
+        if (!Object.values(TASK_EVIDENCE_STRENGTH).includes(er.minStrength)) {
+          return { valid: false, error: `Acceptance criterion ${c.id}: invalid evidence strength '${er.minStrength}'` };
+        }
+      }
+      if (er.sourceConstraints !== undefined) {
+        if (!Array.isArray(er.sourceConstraints)) {
+          return { valid: false, error: `Acceptance criterion ${c.id}: evidenceRequirements.sourceConstraints must be an array` };
+        }
+      }
+    }
     if (ids.has(c.id)) {
       return { valid: false, error: `Duplicate acceptance criterion id: ${c.id}` };
     }
@@ -58,10 +106,10 @@ export function validateOutcomeContract(contract) {
  * Determine criterion status from time-ordered evidence and observations.
  *
  * @param {Array} items - Evidence/observations, sorted oldest -> newest
- * @param {Object} criterion - { mandatory, ... }
+ * @param {Object} criterion - { mandatory, evidenceRequirements, ... }
  * @returns {Object} { status, detail, resolution, finalItem }
  */
-function evaluateCriterionItems(items) {
+function evaluateCriterionItems(items, criterion) {
   let satisfied = false;
   let failed = false;
   let unresolved = false;
@@ -84,7 +132,12 @@ function evaluateCriterionItems(items) {
     finalItem = item;
     const status = item.status;
     const type = item.type || item.evidenceType;
-    const isValidated = status === 'VERIFIED';
+    const strength = item.strength || item.evidenceStrength;
+    const isValidated = String(status || '').toUpperCase() === 'VERIFIED';
+    const isAllowedType = !criterion.evidenceRequirements?.types ||
+      criterion.evidenceRequirements.types.includes(type);
+    const meetsStrength = !criterion.evidenceRequirements?.minStrength ||
+      strength === criterion.evidenceRequirements.minStrength;
 
     // Explicit invalidation always takes precedence.
     if (status === 'INVALID' || status === 'INVALIDATED' || item.invalidated === true) {
@@ -94,7 +147,6 @@ function evaluateCriterionItems(items) {
       detail = `Item invalidated: ${item.description || 'invalid evidence'}`;
       continue;
     }
-
     // Unverified items never satisfy; they keep the criterion unresolved.
     if (type === EVIDENCE_TYPES.NARRATIVE || (type === EVIDENCE_TYPES.OBSERVATION && !isValidated)) {
       if (!isValidated) {
@@ -106,7 +158,6 @@ function evaluateCriterionItems(items) {
       }
       continue;
     }
-
     if (status === 'FAILED' || status === 'INVALID' || item.verified === false) {
       failed = true;
       satisfied = false;
@@ -114,8 +165,7 @@ function evaluateCriterionItems(items) {
       resolution = 'failed';
       continue;
     }
-
-    if (isValidated) {
+    if (isValidated && isAllowedType && meetsStrength) {
       // If there was a previous failure, a new verified item only overrides if explicitly superseding or reverifying.
       if (failed && !item.supersedes && !item.reverifies && !item.explicitSupersession) {
         // Keep failed state unless explicit supersession/reverification is provided
@@ -188,7 +238,7 @@ export function evaluateOutcome(contract, evidenceList = [], observations = []) 
     const isMandatory = criterion.mandatory !== false;
     const items = getItemsFor(cId);
 
-    const { status, detail, resolution, finalItem } = evaluateCriterionItems(items);
+    const { status, detail, resolution, finalItem } = evaluateCriterionItems(items, criterion);
 
     const result = {
       criterionId: cId,
@@ -212,6 +262,10 @@ export function evaluateOutcome(contract, evidenceList = [], observations = []) 
     criteriaResults.push(result);
   }
 
+  // Fail-closed: with zero evidence/observations the outcome is UNVERIFIED,
+  // never PARTIAL. PARTIAL requires at least some criteria to be evidenced.
+  const hasAnyEvidence = [...itemMap.values()].some((items) => items.length > 0);
+
   let outcomeStatus = OUTCOME_STATUSES.UNVERIFIED;
   let canComplete = false;
 
@@ -223,7 +277,7 @@ export function evaluateOutcome(contract, evidenceList = [], observations = []) 
   } else if (mandatoryVerified > 0 && mandatoryUnmet === 0) {
     outcomeStatus = OUTCOME_STATUSES.PARTIAL;
   } else if (mandatoryVerified === 0 && mandatoryUnmet > 0) {
-    outcomeStatus = OUTCOME_STATUSES.PARTIAL;
+    outcomeStatus = hasAnyEvidence ? OUTCOME_STATUSES.PARTIAL : OUTCOME_STATUSES.UNVERIFIED;
   } else {
     outcomeStatus = OUTCOME_STATUSES.UNVERIFIED;
   }

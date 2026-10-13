@@ -24,3 +24,6 @@ A function `evaluateAction(action)` will determine the classification based on:
 
 ## 3. Enforcement
 The plugin will intercept tool calls. If `evaluateAction` returns BLOCKED, the action is rejected with an explanation. If GUARDED, additional checks (like scope validation) are performed.
+## 4. Scope Boundary
+WAM governs actions with **blast radius on the project** (mutations, destructive or sensitive operations). Agent runtime/meta tools that do not mutate the repository — context pruning (`compress`), delegation (`delegate_task`, `call_agent`) — are **out of scope** and bypass the envelope entirely. Fail-closed (`UNKNOWN → BLOCKED`) applies only within the governed domain; it MUST NOT be used to gate the agent's own runtime, which is not WAM's concern.
+Rationale: the envelope was designed for project mutations. Applying it to every tool call caused legitimate runtime/MCP tools to be blocked by omission (not by risk), which is a mis-scoped policy.

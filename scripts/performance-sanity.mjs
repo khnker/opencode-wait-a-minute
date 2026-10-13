@@ -80,7 +80,6 @@ async function buildPhases() {
     load("src/context/context-builder.js"),
     load("src/skills/skill-routing.js"),
     load("src/context/context-snapshot.js"),
-    load("src/verification/completion-gate.js"),
     load("src/skills/engine.js"),
   ]);
 

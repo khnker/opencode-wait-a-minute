@@ -157,6 +157,22 @@ export function logArchitecturalDecision({
 }
 
 export function persistTaskState(taskId, state, root) {
+  // P0a: seed the outcome contract on first persist so the completion gate is
+  // never deadlocked by a missing contract. Stable criterion id, mandatory.
+  if (!state.outcomeContract) {
+    const objective =
+      state.objective ||
+      state.request ||
+      state.title ||
+      ((state.requirements || []).map((r) => r.title).join("; ") || taskId);
+    state.outcomeContract = {
+      taskId,
+      objective,
+      acceptanceCriteria: [
+        { id: "outcome-evaluation", description: "Task outcome verified by evidence", mandatory: true },
+      ],
+    };
+  }
   // Migrate legacy progress to requirements if needed
   if (state.progress && !state.requirements) {
     const total = state.progress.total || 0;

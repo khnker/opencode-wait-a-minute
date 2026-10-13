@@ -36,7 +36,7 @@ defined by the active verification policy.
 
 ## Tests
 
-- `tests/unit/completion-gate.test.mjs`
+- `tests/unit/outcome-completion-gate-seed.test.mjs`
 - `tests/unit/completion-gate-e2e.test.mjs`
 - `tests/unit/false-completion-prevention.test.mjs`
 - `tests/unit/verification-lifecycle.test.mjs`

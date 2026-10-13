@@ -6,17 +6,19 @@ const contract = {
   taskId: 'task-101',
   objective: 'Implement user login feature',
   acceptanceCriteria: [
-    { id: 'c1', description: 'User can submit login form' },
-    { id: 'c2', description: 'JWT token is returned on success' },
+    { id: 'c1', description: 'User can submit login form', mandatory: true },
+    { id: 'c2', description: 'JWT token is returned on success', mandatory: true },
   ],
 };
+
+const base = Date.now();
 
 // Test Case 1: Code modified, tests pass, outcome achieved
 const res1 = evaluateOutcome(
   contract,
   [
-    { criterionId: 'c1', status: 'VERIFIED' },
-    { criterionId: 'c2', status: 'VERIFIED' },
+    { criterionId: 'c1', status: 'VERIFIED', timestamp: base },
+    { criterionId: 'c2', status: 'VERIFIED', timestamp: base + 1 },
   ],
   []
 );
@@ -29,8 +31,8 @@ console.log(`  Actual:   status=${res1.status}, canComplete=${res1.canComplete}`
 const res2 = evaluateOutcome(
   contract,
   [
-    { criterionId: 'c1', status: 'VERIFIED' },
-    { criterionId: 'c2', status: 'FAILED' },
+    { criterionId: 'c1', status: 'VERIFIED', timestamp: base },
+    { criterionId: 'c2', status: 'FAILED', timestamp: base + 1 },
   ],
   []
 );
