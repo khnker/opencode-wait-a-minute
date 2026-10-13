@@ -7,6 +7,7 @@ import { loadWamConfig } from "./src/config/wam-config.js";
 import { configureLogger } from "./src/integration/logger.js";
 import { setLoggingEnabled, wamLog, wamError } from "./src/shared/wam-log.js";
 import { evaluateCompletionGate, applyPhaseTransition } from "./src/integration/orchestration.js";
+import { loadPrompt } from "./src/prompts/loader.js";
 
 import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
 import { purgeTasks } from "./src/persistence/retention-manager.js";
@@ -428,16 +429,16 @@ function delegationLines(state) {
   const reqs = (state?.requirements || []).filter((r) => r.status !== "done" && r.status !== "verified");
   if (!reqs.length || state?.contract?.status !== "APPROVED") return [];
   const lines = [
-    "[wam delegation] Reqs pendientes → delegar en PARALELO via Task (agente: el apropiado según config del entorno). Mutación directa de archivos desde la sesión principal está BLOQUEADA — solo un subagente ejecuta write/edit.",
+    loadPrompt("injection.delegation"),
   ];
   const visible = reqs.slice(0, MAX_VISIBLE_REQS);
   const overflow = reqs.length - MAX_VISIBLE_REQS;
   for (const r of visible) {
     const hint = domainHint(r.title);
-    lines.push(`  ${r.id} → Task(parallel) "${truncate(r.title, 120)}"${hint ? ` [contexto: ${hint}]` : ""}`);
+    lines.push(loadPrompt("injection.delegation_item", { id: r.id, title: truncate(r.title, 120), hint: hint ? ` [contexto: ${hint}]` : "" }));
   }
   if (overflow > 0) {
-    lines.push(`  ...(+${overflow} requisitos adicionales consolidados)`);
+    lines.push(loadPrompt("injection.delegation_overflow", { count: overflow }));
   }
   return lines;
 }

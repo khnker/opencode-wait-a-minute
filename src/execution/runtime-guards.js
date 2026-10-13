@@ -4,6 +4,7 @@ import { evaluateDiscovery } from "../policy/discovery-classifier.js";
 import { evaluateAction } from "../policy/risk-engine.js";
 import { getCapability, CAPABILITY_LEVELS } from "../policy/action-capabilities.js";
 import { guardSubagentDispatch, loadModelRegistry } from "../skills/subagent-model-availability.js";
+import { loadPrompt } from "../prompts/loader.js";
 import fs from "node:fs";
 
 const HARD_DELETE_RE =
@@ -59,7 +60,7 @@ export async function guardAction(tool, args, taskRoot, taskId) {
           return {
             allowed: true,
             level: "INFO",
-            nudge: `redundant read: ${path} unchanged since last read in this session`,
+            nudge: loadPrompt("nudge.runtime.redundant_read", { path }),
           };
         }
       } catch (e) {}
@@ -73,7 +74,7 @@ export async function guardAction(tool, args, taskRoot, taskId) {
           return {
             allowed: false,
             level: "BLOCKED",
-            reason: `stale buffer: ${path} changed since last read; re-read the file before editing`,
+            reason: loadPrompt("reason.runtime.stale_buffer", { path }),
           };
         }
       } catch (e) {
@@ -152,14 +153,14 @@ export async function guardAction(tool, args, taskRoot, taskId) {
   if (risk.level === "GUARDED" && !args?.hypothesisId) {
     return {
       ...baseReturn,
-      warning: "GUARDED action without hypothesisId — attach hypothesis before mutating.",
+      warning: loadPrompt("warning.runtime.guarded_no_hypothesis"),
     };
   }
 
   if (repeated) {
     return {
       ...baseReturn,
-      warning: `Repetición detectada: ya se intentó ${repeated.status}. Considera replanificar.`,
+      warning: loadPrompt("warning.runtime.repetition", { status: repeated.status }),
     };
   }
 

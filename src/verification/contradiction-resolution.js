@@ -1,3 +1,5 @@
+import { loadPrompt } from "../prompts/loader.js";
+
 /**
  * Context Contradiction Resolution — explicit conflict detection and resolution.
  *
@@ -246,7 +248,7 @@ export function generateConflictReport(conflicts) {
 
   const unresolved = conflicts.filter((c) => c.status === "UNRESOLVED");
   if (unresolved.length > 0) {
-    lines.push(`  ⚠ ${unresolved.length} unresolved conflict(s) — do not choose silently`);
+    lines.push(loadPrompt("warning.contradiction.unresolved", { count: unresolved.length }));
   }
 
   return lines.join("\n");

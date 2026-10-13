@@ -1,3 +1,5 @@
+import { loadPrompt } from "../prompts/loader.js";
+
 export function classifyBash(command) {
   if (!command || typeof command !== "string") {
     return { kind: "justified", primary: "", reason: "empty or non-string command" };
@@ -68,15 +70,15 @@ export function nudgeFor(command) {
   }
   const primary = classification.primary;
   if (primary === "grep" || primary === "rg") {
-    return "Consider using the dedicated 'grep' tool or 'context-query-engine' MCP (search_files / context_query) instead of raw bash search.";
+    return loadPrompt("nudge.discovery.grep");
   }
   if (primary === "ls" || primary === "find" || primary === "tree") {
-    return "Consider using the dedicated 'glob' tool instead of raw bash file listing/finding.";
+    return loadPrompt("nudge.discovery.glob");
   }
   if (primary === "cat" || primary === "head" || primary === "tail") {
-    return "Consider using the dedicated 'read' tool or 'context-query-engine' MCP (read_file) instead of raw bash file reading.";
+    return loadPrompt("nudge.discovery.read");
   }
-  return "Consider using dedicated tools (`grep`, `glob`, `read`) or the `context-query-engine` MCP instead of raw bash discovery.";
+  return loadPrompt("nudge.discovery.default");
 }
 
 export function workdirSuggestion(command) {
@@ -84,7 +86,7 @@ export function workdirSuggestion(command) {
   const match = command.trim().match(/^cd\s+([^\s&]+)\s*&&\s*(.*)$/);
   if (match) {
     const dir = match[1];
-    return `Consider using the 'workdir' parameter ('workdir: "${dir}"') instead of 'cd ${dir} && ...' in bash.`;
+    return loadPrompt("nudge.discovery.workdir", { dir });
   }
   return null;
 }

@@ -17,6 +17,7 @@ import { classifyRequest } from "../policy/request-classifier.js";
 import { detectStack } from "../policy/project-inspector.js";
 import { classifyUncertainty, buildUncertainties, buildAssumptions } from "../policy/uncertainty.js";
 import { discoverSkills } from "../policy/skill-routing.js";
+import { loadPrompt } from "../prompts/loader.js";
 
 // Re-export for backward compatibility
 export { classifyRequest, detectStack, classifyUncertainty, buildUncertainties, buildAssumptions, discoverSkills };
@@ -278,36 +279,19 @@ const PERSISTENT_POLICIES = {
   scope: {
     name: "Scope",
     kind: "persistent",
-    rules: [
-      "Entregar únicamente lo pedido — sin expansión de alcance",
-      "No agregar features no solicitadas",
-      "No refactorizar código ajeno a la tarea",
-      "Cambiar la mínima superficie posible",
-    ],
+    rules: loadPrompt("policy.scope.rules").split("\n"),
     gates: ["scope-creep", "surface-change"],
   },
   verify: {
     name: "Verify",
     kind: "persistent",
-    rules: [
-      "Toda implementación debe tener resultado verificable",
-      "Ninguna tarea se marca DONE sin evidencia satisfecha",
-      "Ejecutar tests/lint/typecheck de los artefactos tocados",
-      "Verificar consumidores de los cambios, no solo el cambio",
-    ],
+    rules: loadPrompt("policy.verify.rules").split("\n"),
     gates: ["completion-gate", "evidence-required"],
   },
   simplify: {
     name: "Simplify",
     kind: "persistent",
-    rules: [
-      "YAGNI — no construir para necesidades futuras especulativas",
-      "Reusar código y abstracciones existentes",
-      "Preferir mecanismos nativos y stdlib cuando aplique",
-      "Implementación mínima y superficie de cambio mínima",
-      "Evitar dependencias innecesarias y generalización prematura",
-      "Abstracción solo cuando el requerimiento la exige ahora",
-    ],
+    rules: loadPrompt("policy.simplify.rules").split("\n"),
     gates: ["speculative-abstraction", "unnecessary-deps"],
   },
 };
@@ -369,7 +353,7 @@ function evaluatePersistentPolicies(prompt, projectInfo, classification, mode) {
       status: "ACTIVE",
       gates: bifurcations.flatMap((b) => b.gates),
       restrictions: bifurcations.map(
-        (b) => `Bifurcación detectada (${b.label}): subagente DEBE invocar tracer.logTechnicalDecision(decisionPoint, rationale, alternatives[], evidence[], technicalMetrics{}) antes de implementar.`
+        (b) => loadPrompt("injection.decision_gate", { label: b.label })
       ),
       bifurcations: bifurcations.map((b) => b.id),
     });
@@ -403,7 +387,7 @@ function evaluatePersistentPolicies(prompt, projectInfo, classification, mode) {
   const protectedHits = SIMPLIFY_PROTECTED.filter((w) => lower.includes(w));
   if (protectedHits.length > 0) {
     simplifyRestrictions.unshift(
-      `Protegido por Simplify: NO eliminar ${protectedHits.join(", ")} — simplificar implementación, no la restricción`
+      loadPrompt("injection.simplify_protected", { hits: protectedHits.join(", ") })
     );
   }
 
@@ -1297,7 +1281,7 @@ export function escalateAssumptions(state, taskText = "") {
             {
               id: `U${unknowns.length + 1}`,
               kind: "ASSUMED",
-              question: `¿${a.statement}?`,
+              question: loadPrompt("question.escalation", { statement: a.statement }),
               status: "blocking",
               assumptionId: a.id,
             },
@@ -1418,11 +1402,11 @@ export function addToBacklog(state, title, source = "user") {
 export function formatBacklog(state) {
   const pending = (state.backlog || []).filter((b) => b.status === "pending");
   if (!pending.length) return null;
-  const lines = [`[wam backlog] ${pending.length} requerimiento(s) fuera de alcance:`];
+  const lines = [loadPrompt("injection.backlog_header", { count: pending.length })];
   for (const b of pending.slice(0, 10)) {
-    lines.push(`  ${b.id}: ${b.title}`);
+    lines.push(loadPrompt("injection.backlog_item", { id: b.id, title: b.title }));
   }
-  if (pending.length > 10) lines.push(`  ...(+${pending.length - 10} más)`);
+  if (pending.length > 10) lines.push(loadPrompt("injection.backlog_overflow", { count: pending.length - 10 }));
   return lines.join("\n");
 }
 

@@ -18,6 +18,7 @@ import path from "node:path";
 import { hasWamMarkerFor, isWamSynthetic } from "./part-provenance.js";
 import { buildTaskInferenceDirective } from "../cognition/task-inference-engine.js";
 import { detectCouplingIntent, traceCouplingForTask } from "../context/selection.js";
+import { loadPrompt } from "../prompts/loader.js";
 
 // Idempotency guard: a chat.message invocation must be processed at most once
 // per message id + kind. The store is normally owned by the plugin instance
@@ -246,9 +247,9 @@ export async function handleMessage(input, output, deps) {
       const active = sessionTasks.get(input.sessionID) || readActiveTaskIdFresh(wamRoot);
       const st = active ? getTaskState(active, wamRoot) : null;
       if (st && st.phase !== "DONE") {
-        emitTextPart(output, `[wait-a-minute] Hay una tarea pendiente: ${active} (fase ${st.phase}). ¿Quieres continuarla? Responde /wam resume ${active} o define una tarea nueva — no asumo intención.`, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+        emitTextPart(output, loadPrompt("notice.pending_task", { active, phase: st.phase }), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
       } else {
-        emitTextPart(output, "[wait-a-minute] No hay tarea activa. Dime qué tarea nueva quieres — no asumo intención previa.", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+        emitTextPart(output, loadPrompt("notice.no_active_task"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
       }
       return;
     }
@@ -266,12 +267,12 @@ export async function handleMessage(input, output, deps) {
       if (kind === "blocked-message") {
         const u = (askingState.contract?.unknowns || []).find((x) => x.status === "blocking");
         const directive = u
-          ? `⛔ [wait-a-minute] BLOQUEADO: Pregunta pendiente — ${u.id}: ${u.question}\nResponder: /wam answer ${u.id} <respuesta>`
-          : "⛔ [wait-a-minute] BLOQUEADO: Tienes preguntas sin responder.";
+          ? loadPrompt("notice.blocked_question", { id: u.id, question: u.question })
+          : loadPrompt("notice.blocked_generic");
         emitTextPart(output, directive, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
         // Rewrite the original prompt so the implementation attempt is NOT
         // consumed downstream as an instruction (AC5).
-        const rewrite = `[wait-a-minute] BLOQUEADO — prompt de implementación no consumido como respuesta. ${directive}`;
+        const rewrite = loadPrompt("notice.blocked_prefix", { directive });
         if (input?.message?.parts && input.message.parts.length > 0) {
           const tp = input.message.parts.find((p) => p.type === "text" && typeof p.text === "string");
           if (tp) tp.text = rewrite;
@@ -283,7 +284,7 @@ export async function handleMessage(input, output, deps) {
         return;
       }
       if (kind === "new-intent") {
-        emitTextPart(output, "[wait-a-minute] Nueva intención detectada. Abriendo tarea nueva.", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+        emitTextPart(output, loadPrompt("notice.new_intent"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
         // Override the explicit taskId so subsequent analysis creates a fresh
         // task (task-<ts>) without contaminating unknowns from the previous task.
         const newTaskId = `task-${Date.now()}`;
@@ -302,7 +303,11 @@ export async function handleMessage(input, output, deps) {
         const u = ansRes.u;
         emitTextPart(
           output,
-          `[wait-a-minute] question answered — ${u?.id || "U1"}: ${u?.answer || trimmed}. Ready → Proceed (${u?.question || "pregunta resuelta"})`,
+          loadPrompt("notice.question_answered", {
+            id: u?.id || "U1",
+            answer: u?.answer || trimmed,
+            question: u?.question || "pregunta resuelta",
+          }),
           { sessionID: input.sessionID, messageID: output.message?.id || input.messageID },
         );
         // After resolving, fall through to re-analysis so contract is rebuilt.
@@ -337,7 +342,7 @@ export async function handleMessage(input, output, deps) {
             persistLiveContext(taskId, existingState, wamRoot);
             const live = readLiveContext(wamRoot, taskId);
             if (live) {
-              const parts = [`[wam N2 task]\n${live}\n`];
+              const parts = [loadPrompt("injection.n2_task", { live }) + "\n"];
               parts.push(...delegationLines(existingState).map((l) => l + "\n"));
               emitTextPart(output, parts.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
             }
@@ -354,8 +359,8 @@ export async function handleMessage(input, output, deps) {
             const live = readLiveContext(wamRoot, taskId);
             if (live) {
               const parts = [
-                `[wam continuation] Contexto reconstruido (${snapshotCheck.changedSignals.join(", ")})`,
-                `[wam N2 task]\n${live}\n`,
+                loadPrompt("injection.continuation", { signals: snapshotCheck.changedSignals.join(", ") }),
+                loadPrompt("injection.n2_task", { live }) + "\n",
               ];
               parts.push(...delegationLines(existingState).map((l) => l + "\n"));
               emitTextPart(output, parts.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
@@ -390,7 +395,7 @@ export async function handleMessage(input, output, deps) {
       if (existingTaskId && existingTaskId !== taskId) {
         // Candidate-only: report, do not reassign. The session continues with
         // the freshly-initialized taskId; the user can reuse via /wam task switch.
-        emitTextPart(output, `[wait-a-minute] Tarea similar detectada: ${existingTaskId} (usa /wam task switch ${existingTaskId} para retomar)`, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+        emitTextPart(output, loadPrompt("notice.similar_task", { taskId: existingTaskId }), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
       }
     }
 
@@ -559,7 +564,7 @@ export async function handleMessage(input, output, deps) {
       const pendingList = visiblePending.length > 0
         ? "\n  Requisitos pendientes:\n    " + visiblePending.map((p) => `- ${truncate(p, 150)}`).join("\n    ") + (overflowPending > 0 ? `\n    ...(+${overflowPending} más)` : "") + "\n"
         : "";
-      const gateHold = `⛔ [wait-a-minute] COMPLETION GATE: faltan ${gate.pending.length} requisito(s). No declare DONE.${pendingList} Continuar con: ${updatedState.nextAction}`;
+      const gateHold = loadPrompt("notice.completion_gate", { count: gate.pending.length, pendingList, nextAction: updatedState.nextAction });
       emitTextPart(output, gateHold, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
       if (input?.parts && input.parts.length > 0) {
         const tp = input.parts.find((p) => p.type === "text" && typeof p.text === "string");
