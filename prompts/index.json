@@ -385,6 +385,54 @@
       ]
     },
     {
+      "id": "policy.discovery.rules",
+      "path": "policies/discovery.md",
+      "status": "active",
+      "responsibility": "Owns the persistent Discovery policy: gather context before acting and prefer indexed lookups.",
+      "consumers": [
+        "src/skills/engine.js"
+      ],
+      "testRefs": [
+        "src/prompts/characterization.test.mjs"
+      ]
+    },
+    {
+      "id": "policy.runtime.rules",
+      "path": "policies/runtime.md",
+      "status": "active",
+      "responsibility": "Owns the persistent Runtime policy: operate within latency, token and tool-call budgets.",
+      "consumers": [
+        "src/skills/engine.js"
+      ],
+      "testRefs": [
+        "src/prompts/characterization.test.mjs"
+      ]
+    },
+    {
+      "id": "policy.decision-gate.rules",
+      "path": "policies/decision-gate.md",
+      "status": "active",
+      "responsibility": "Owns the persistent Decision-gate policy: every detected bifurcation requires a logged technical decision.",
+      "consumers": [
+        "src/skills/engine.js"
+      ],
+      "testRefs": [
+        "src/prompts/characterization.test.mjs"
+      ]
+    },
+    {
+      "id": "policy.completion.rules",
+      "path": "policies/completion.md",
+      "status": "active",
+      "responsibility": "Owns the persistent Completion policy: distinguish verified from partial work; DONE only with executed checks.",
+      "consumers": [
+        "src/skills/engine.js"
+      ],
+      "testRefs": [
+        "src/prompts/characterization.test.mjs"
+      ]
+    },
+    {
       "id": "question.escalation",
       "path": "questions/escalation.md",
       "status": "active",
@@ -394,6 +442,66 @@
       ],
       "testRefs": [
         "src/prompts/characterization.test.mjs"
+      ]
+    },
+    {
+      "id": "frontend-ux-diagnose",
+      "path": "frontend-ux/diagnose.md",
+      "status": "active",
+      "responsibility": "Owns the diagnosis prompt: classify frontend UX findings as observed defects or hypotheses.",
+      "consumers": [
+        "src/prompts/frontend-ux.js#loadFrontendUxPrompt"
+      ],
+      "testRefs": [
+        "src/prompts/frontend-ux.test.mjs"
+      ]
+    },
+    {
+      "id": "frontend-ux-design",
+      "path": "frontend-ux/design.md",
+      "status": "active",
+      "responsibility": "Owns the design prompt: propose frontend UX changes grounded in diagnosed findings.",
+      "consumers": [
+        "src/prompts/frontend-ux.js#loadFrontendUxPrompt"
+      ],
+      "testRefs": [
+        "src/prompts/frontend-ux.test.mjs"
+      ]
+    },
+    {
+      "id": "frontend-ux-refine",
+      "path": "frontend-ux/refine.md",
+      "status": "active",
+      "responsibility": "Owns the refinement prompt: apply minimal, incremental frontend UX improvements.",
+      "consumers": [
+        "src/prompts/frontend-ux.js#loadFrontendUxPrompt"
+      ],
+      "testRefs": [
+        "src/prompts/frontend-ux.test.mjs"
+      ]
+    },
+    {
+      "id": "frontend-ux-verify",
+      "path": "frontend-ux/verify.md",
+      "status": "active",
+      "responsibility": "Owns the verification prompt: confirm frontend UX outcomes with observed evidence.",
+      "consumers": [
+        "src/prompts/frontend-ux.js#loadFrontendUxPrompt"
+      ],
+      "testRefs": [
+        "src/prompts/frontend-ux.test.mjs"
+      ]
+    },
+    {
+      "id": "frontend-ux-review",
+      "path": "frontend-ux/review.md",
+      "status": "active",
+      "responsibility": "Owns the review prompt: audit frontend UX changes against their declared contract.",
+      "consumers": [
+        "src/prompts/frontend-ux.js#loadFrontendUxPrompt"
+      ],
+      "testRefs": [
+        "src/prompts/frontend-ux.test.mjs"
       ]
     }
   ]

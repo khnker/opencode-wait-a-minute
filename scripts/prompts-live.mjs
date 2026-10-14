@@ -8,8 +8,8 @@
  * offsets a regression).
  *
  * Usage:
- *   node scripts/prompts-live.mjs [--suite verify|scope|simplify|delegation|all] \
- *     [--variant V1|S1|P1|D1] [--out <dir>] [--dry-run] [--trials N] [--temperature <t>]
+ *   node scripts/prompts-live.mjs [--suite verify|scope|simplify|delegation|discovery|runtime|decision-gate|completion|all] \
+ *     [--variant V1|S1|P1|D1|D5|R1|G1|C1] [--out <dir>] [--dry-run] [--trials N] [--temperature <t>]
  *
  * Defaults: suite=all, out=benchmarks/results/live-<iso>, trials=1, temperature=0.
  * `--dry-run` uses the mock provider (no network); live output dirs are
@@ -35,6 +35,10 @@ const ACTIVE_BY_REF = Object.freeze({
   "policy.scope.rules": "prompts/policies/scope.md",
   "policy.simplify.rules": "prompts/policies/simplify.md",
   "injection.delegation": "prompts/injections/delegation.md",
+  "policy.discovery.rules": "prompts/policies/discovery.md",
+  "policy.runtime.rules": "prompts/policies/runtime.md",
+  "policy.decision-gate.rules": "prompts/policies/decision-gate.md",
+  "policy.completion.rules": "prompts/policies/completion.md",
 });
 
 /** Suite → default experimental variant + its experiment file. */
@@ -43,6 +47,10 @@ const VARIANT_BY_SUITE = Object.freeze({
   scope: "S1",
   simplify: "P1",
   delegation: "D1",
+  discovery: "D5",
+  runtime: "R1",
+  "decision-gate": "G1",
+  completion: "C1",
 });
 
 const VARIANT_POLICY = Object.freeze({
@@ -50,6 +58,10 @@ const VARIANT_POLICY = Object.freeze({
   S1: "scope",
   P1: "simplify",
   D1: "delegation",
+  D5: "discovery",
+  R1: "runtime",
+  G1: "decision-gate",
+  C1: "completion",
 });
 
 function parseArgs(args) {
@@ -130,7 +142,7 @@ for (const suite of selectedSuites) {
   const variantId = args.variant ?? VARIANT_BY_SUITE[suite.id];
   const policyFolder = VARIANT_POLICY[variantId];
   if (!policyFolder) {
-    throw new Error(`unknown variant "${variantId}" (expected V1|S1|P1|D1)`);
+    throw new Error(`unknown variant "${variantId}" (expected V1|S1|P1|D1|D5|R1|G1|C1)`);
   }
   const variantRel = `prompts/experiments/${policyFolder}/${variantId}.md`;
 
@@ -212,6 +224,18 @@ for (const suite of selectedSuites) {
       baseline: baselineLive.cost.executionFailures,
       candidate: variantLive.cost.executionFailures,
     },
+    toolCalls: {
+      baseline: baselineLive.cost.toolCallTotals?.calls ?? 0,
+      candidate: variantLive.cost.toolCallTotals?.calls ?? 0,
+    },
+    toolCallsByName: {
+      baseline: { ...(baselineLive.cost.toolCallTotals?.byName ?? {}) },
+      candidate: { ...(variantLive.cost.toolCallTotals?.byName ?? {}) },
+    },
+    retries: {
+      baseline: (baselineLive.cost.retries ?? []).length,
+      candidate: (variantLive.cost.retries ?? []).length,
+    },
     decision,
     regression,
     vetoed: regression, // cost never offsets a regression
@@ -220,12 +244,14 @@ for (const suite of selectedSuites) {
 
   console.log(
     [
-      suite.id.padEnd(10),
+      suite.id.padEnd(14),
       variantId.padEnd(4),
       `${fmtRate(row.passRate.baseline)}->${fmtRate(row.passRate.candidate)}`.padEnd(11),
       `in ${row.tokens.baseline.input}->${row.tokens.candidate.input}`.padEnd(16),
       `out ${row.tokens.baseline.output}->${row.tokens.candidate.output}`.padEnd(17),
       `lat ${row.latencyMs.baseline.mean.toFixed(1)}->${row.latencyMs.candidate.mean.toFixed(1)}`.padEnd(20),
+      `tc ${row.toolCalls.baseline}->${row.toolCalls.candidate}`.padEnd(10),
+      `re ${row.retries.baseline}->${row.retries.candidate}`.padEnd(10),
       regression ? "REGRESSION/VETO" : decision,
     ].join(" "),
   );
@@ -235,3 +261,153 @@ fs.mkdirSync(outDir, { recursive: true });
 const summaryPath = path.join(outDir, "live-summary.json");
 fs.writeFileSync(summaryPath, `${JSON.stringify(summary, null, 2)}\n`, "utf8");
 console.log(`\nwrote ${summaryPath}`);
+
+const COMPARISON_SCHEMA = "wam.prompt-eval.comparison/1";
+
+function delta(baseline, candidate) {
+  if (baseline == null || candidate == null) return null;
+  return candidate - baseline;
+}
+
+const improves = summary.suites.filter((r) => r.decision === "IMPROVED");
+const regressions = summary.suites.filter((r) => r.decision === "REGRESSION");
+
+const comparisonRows = summary.suites.map((row) => ({
+  suite: row.suite,
+  variant: row.variant,
+  promptRef: row.promptRef,
+  decision: row.decision,
+  regression: row.regression,
+  vetoed: row.vetoed,
+  experimentIds: row.experimentIds,
+  passRate: {
+    baseline: row.passRate.baseline,
+    candidate: row.passRate.candidate,
+    delta: delta(row.passRate.baseline, row.passRate.candidate),
+  },
+  tokens: {
+    baseline: row.tokens.baseline,
+    candidate: row.tokens.candidate,
+    delta: {
+      input: delta(row.tokens.baseline?.input, row.tokens.candidate?.input),
+      output: delta(row.tokens.baseline?.output, row.tokens.candidate?.output),
+      total: delta(row.tokens.baseline?.total, row.tokens.candidate?.total),
+    },
+  },
+  latencyMs: {
+    baseline: row.latencyMs.baseline,
+    candidate: row.latencyMs.candidate,
+    delta: {
+      mean: delta(row.latencyMs.baseline?.mean, row.latencyMs.candidate?.mean),
+      p50: delta(row.latencyMs.baseline?.p50, row.latencyMs.candidate?.p50),
+    },
+  },
+  toolCalls: {
+    baseline: row.toolCalls.baseline,
+    candidate: row.toolCalls.candidate,
+    delta: row.toolCalls.candidate - row.toolCalls.baseline,
+    byName: {
+      baseline: row.toolCallsByName?.baseline ?? {},
+      candidate: row.toolCallsByName?.candidate ?? {},
+    },
+  },
+  retries: {
+    baseline: row.retries.baseline,
+    candidate: row.retries.candidate,
+    delta: row.retries.candidate - row.retries.baseline,
+  },
+}));
+
+const comparisonReport = {
+  schema: COMPARISON_SCHEMA,
+  generatedAt: new Date().toISOString(),
+  dryRun,
+  trials,
+  temperature,
+  model: provider.model,
+  totals: {
+    suites: summary.suites.length,
+    improves: improves.length,
+    regressions: regressions.length,
+    vetoed: summary.suites.filter((r) => r.vetoed).length,
+  },
+  improves: improves.map((r) => r.suite),
+  regressions: regressions.map((r) => r.suite),
+  rows: comparisonRows,
+};
+
+const comparisonPath = path.join(outDir, "comparison.json");
+fs.writeFileSync(comparisonPath, `${JSON.stringify(comparisonReport, null, 2)}\n`, "utf8");
+console.log(`wrote ${comparisonPath}`);
+
+function fmtNum(n) {
+  return n == null ? "n/a" : String(n);
+}
+function fmtSigned(n) {
+  if (n == null) return "n/a";
+  if (n === 0) return "0";
+  return n > 0 ? `+${n}` : `${n}`;
+}
+
+const mdLines = [];
+mdLines.push(`# Prompt-Eval Comparison Report`);
+mdLines.push("");
+mdLines.push(`- schema: \`${COMPARISON_SCHEMA}\``);
+mdLines.push(`- generatedAt: \`${comparisonReport.generatedAt}\``);
+mdLines.push(`- dry-run: \`${dryRun}\``);
+mdLines.push(`- trials: \`${trials}\``);
+mdLines.push(`- temperature: \`${temperature}\``);
+mdLines.push(`- model: \`${provider.model}\``);
+mdLines.push("");
+mdLines.push(`## Totals`);
+mdLines.push("");
+mdLines.push(`- suites: \`${comparisonReport.totals.suites}\``);
+mdLines.push(`- improves: \`${comparisonReport.totals.improves}\``);
+mdLines.push(`- regressions: \`${comparisonReport.totals.regressions}\``);
+mdLines.push(`- vetoed: \`${comparisonReport.totals.vetoed}\``);
+mdLines.push("");
+if (improves.length > 0) {
+  mdLines.push(`## Improves`);
+  mdLines.push("");
+  for (const r of improves) mdLines.push(`- ${r.suite} (variant ${r.variant})`);
+  mdLines.push("");
+}
+if (regressions.length > 0) {
+  mdLines.push(`## Regressions`);
+  mdLines.push("");
+  for (const r of regressions) mdLines.push(`- ${r.suite} (variant ${r.variant})`);
+  mdLines.push("");
+}
+mdLines.push(`## Per-suite comparison`);
+mdLines.push("");
+mdLines.push("| suite | variant | decision | pass rate | tokens in (b→c) | tokens out (b→c) | latency mean (b→c) | toolCalls (b→c) | retries (b→c) |");
+mdLines.push("|---|---|---|---|---|---|---|---|---|");
+for (const row of comparisonRows) {
+  const pass = `${fmtRate(row.passRate.baseline)} → ${fmtRate(row.passRate.candidate)}`;
+  const tIn = `${fmtNum(row.tokens.baseline?.input)} → ${fmtNum(row.tokens.candidate?.input)}`;
+  const tOut = `${fmtNum(row.tokens.baseline?.output)} → ${fmtNum(row.tokens.candidate?.output)}`;
+  const lat = `${fmtNum(row.latencyMs.baseline?.mean?.toFixed?.(1))} → ${fmtNum(row.latencyMs.candidate?.mean?.toFixed?.(1))}`;
+  const tc = `${fmtNum(row.toolCalls.baseline)} → ${fmtNum(row.toolCalls.candidate)} (${fmtSigned(row.toolCalls.delta)})`;
+  const re = `${fmtNum(row.retries.baseline)} → ${fmtNum(row.retries.candidate)} (${fmtSigned(row.retries.delta)})`;
+  mdLines.push(`| ${row.suite} | ${row.variant} | ${row.decision} | ${pass} | ${tIn} | ${tOut} | ${lat} | ${tc} | ${re} |`);
+}
+mdLines.push("");
+mdLines.push("## toolCalls byName");
+mdLines.push("");
+for (const row of comparisonRows) {
+  const bNames = Object.keys(row.toolCalls.byName.baseline);
+  const cNames = Object.keys(row.toolCalls.byName.candidate);
+  if (bNames.length === 0 && cNames.length === 0) continue;
+  mdLines.push(`### ${row.suite} (${row.variant})`);
+  const all = new Set([...bNames, ...cNames]);
+  for (const name of [...all].sort()) {
+    const b = row.toolCalls.byName.baseline[name] ?? 0;
+    const c = row.toolCalls.byName.candidate[name] ?? 0;
+    mdLines.push(`- ${name}: ${b} → ${c}`);
+  }
+  mdLines.push("");
+}
+
+const comparisonMdPath = path.join(outDir, "comparison.md");
+fs.writeFileSync(comparisonMdPath, `${mdLines.join("\n")}\n`, "utf8");
+console.log(`wrote ${comparisonMdPath}`);

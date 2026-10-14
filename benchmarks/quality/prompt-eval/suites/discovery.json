@@ -1,0 +1,96 @@
+{
+  "id": "discovery",
+  "version": "1.0.0",
+  "description": "Discovery: the agent gathers context before acting, preferring indexed lookups over exhaustive sweeps and asking only when required.",
+  "scenarios": [
+    {
+      "id": "discovery.context-first",
+      "suite": "discovery",
+      "severity": "high",
+      "context": "The agent is asked to implement a feature but has not yet gathered context from the codebase. A naive implementation path exists but would duplicate existing logic.",
+      "promptRef": "policy.discovery.rules",
+      "criteria": [
+        {
+          "id": "discovery.context-first.gather-before-acting",
+          "required": true,
+          "description": "The agent must gather context (search, read, explore) before writing code.",
+          "oracle": {
+            "kind": "includes-any",
+            "values": [
+              "search",
+              "read",
+              "explore",
+              "find",
+              "look",
+              "check",
+              "inspect"
+            ]
+          }
+        },
+        {
+          "id": "discovery.context-first.indexed-lookup",
+          "required": false,
+          "description": "The agent should prefer indexed search (tgrep, grep, glob) over exhaustive sweeps.",
+          "oracle": {
+            "kind": "includes-any",
+            "values": [
+              "tgrep",
+              "grep",
+              "glob",
+              "indexed"
+            ]
+          }
+        },
+        {
+          "id": "discovery.context-first.no-reimplementation",
+          "required": true,
+          "description": "The agent must not reimplement logic that already exists in the codebase.",
+          "oracle": {
+            "kind": "not-matches",
+            "values": [
+              "\\b(?:I|we)\\s+(?:will|would|should|could|might|can|may|plan\\s+to|decide\\s+to|decided\\s+to)\\s+(?:just\\s+|simply\\s+)?(?:write|create|build|implement)\\s+(?:a\\s+)?(?:new|fresh|custom)\\b"
+            ],
+            "flags": "i"
+          }
+        }
+      ],
+      "expectation": "The agent gathers context (search/read/explore) before any code is written, prefers indexed tools, and declares any reuse of existing logic."
+    },
+    {
+      "id": "discovery.narrow-questions",
+      "suite": "discovery",
+      "severity": "medium",
+      "context": "The agent encounters ambiguous requirements and must decide whether to ask clarifying questions or proceed with reasonable defaults.",
+      "promptRef": "policy.discovery.rules",
+      "criteria": [
+        {
+          "id": "discovery.narrow-questions.ask-only-when-missing",
+          "required": true,
+          "description": "The agent must ask only when the contract is genuinely missing, not for preferences or style.",
+          "oracle": {
+            "kind": "not-matches",
+            "values": [
+              "\\b(?:what|which|how|do\\s+you)\\s+(?:prefer|like|want|style|format)\\b"
+            ],
+            "flags": "i"
+          }
+        },
+        {
+          "id": "discovery.narrow-questions.reasonable-defaults",
+          "required": false,
+          "description": "The agent should state the reasonable defaults it is assuming when the contract is ambiguous.",
+          "oracle": {
+            "kind": "includes-any",
+            "values": [
+              "assume",
+              "default",
+              "reasonable",
+              "standard"
+            ]
+          }
+        }
+      ],
+      "expectation": "The agent narrows ambiguous asks by asking only the minimum blocking questions and only when the requirement is genuinely ambiguous."
+    }
+  ]
+}

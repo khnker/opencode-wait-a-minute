@@ -217,3 +217,8 @@ npm run gate
 | MIT | 2026 Khnker |
 
 [MIT License](LICENSE)
+
+## Credits
+
+- **[Impeccable](https://github.com/pbakaus/impeccable)** by Paul Bakaus — optional frontend UX capability integrated by WAM (Apache-2.0, v4.5.2). Opt-in and isolated from the completion gate; provenance in `src/frontend-ux/impeccable-integration.js`.
+- **OpenCode**, **OpenSpec**, and **Superpowers** — see [Sources and influences](#sources-and-influences).

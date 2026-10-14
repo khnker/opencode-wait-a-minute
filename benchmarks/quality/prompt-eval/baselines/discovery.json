@@ -1,0 +1,35 @@
+{
+  "schema": "wam.prompt-eval.baseline/1",
+  "label": "baseline",
+  "suite": {
+    "id": "discovery",
+    "version": "1.0.0",
+    "hash": "2204bc03e454f8db4bf1d5c3526174dd8fdc50c7ff334c86a38a6a8310fb1165"
+  },
+  "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "coverage": {
+    "scenarios": [
+      "discovery.context-first",
+      "discovery.narrow-questions"
+    ],
+    "requiredCriteria": [
+      "discovery.context-first.gather-before-acting",
+      "discovery.context-first.no-reimplementation",
+      "discovery.narrow-questions.ask-only-when-missing"
+    ],
+    "hash": "2e071669d0081ec5ab897fc70c58ab9a9f572a71c634072d96b630d9517c2b5b"
+  },
+  "prompts": [
+    {
+      "id": "policy.discovery.rules",
+      "hash": "f66ae0f0b1728509f1deec78a27fb2a1b3fd1c8314b5607a8faff584f8f8a677"
+    }
+  ],
+  "metrics": {
+    "totalScenarios": 2,
+    "mandatoryCompliance": 0,
+    "targetChecksPassed": 0,
+    "criticalRegressions": 0,
+    "evaluableCount": 0
+  }
+}

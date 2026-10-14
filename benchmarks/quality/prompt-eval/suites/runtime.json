@@ -1,0 +1,84 @@
+{
+  "id": "runtime",
+  "version": "1.0.0",
+  "description": "Runtime hygiene: idempotent operations, isolated state, observable side-effects.",
+  "scenarios": [
+    {
+      "id": "runtime.idempotent-ops",
+      "suite": "runtime",
+      "severity": "high",
+      "context": "The agent must perform a file operation (write, edit) that may be retried. The operation must be safe to run multiple times without side-effects.",
+      "promptRef": "policy.runtime.rules",
+      "criteria": [
+        {
+          "id": "runtime.idempotent-ops.safe-retry",
+          "required": true,
+          "description": "The agent must ensure the operation is idempotent or safe to retry.",
+          "oracle": {
+            "kind": "includes-any",
+            "values": [
+              "idempotent",
+              "safe",
+              "retry",
+              "check",
+              "exists"
+            ]
+          }
+        },
+        {
+          "id": "runtime.idempotent-ops.no-partial-state",
+          "required": true,
+          "description": "The agent must not leave partial state on failure.",
+          "oracle": {
+            "kind": "not-matches",
+            "values": [
+              "\\b(?:I|we)\\s+(?:will|would|should|could|might|can|may)\\s+(?:just\\s+|simply\\s+)?(?:leave|ignore|skip)\\s+(?:partial|incomplete|broken)\\b"
+            ],
+            "flags": "i"
+          }
+        }
+      ],
+      "expectation": "Repeated operations produce the same observable result and reported metrics; no silent state mutation occurs."
+    },
+    {
+      "id": "runtime.isolated-state",
+      "suite": "runtime",
+      "severity": "critical",
+      "context": "The agent performs a stateful operation (database write, file creation) that must not leak into other tasks or sessions.",
+      "promptRef": "policy.runtime.rules",
+      "criteria": [
+        {
+          "id": "runtime.isolated-state.no-cross-task-leak",
+          "required": true,
+          "description": "The agent must ensure state changes are isolated to the current task.",
+          "oracle": {
+            "kind": "includes-any",
+            "values": [
+              "isolated",
+              "scoped",
+              "sandbox",
+              "cleanup",
+              "rollback"
+            ]
+          }
+        },
+        {
+          "id": "runtime.isolated-state.observable-effects",
+          "required": true,
+          "description": "The agent must make side-effects observable (logs, artifacts, outputs).",
+          "oracle": {
+            "kind": "includes-any",
+            "values": [
+              "log",
+              "record",
+              "artifact",
+              "output",
+              "evidence"
+            ]
+          }
+        }
+      ],
+      "expectation": "Each scenario uses isolated state; failures are reported with their observable cause and the run is marked blocked/incomplete rather than silently retried."
+    }
+  ]
+}

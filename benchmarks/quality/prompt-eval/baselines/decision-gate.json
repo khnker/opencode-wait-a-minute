@@ -1,0 +1,36 @@
+{
+  "schema": "wam.prompt-eval.baseline/1",
+  "label": "baseline",
+  "suite": {
+    "id": "decision-gate",
+    "version": "1.0.0",
+    "hash": "b81ec93c6ae64fef4e89d6754ab54e263a9fd8e811e9ab5967d607cc953d8106"
+  },
+  "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "coverage": {
+    "scenarios": [
+      "decision-gate.missing-contract",
+      "decision-gate.trade-off-capture"
+    ],
+    "requiredCriteria": [
+      "decision-gate.missing-contract.ask-when-missing",
+      "decision-gate.missing-contract.no-fabrication",
+      "decision-gate.trade-off-capture.record-choice",
+      "decision-gate.trade-off-capture.state-trade-offs"
+    ],
+    "hash": "256df599616b00d8923c15da5b31536292fe1b2dca2d6d15b9725a822600118e"
+  },
+  "prompts": [
+    {
+      "id": "policy.decision-gate.rules",
+      "hash": "cf9dcbe2d99a5d7ba0c96af1c1a691ebc6bb491a45727781252945d18cd0aa0f"
+    }
+  ],
+  "metrics": {
+    "totalScenarios": 2,
+    "mandatoryCompliance": 0,
+    "targetChecksPassed": 0,
+    "criticalRegressions": 1,
+    "evaluableCount": 0
+  }
+}

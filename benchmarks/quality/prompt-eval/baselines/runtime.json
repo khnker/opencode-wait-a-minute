@@ -1,0 +1,36 @@
+{
+  "schema": "wam.prompt-eval.baseline/1",
+  "label": "baseline",
+  "suite": {
+    "id": "runtime",
+    "version": "1.0.0",
+    "hash": "0edb537ac78656ec765685dcfb3a2e38eaee3eccdda7c29d0521846e28bc1d9a"
+  },
+  "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "coverage": {
+    "scenarios": [
+      "runtime.idempotent-ops",
+      "runtime.isolated-state"
+    ],
+    "requiredCriteria": [
+      "runtime.idempotent-ops.no-partial-state",
+      "runtime.idempotent-ops.safe-retry",
+      "runtime.isolated-state.no-cross-task-leak",
+      "runtime.isolated-state.observable-effects"
+    ],
+    "hash": "f31a11280c0c54c5c52591d0b9f090671c76d4b08891717bac4bb3fa2bc7c66c"
+  },
+  "prompts": [
+    {
+      "id": "policy.runtime.rules",
+      "hash": "31ea92d91ea1f61b8aa35d7e4e776b6acd85d8359736e294d9d9856a5fa6b52c"
+    }
+  ],
+  "metrics": {
+    "totalScenarios": 2,
+    "mandatoryCompliance": 0,
+    "targetChecksPassed": 0,
+    "criticalRegressions": 1,
+    "evaluableCount": 0
+  }
+}

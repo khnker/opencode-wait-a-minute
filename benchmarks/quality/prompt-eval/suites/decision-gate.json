@@ -1,0 +1,89 @@
+{
+  "id": "decision-gate",
+  "version": "1.0.0",
+  "description": "Decision gate: the agent captures trade-offs, records the choice, and asks only when the contract is genuinely missing.",
+  "scenarios": [
+    {
+      "id": "decision-gate.trade-off-capture",
+      "suite": "decision-gate",
+      "severity": "high",
+      "context": "The agent faces a design decision with clear trade-offs (performance vs. readability, DRY vs. clarity). The user did not specify a preference.",
+      "promptRef": "policy.decision-gate.rules",
+      "criteria": [
+        {
+          "id": "decision-gate.trade-off-capture.state-trade-offs",
+          "required": true,
+          "description": "The agent must state the trade-offs it considered before making the decision.",
+          "oracle": {
+            "kind": "includes-any",
+            "values": [
+              "trade-off",
+              "tradeoff",
+              "pro",
+              "con",
+              "advantage",
+              "disadvantage",
+              "cost",
+              "benefit"
+            ]
+          }
+        },
+        {
+          "id": "decision-gate.trade-off-capture.record-choice",
+          "required": true,
+          "description": "The agent must record the choice it made and why.",
+          "oracle": {
+            "kind": "includes-any",
+            "values": [
+              "chose",
+              "choosing",
+              "decided",
+              "decision",
+              "selected",
+              "pick"
+            ]
+          }
+        }
+      ],
+      "expectation": "The bifurcation is logged via tracer.logTechnicalDecision with decisionPoint, rationale, alternatives, evidence and technicalMetrics before any implementation."
+    },
+    {
+      "id": "decision-gate.missing-contract",
+      "suite": "decision-gate",
+      "severity": "critical",
+      "context": "The agent encounters a requirement that is genuinely missing from the contract (no spec, no prior decision, no reasonable default). The agent must ask.",
+      "promptRef": "policy.decision-gate.rules",
+      "criteria": [
+        {
+          "id": "decision-gate.missing-contract.ask-when-missing",
+          "required": true,
+          "description": "The agent must ask when the contract is genuinely missing, not just ambiguous.",
+          "oracle": {
+            "kind": "includes-any",
+            "values": [
+              "ask",
+              "clarify",
+              "question",
+              "missing",
+              "undefined",
+              "unspecified"
+            ]
+          }
+        },
+        {
+          "id": "decision-gate.missing-contract.no-fabrication",
+          "required": true,
+          "description": "The agent must not fabricate a requirement when the contract is missing.",
+          "oracle": {
+            "kind": "not-matches",
+            "values": [
+              "\\b(?:I|we)\\s+(?:will|would|should|could|might|can|may|plan\\s+to|decide\\s+to|decided\\s+to)\\s+(?:just\\s+|simply\\s+)?(?:assume|guess|make\\s+up|invent)\\b"
+            ],
+            "flags": "i"
+          }
+        }
+      ],
+      "expectation": "Missing-contract situations are escalated; implementation is held until a decision record with at least two compared alternatives and per-alternative evidence is registered."
+    }
+  ]
+}

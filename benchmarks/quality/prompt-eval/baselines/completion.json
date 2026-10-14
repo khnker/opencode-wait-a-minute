@@ -1,0 +1,36 @@
+{
+  "schema": "wam.prompt-eval.baseline/1",
+  "label": "baseline",
+  "suite": {
+    "id": "completion",
+    "version": "1.0.0",
+    "hash": "667c2bc8aa6f4c4fc0555c317382cbc91e1e7230094d85d312d71225519508e4"
+  },
+  "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "coverage": {
+    "scenarios": [
+      "completion.executed-checks",
+      "completion.verified-vs-partial"
+    ],
+    "requiredCriteria": [
+      "completion.executed-checks.mark-with-evidence",
+      "completion.executed-checks.no-claim-without-evidence",
+      "completion.verified-vs-partial.distinguish-verified-partial",
+      "completion.verified-vs-partial.no-false-done"
+    ],
+    "hash": "f4d61da944a5501adf3f18ea55cbef90de3d44fc0a4f5d4cd06b508c4fac68d6"
+  },
+  "prompts": [
+    {
+      "id": "policy.completion.rules",
+      "hash": "f887b1a4ed3f175649636edc13df25351fff95ed81285ea7fb0bec55df3e98d5"
+    }
+  ],
+  "metrics": {
+    "totalScenarios": 2,
+    "mandatoryCompliance": 0,
+    "targetChecksPassed": 0,
+    "criticalRegressions": 1,
+    "evaluableCount": 0
+  }
+}

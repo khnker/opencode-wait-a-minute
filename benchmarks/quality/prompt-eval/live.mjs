@@ -18,9 +18,23 @@
  * (`executionFailures`) and an empty response — we NEVER fabricate tokens or
  * latency. `source` is `"mock"` when a mock provider is injected.
  *
+ * TOOL-CALL / RETRY TELEMETRY: the provider may expose two OPTIONAL hooks:
+ *
+ *   - `recordToolCall(name, { ok = true, retry = false, durationMs = 0 } = {})`
+ *     — called by the provider when it invokes a tool (read, write, edit,
+ *     grep, bash, etc.). The harness stores it as
+ *     `{ scenarioId, name, ok, retry, durationMs }`.
+ *   - `recordRetry(reason = "unknown")`
+ *     — called by the provider when it retries a provider call (429, 5xx,
+ *     transient parse failure). Stored as `{ scenarioId, reason }`.
+ *
+ * Providers that don't implement these hooks still produce a valid run; the
+ * missing arrays default to `[]`. Mock providers in tests typically implement
+ * no-op hooks so the artifact stays byte-deterministic.
+ *
  * DETERMINISM INVARIANT: given identical provider responses, `outputs`,
- * `perScenario` (usage) and the experiment config/report are byte-identical
- * across repeats. Only `latencyMs` is inherently wall-clock.
+ * `perScenario` (usage, toolCalls, retries) and the experiment config/report
+ * are byte-identical across repeats. Only `latencyMs` is inherently wall-clock.
  */
 
 /** Fixed instruction header for every synthesized live task. */
@@ -104,6 +118,8 @@ export async function runLiveVariant({
   const source = providerName === "mock" ? "mock" : "run";
 
   const outputs = {};
+  const toolCalls = []; // [{ scenarioId, name, ok, retry, durationMs }]
+  const retries = [];    // [{ scenarioId, reason }]
   const perScenario = [];
 
   let inputTokens = 0;
@@ -127,6 +143,19 @@ export async function runLiveVariant({
         { role: "user", content: buildTaskPrompt(scenario) },
       ];
       const start = performance.now();
+            let localToolCalls = [];
+      let localRetries = [];
+      const originalRecordToolCall = provider.recordToolCall || (() => {});
+      const originalRecordRetry = provider.recordRetry || (() => {});
+      // Monkey-patch provider to capture calls during this scenario
+      provider.recordToolCall = (name, meta) => {
+        localToolCalls.push({ name, ...meta });
+        originalRecordToolCall.call(provider, name, meta);
+      };
+      provider.recordRetry = (reason) => {
+        localRetries.push(reason);
+        originalRecordRetry.call(provider, reason);
+      };
       try {
         const result = await provider.complete({ messages, model: modelName, temperature, maxTokens });
         const usage = result?.usage ?? {};
@@ -139,7 +168,14 @@ export async function runLiveVariant({
         error = err instanceof Error ? err.message : String(err);
         // Honest accounting: no tokens invented, response recorded as empty.
         texts.push("");
-      } finally {
+            } finally {
+        // Restore original provider methods
+        provider.recordToolCall = originalRecordToolCall;
+        provider.recordRetry = originalRecordRetry;
+        // Aggregate into the run-level arrays
+        localToolCalls.forEach(tc => toolCalls.push({ ...tc, scenarioId: scenario.id }));
+        localRetries.forEach(reason => retries.push({ scenarioId: scenario.id, reason }));
+      
         sLatency += performance.now() - start;
       }
     }
@@ -152,6 +188,9 @@ export async function runLiveVariant({
     totalTokens += sTotal;
 
     perScenario.push({
+        toolCalls: toolCalls.filter(tc => tc.scenarioId === scenario.id),
+        retries: retries.filter(r => r.scenarioId === scenario.id),
+      
       scenarioId: scenario.id,
       usage: { inputTokens: sInput, outputTokens: sOutput, totalTokens: sTotal },
       latencyMs: sLatency,
@@ -170,5 +209,14 @@ export async function runLiveVariant({
     provider: providerName,
   };
 
-  return { outputs, perScenario, cost, variantId };
+        const toolCallTotals = {
+        calls: toolCalls.length,
+        ok: toolCalls.filter(tc => tc.ok).length,
+        retry: toolCalls.filter(tc => tc.retry).length,
+        byName: toolCalls.reduce((acc, tc) => {
+          acc[tc.name] = (acc[tc.name] || 0) + 1;
+          return acc;
+        }, {}),
+      };
+      return { outputs, perScenario, cost: { ...cost, toolCalls, retries, toolCallTotals }, variantId };
 }
