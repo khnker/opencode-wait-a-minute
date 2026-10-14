@@ -38,6 +38,7 @@ const IGNORE_DIRS = new Set([
   ".opencode",
   ".openspec",
   "upstream",
+  "vendor",
 ]);
 
 let logStream = null;

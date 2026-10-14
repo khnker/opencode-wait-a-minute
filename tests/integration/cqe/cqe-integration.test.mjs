@@ -6,10 +6,10 @@ import path from 'node:path';
 import { makeFixtureRepo, cleanupRepo } from '../../helpers/cqe/fixture.mjs';
 import { createCqeEngine, retrieveWithCqe } from '../../../src/context/cqe-adapter.js';
 
-test('INT-01: engine is repository-scoped', () => {
+test('INT-01: engine is repository-scoped', async () => {
   const dir = makeFixtureRepo();
   try {
-    const engine = createCqeEngine({ repoRoot: dir });
+    const engine = await createCqeEngine({ repoRoot: dir });
     assert.strictEqual(engine.repoRoot, dir);
   } finally {
     cleanupRepo(dir);

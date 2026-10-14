@@ -18,8 +18,8 @@ function snapshot(dir) {
   return out.sort();
 }
 
-test('RNF: engine exposes repo-scoped cache/index/budget config', () => {
-  const engine = createCqeEngine({ repoRoot: '/tmp/whatever', cacheDir: '/tmp/c', indexDir: '/tmp/i', budget: 1234 });
+test('RNF: engine exposes repo-scoped cache/index/budget config', async () => {
+  const engine = await createCqeEngine({ repoRoot: '/tmp/whatever', cacheDir: '/tmp/c', indexDir: '/tmp/i', budget: 1234 });
   assert.strictEqual(engine.repoRoot, '/tmp/whatever');
   assert.strictEqual(engine.budget, 1234);
 });

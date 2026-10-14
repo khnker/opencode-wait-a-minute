@@ -15,7 +15,6 @@
  *   - Repository is explicit; never relies on an accidental process.cwd().
  */
 
-import { createEngine } from '../../vendor/context-query-core/src/index.js';
 import fs from 'fs';
 import path from 'path';
 import { retrieveContext } from './context-retrieval.js';
@@ -43,11 +42,23 @@ function resolveMode(explicit) {
 }
 
 /**
+ * Lazily load the vendor CQE entry. The static import is intentionally avoided:
+ * the vendor transitively imports `node:sqlite`, which opencode's Bun runtime
+ * cannot resolve. A failed dynamic import must degrade to native retrieval
+ * instead of preventing the whole plugin from loading.
+ */
+async function loadCreateEngine() {
+  const mod = await import('../../vendor/context-query-core/src/index.js');
+  return mod.createEngine;
+}
+
+/**
  * Create a repository-scoped CQE engine. No retrieval runs at creation time.
  * @param {{repoRoot?: string, cacheDir?: string, indexDir?: string, budget?: number}} [config]
  */
-export function createCqeEngine(config = {}) {
+export async function createCqeEngine(config = {}) {
   const repoRoot = config.repoRoot || config.root || process.cwd();
+  const createEngine = await loadCreateEngine();
   return createEngine({
     repoRoot,
     cacheDir: config.cacheDir,
@@ -56,10 +67,10 @@ export function createCqeEngine(config = {}) {
   });
 }
 
-function getDefaultEngine(repoRoot) {
+async function getDefaultEngine(repoRoot) {
   const root = repoRoot || process.cwd();
   if (!defaultEngine || defaultEngineKey !== root) {
-    defaultEngine = createCqeEngine({ repoRoot: root });
+    defaultEngine = await createCqeEngine({ repoRoot: root });
     defaultEngineKey = root;
   }
   return defaultEngine;
@@ -161,7 +172,8 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
 
   if (mode !== 'disabled' && queryText != null) {
     try {
-      const engine = getDefaultEngine(constraints.repoRoot);
+      const engine = await getDefaultEngine(constraints.repoRoot);
+      if (!engine) throw new Error('CQE_ENGINE_UNAVAILABLE');
       cqeResult = await withTimeout(
         engine.query(queryText, {
           budget: constraints.budget,

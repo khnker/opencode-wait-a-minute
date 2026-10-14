@@ -341,11 +341,9 @@ export async function handleMessage(input, output, deps) {
           try {
             persistLiveContext(taskId, existingState, wamRoot);
             const live = readLiveContext(wamRoot, taskId);
-            if (live) {
-              const parts = [loadPrompt("injection.n2_task", { live }) + "\n"];
-              parts.push(...delegationLines(existingState).map((l) => l + "\n"));
-              emitTextPart(output, parts.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
-            }
+            const parts = [loadPrompt("injection.n2_task", { live }) + "\n"];
+            parts.push(...delegationLines(existingState).map((l) => l + "\n"));
+            emitTextPart(output, parts.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
           } catch {}
           return;
         }
@@ -357,14 +355,12 @@ export async function handleMessage(input, output, deps) {
           try {
             persistLiveContext(taskId, existingState, wamRoot);
             const live = readLiveContext(wamRoot, taskId);
-            if (live) {
-              const parts = [
-                loadPrompt("injection.continuation", { signals: snapshotCheck.changedSignals.join(", ") }),
-                loadPrompt("injection.n2_task", { live }) + "\n",
-              ];
-              parts.push(...delegationLines(existingState).map((l) => l + "\n"));
-              emitTextPart(output, parts.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
-            }
+            const parts = [
+              loadPrompt("injection.continuation", { signals: snapshotCheck.changedSignals.join(", ") }),
+              loadPrompt("injection.n2_task", { live }) + "\n",
+            ];
+            parts.push(...delegationLines(existingState).map((l) => l + "\n"));
+            emitTextPart(output, parts.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
           } catch {}
           return;
         }

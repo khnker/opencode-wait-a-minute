@@ -73,17 +73,20 @@ async function buildPhases() {
     { build },
     { routeWithConstraints },
     { checkContinuation },
-    { isCompletionAllowed },
-    engine,
+    { evaluateCompletionGate },
+    { classifyRequest },
+    { detectStack },
+    { persistTaskState, getTaskState },
   ] = await Promise.all([
     load("src/context/context-classification.js"),
     load("src/context/context-builder.js"),
     load("src/skills/skill-routing.js"),
     load("src/context/context-snapshot.js"),
+    load("src/verification/verification-policy.js"),
+    load("src/policy/request-classifier.js"),
+    load("src/policy/project-inspector.js"),
     load("src/skills/engine.js"),
   ]);
-
-  const { classifyRequest, detectStack, persistTaskState, getTaskState } = engine;
 
   // Scratch root for phases that touch disk (persistence + snapshots).
   const scratchRoot = mkdtempSync(join(tmpdir(), "wam-perf-"));
@@ -168,7 +171,9 @@ async function buildPhases() {
     {
       name: "completion gate",
       run() {
-        isCompletionAllowed(scratchRoot, taskId);
+        const state =
+          getTaskState(taskId, scratchRoot) || { requirements: [], evidence: [] };
+        evaluateCompletionGate(state);
       },
     },
     {

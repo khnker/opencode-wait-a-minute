@@ -30,13 +30,14 @@ import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
-  readFileSync,
 } from "node:fs";
 
 // Compatibility fail-fast check
@@ -349,9 +350,13 @@ async function main() {
   log("install", `plugin installed at ${installedMain}`);
 
   // Step 3a: generate a thin adapter that imports the INSTALLED package entry.
-  // OpenCode's legacy plugin loader requires every named export to be a function;
+  // OpenCode's plugin loader requires every named export to be a function;
   // WAM's index.js also exports a non-function (sessionExecutions), so the adapter
   // exposes exactly one default export pointing at the installed `main`.
+  //
+  // OpenCode 1.18.x resolves `plugin` config entries as npm specs, file paths
+  // (relative to the declaring config) or file URLs. `.mjs` is NOT recognized;
+  // the adapter is written as `.js` so Bun loads it as ESM.
   const wrapperSource =
     `import fs from "node:fs";\n` +
     `import WaitAMinutePlugin from ${JSON.stringify(installedMain)};\n` +
@@ -361,13 +366,15 @@ async function main() {
     `  }\n` +
     `  return WaitAMinutePlugin(input);\n` +
     `}\n`;
-  writeFileSync(wrapperPath, wrapperSource, "utf8");
+  const pluginEntryPath = join(workspace, "wam-e2e-entry.js");
+  writeFileSync(pluginEntryPath, wrapperSource, "utf8");
+  log("setup", `wrote plugin adapter at ${pluginEntryPath}`);
 
-  // Step 3b: register the adapter in the temp project opencode.jsonc.
+  // Step 3b: register the adapter via the project opencode.jsonc `plugin` array.
   const configContent = JSON.stringify(
     {
       $schema: "https://opencode.ai/config.json",
-      plugin: [wrapperPath],
+      plugin: ["./wam-e2e-entry.js"],
     },
     null,
     2

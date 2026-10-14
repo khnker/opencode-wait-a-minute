@@ -1,5 +1,3 @@
-import { traceCrossLayer } from '../../vendor/context-query-core/src/index.js';
-
 export function detectCouplingIntent(text) {
   const q = text.toLowerCase();
   const hasIntent = /\b(acoplamiento|coupling|cross-layer|endpoint-trace)\b/.test(q);
@@ -17,6 +15,7 @@ export async function traceCouplingForTask(task, { root, depth = 4 } = {}) {
       return { ok: false, lines: [], result: null };
     }
 
+    const { traceCrossLayer } = await import('../../vendor/context-query-core/src/index.js');
     const result = await traceCrossLayer({
       repoRoot: root || process.cwd(),
       start,
