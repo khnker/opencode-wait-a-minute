@@ -13,7 +13,19 @@ import { createAuditCoalescer } from "../persistence/audit-coalescer.js";
 export class ContextDecisionTracer {
   constructor(traceId, projectRoot, mode = "standard") {
     this.traceId = traceId;
-    this.projectRoot = projectRoot || process.cwd();
+    // Validate projectRoot: must exist and be a directory; otherwise fallback to cwd.
+    const rootCandidates = [projectRoot, process.cwd()];
+    let validRoot = process.cwd();
+    for (const candidate of rootCandidates) {
+      if (candidate && fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+        validRoot = candidate;
+        break;
+      }
+    }
+    if (validRoot !== (projectRoot || process.cwd())) {
+      logger.warn("ContextDecisionTracer", `Invalid projectRoot: ${projectRoot || "undefined"}. Falling back to: ${validRoot}`);
+    }
+    this.projectRoot = validRoot;
     this.mode = mode; // minimal, standard, debug
     this.ledger = {
       traceId,
