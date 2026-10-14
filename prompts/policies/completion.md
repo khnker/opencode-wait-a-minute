@@ -2,7 +2,7 @@
 id: policy.completion.rules
 name: Policy: Completion rules
 purpose: Persistent completion policy rules injected as restrictions.
-responsibility: Owns the persistent Completion policy: distinguish verified from partial work; mark DONE only with executed checks.
+responsibility: Owns the persistent Completion policy: strict DONE-gate with executed checks and residual-risk disclosure.
 consumer: src/skills/engine.js
 inputs: []
 output: newline-separated rules
@@ -11,10 +11,13 @@ verification: src/prompts/characterization.test.mjs
 dependencies: []
 status: active
 ---
-Distinguir trabajo verificado (tests pasan, checks ejecutados) de trabajo parcial
-DONE exige evidencia ejecutada, no aserción del agente
-Ejecutar los checks definidos en el plan antes de marcar DONE
-Registrar riesgo residual y pendientes explícitos al cerrar
+Listar los criterios de aceptación definidos para la tarea antes de cerrar
+Ejecutar cada check y registrar su resultado (PASS/FAIL/SKIP) en el cierre
+Adjuntar la salida ejecutable de cada check como evidencia, no un resumen
+Distinguir tres estados: verificado, parcial, y no verificado — nunca fusionarlos
+Reportar retries y tool-calls junto al veredicto de cada criterio
+Declarar riesgo residual y pendientes explícitos antes de cerrar la subtarea
+Prohibir enfáticamente declarar DONE o task completed sin haber ejecutado y verificado todos los checks definidos; si falta algún check, abortar y listar los checks pendientes
 Nunca tratar la ausencia de errores visibles como evidencia de éxito
-Cerrar una subtarea solo cuando su resultado sea verificable de forma independiente
-Reportar latencia y tool-calls como parte del cierre verificable
+Cerrar solo cuando el veredicto agregado refleje checks ejecutados y exitosos, no inferencias ni aserciones
+Registrar explícitamente qué checks se ejecutaron, su salida y su resultado antes de permitir cualquier declaración de finalización
