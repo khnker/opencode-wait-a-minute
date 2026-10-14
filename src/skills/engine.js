@@ -310,6 +310,30 @@ const PERSISTENT_POLICIES = {
     rules: loadPrompt("policy.simplify.rules").split("\n"),
     gates: ["speculative-abstraction", "unnecessary-deps"],
   },
+  discovery: {
+    name: "Discovery",
+    kind: "persistent",
+    rules: loadPrompt("policy.discovery.rules").split("\n"),
+    gates: ["indexed-lookup-first", "context-gather-before-act"],
+  },
+  runtime: {
+    name: "Runtime",
+    kind: "persistent",
+    rules: loadPrompt("policy.runtime.rules").split("\n"),
+    gates: ["latency-budget", "token-budget", "tool-call-budget"],
+  },
+  "decision-gate": {
+    name: "Decision Gate",
+    kind: "persistent",
+    rules: loadPrompt("policy.decision-gate.rules").split("\n"),
+    gates: ["bifurcation-logged", "alternatives-documented"],
+  },
+  completion: {
+    name: "Completion",
+    kind: "persistent",
+    rules: loadPrompt("policy.completion.rules").split("\n"),
+    gates: ["verified-not-partial", "done-needs-evidence"],
+  },
 };
 
 // Excepciones de Simplify: nunca eliminar restricciones esenciales.
