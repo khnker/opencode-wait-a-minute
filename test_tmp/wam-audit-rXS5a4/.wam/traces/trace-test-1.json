@@ -1,0 +1,14 @@
+{
+  "traceId": "trace-test-1",
+  "timestamp": "2026-10-14T18:27:50.418Z",
+  "entries": [
+    {
+      "type": "CONCEPT_EXTRACTION",
+      "timestamp": "2026-10-14T18:27:50.419Z",
+      "concept": "auth",
+      "metadata": {
+        "surface": "login"
+      }
+    }
+  ]
+}

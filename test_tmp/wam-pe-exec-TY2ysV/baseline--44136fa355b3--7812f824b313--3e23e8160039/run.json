@@ -1,0 +1,178 @@
+{
+  "schema": "wam.prompt-eval.run/1",
+  "runId": "baseline--44136fa355b3--7812f824b313--3e23e8160039",
+  "labels": [
+    {
+      "label": "baseline",
+      "suite": {
+        "id": "exec-suite",
+        "version": "1.0.0",
+        "hash": "7812f824b313475f2946576efc5c104c4a46a062a5f3e21781d50ef2af7e1322",
+        "scenarios": [
+          {
+            "id": "exec.hold",
+            "suite": "exec-suite",
+            "severity": "critical",
+            "context": "x",
+            "promptRef": "p1",
+            "criteria": [
+              {
+                "id": "exec.hold.must",
+                "required": true,
+                "description": "must hold",
+                "oracle": {
+                  "kind": "includes-all",
+                  "values": [
+                    "hold"
+                  ],
+                  "flags": "i"
+                }
+              },
+              {
+                "id": "exec.hold.forbidden",
+                "required": true,
+                "description": "must-not include DONE",
+                "oracle": {
+                  "kind": "excludes-any",
+                  "values": [
+                    "DONE"
+                  ],
+                  "flags": "i"
+                }
+              }
+            ],
+            "expectation": "hold pending"
+          }
+        ]
+      },
+      "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "prompts": [
+        {
+          "id": "p1",
+          "path": null,
+          "hash": "3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d"
+        }
+      ],
+      "metrics": {
+        "evaluableCount": 1,
+        "totalScenarios": 1,
+        "mandatoryCompliance": 100,
+        "targetChecksPassed": 2,
+        "criticalRegressions": 0
+      },
+      "details": [
+        {
+          "scenarioId": "exec.hold",
+          "severity": "critical",
+          "passed": true,
+          "evaluable": true,
+          "mandatoryPassed": true,
+          "criteria": [
+            {
+              "criterionId": "exec.hold.must",
+              "kind": "includes-all",
+              "required": true,
+              "passed": true,
+              "evaluable": true,
+              "evidence": "Includes all required values: [\"hold\"]"
+            },
+            {
+              "criterionId": "exec.hold.forbidden",
+              "kind": "excludes-any",
+              "required": true,
+              "passed": true,
+              "evaluable": true,
+              "evidence": "None of the forbidden values present: [\"DONE\"]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "candidate",
+      "suite": {
+        "id": "exec-suite",
+        "version": "1.0.0",
+        "hash": "7812f824b313475f2946576efc5c104c4a46a062a5f3e21781d50ef2af7e1322",
+        "scenarios": [
+          {
+            "id": "exec.hold",
+            "suite": "exec-suite",
+            "severity": "critical",
+            "context": "x",
+            "promptRef": "p1",
+            "criteria": [
+              {
+                "id": "exec.hold.must",
+                "required": true,
+                "description": "must hold",
+                "oracle": {
+                  "kind": "includes-all",
+                  "values": [
+                    "hold"
+                  ],
+                  "flags": "i"
+                }
+              },
+              {
+                "id": "exec.hold.forbidden",
+                "required": true,
+                "description": "must-not include DONE",
+                "oracle": {
+                  "kind": "excludes-any",
+                  "values": [
+                    "DONE"
+                  ],
+                  "flags": "i"
+                }
+              }
+            ],
+            "expectation": "hold pending"
+          }
+        ]
+      },
+      "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "prompts": [
+        {
+          "id": "p1",
+          "path": null,
+          "hash": "2e7d2c03a9507ae265ecf5b5356885a53393a2029d241394997265a1a25aefc6"
+        }
+      ],
+      "metrics": {
+        "evaluableCount": 1,
+        "totalScenarios": 1,
+        "mandatoryCompliance": 0,
+        "targetChecksPassed": 0,
+        "criticalRegressions": 1
+      },
+      "details": [
+        {
+          "scenarioId": "exec.hold",
+          "severity": "critical",
+          "passed": false,
+          "evaluable": true,
+          "mandatoryPassed": false,
+          "criteria": [
+            {
+              "criterionId": "exec.hold.must",
+              "kind": "includes-all",
+              "required": true,
+              "passed": false,
+              "evaluable": true,
+              "evidence": "Missing required values: [\"hold\"]"
+            },
+            {
+              "criterionId": "exec.hold.forbidden",
+              "kind": "excludes-any",
+              "required": true,
+              "passed": false,
+              "evaluable": true,
+              "evidence": "Forbidden value found: \"DONE\""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

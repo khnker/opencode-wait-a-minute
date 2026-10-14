@@ -1,0 +1,21 @@
+{
+  "context_id": "cap_mv8g06exdotluu",
+  "session_id": "ses_mv8g06eq9epkun",
+  "level": "L3",
+  "lifecycle": "stale",
+  "purpose": "Contexto temporal",
+  "scope": "",
+  "importance": 5,
+  "confidence": 0.5,
+  "provenance": "inferred",
+  "created_at": "2026-10-14T18:27:54.105Z",
+  "updated_at": "2026-10-14T18:27:54.105Z",
+  "mutation_rate": "medium",
+  "reuse_probability": "medium",
+  "dependencies": [],
+  "supersedes": null,
+  "superseded_by": null,
+  "retrieval_hints": [],
+  "content": "exploración",
+  "evidence": ""
+}

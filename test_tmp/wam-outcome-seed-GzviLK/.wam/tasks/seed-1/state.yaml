@@ -1,0 +1,30 @@
+{
+  "phase": "IMPLEMENTING",
+  "contract": {
+    "status": "APPROVED",
+    "checks": [],
+    "unknowns": [],
+    "assumptions": []
+  },
+  "requirements": [
+    {
+      "id": "R1",
+      "title": "demo",
+      "status": "verified",
+      "evidence": [
+        "done"
+      ]
+    }
+  ],
+  "outcomeContract": {
+    "taskId": "seed-1",
+    "objective": "demo",
+    "acceptanceCriteria": [
+      {
+        "id": "outcome-evaluation",
+        "description": "Task outcome verified by evidence",
+        "mandatory": true
+      }
+    ]
+  }
+}

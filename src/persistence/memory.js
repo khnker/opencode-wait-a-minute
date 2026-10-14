@@ -4,7 +4,15 @@ import { cavemanify } from "../skills/engine.js";
 
 const StorageProvider = {
   read: (p) => fs.readFileSync(p, "utf-8"),
-  write: (p, data) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data, "utf-8"); },
+  write: (p, data) => { 
+    try {
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      fs.writeFileSync(p, data, "utf-8");
+    } catch (err) {
+      console.error("Failed to write file:", p, err);
+      throw err;
+    }
+  },
   exists: (p) => fs.existsSync(p),
   readdir: (p) => fs.readdirSync(p),
   rm: (p, opts) => fs.rmSync(p, opts)

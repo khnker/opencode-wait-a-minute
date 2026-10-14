@@ -304,7 +304,7 @@
       "id": "policy.verify.rules",
       "path": "policies/verify.md",
       "status": "active",
-      "responsibility": "Owns the persistent Verify policy: no task is DONE without satisfied evidence.",
+      "responsibility": "Owns the persistent Verify policy: evidence-driven decision finality; explicit checks, observable results, no invisible success.",
       "consumers": [
         "src/skills/engine.js"
       ],
@@ -424,7 +424,7 @@
       "id": "policy.completion.rules",
       "path": "policies/completion.md",
       "status": "active",
-      "responsibility": "Owns the persistent Completion policy: distinguish verified from partial work; DONE only with executed checks.",
+      "responsibility": "Owns the persistent Completion policy: strict DONE-gate with executed checks and residual-risk disclosure.",
       "consumers": [
         "src/skills/engine.js"
       ],

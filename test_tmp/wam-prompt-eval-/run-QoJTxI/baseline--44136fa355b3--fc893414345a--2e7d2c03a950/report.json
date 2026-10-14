@@ -1,0 +1,25 @@
+{
+  "runId": "baseline--44136fa355b3--fc893414345a--2e7d2c03a950",
+  "labels": [
+    "baseline"
+  ],
+  "scenarios": [
+    {
+      "scenarioId": "sc1",
+      "severity": "low",
+      "passed": false,
+      "evaluable": false,
+      "mandatoryPassed": false,
+      "criteria": [
+        {
+          "criterionId": "c",
+          "kind": "includes-all",
+          "required": true,
+          "passed": false,
+          "evaluable": false,
+          "evidence": "Output missing or empty; not evaluable"
+        }
+      ]
+    }
+  ]
+}

@@ -138,6 +138,8 @@ export function assembleContext({
   const admissionItems = [];
 
   const reserve = (level, text, admission = ADMISSION.MANDATORY, reason = "required") => {
+    // MANDATORY items bypass budget limits — never truncated, never dropped.
+    // They are guaranteed to be present in the pack regardless of budget.
     const t = estTokens(text);
     levels[level].push(text);
     admissionItems.push({ level, admission, reason, tokenCost: t, text });
@@ -159,11 +161,13 @@ export function assembleContext({
     return t;
   };
 
-  /** Drop OPTIONAL items first, then CONDITIONAL, to free budget for MANDATORY. */
+  /** Drop CONDITIONAL items first, then OPTIONAL, to free budget for MANDATORY. */
   const dropByAdmission = (minAdmission) => {
-    const order = [ADMISSION.OPTIONAL, ADMISSION.CONDITIONAL];
+    const order = [ADMISSION.CONDITIONAL, ADMISSION.OPTIONAL];
     const minIdx = order.indexOf(minAdmission);
-    const droppable = order.slice(minIdx);
+    // minAdmission=MANDATORY → drop everything below MANDATORY (both CONDITIONAL and OPTIONAL).
+    // indexOf returns -1 for MANDATORY, so clamp to 0 to include the full order.
+    const droppable = order.slice(Math.max(0, minIdx));
 
     let freed = 0;
     for (const admission of droppable) {
@@ -450,7 +454,8 @@ if (!isTrivial) {
         
         const head = `[wam N3 skill] ${skill.id} — ${(skill.reason || "").slice(0, 100)}`;
         const line = `${head}\n  content: ${truncated.replace(/\n+/g, " ").slice(0, skillContentMax)}`;
-        const cost = spend("N3", line, ADMISSION.OPTIONAL, `skill ${skill.id}`);
+        const skillAdmission = skill.base ? ADMISSION.OPTIONAL : ADMISSION.CONDITIONAL;
+        const cost = spend("N3", line, skillAdmission, `skill ${skill.id}`);
         skillSpent += cost;
         rationale.push(`N3: ${skill.id} inyectada (${cost} tok, reason: ${skill.reason})`);
       }

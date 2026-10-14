@@ -1,0 +1,21 @@
+{
+  "context_id": "cap_mv8k3wp1r3xgpc",
+  "session_id": "ses_mv8k3wow0ex1qj",
+  "level": "L3",
+  "lifecycle": "active",
+  "purpose": "Decisión nueva",
+  "scope": "",
+  "importance": 5,
+  "confidence": 0.5,
+  "provenance": "user_decided",
+  "created_at": "2026-10-14T20:22:46.597Z",
+  "updated_at": "2026-10-14T20:22:46.597Z",
+  "mutation_rate": "medium",
+  "reuse_probability": "medium",
+  "dependencies": [],
+  "supersedes": "cap_mv8k3wp1jjjap3",
+  "superseded_by": null,
+  "retrieval_hints": [],
+  "content": "Postgres",
+  "evidence": ""
+}

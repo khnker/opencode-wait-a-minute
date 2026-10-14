@@ -1,0 +1,21 @@
+{
+  "context_id": "cap_mv8k3wp3a7jnv6",
+  "session_id": "ses_mv8k3wow0ex1qj",
+  "level": "L3",
+  "lifecycle": "active",
+  "purpose": "Deploy docker compose",
+  "scope": "ops",
+  "importance": 4,
+  "confidence": 0.5,
+  "provenance": "observed",
+  "created_at": "2026-10-14T20:22:46.599Z",
+  "updated_at": "2026-10-14T20:22:46.599Z",
+  "mutation_rate": "medium",
+  "reuse_probability": "medium",
+  "dependencies": [],
+  "supersedes": null,
+  "superseded_by": null,
+  "retrieval_hints": [],
+  "content": "orquestación",
+  "evidence": ""
+}

@@ -1,0 +1,11 @@
+{"timestamp":"2026-10-14T20:22:54.878Z","task":"implementar auth con refresh token y migración","selected_ids":[],"budget_used":0,"budget":15940,"sufficiency":"insufficient"}
+{"timestamp":"2026-10-14T20:22:54.964Z","task":"migrar a postgres","selected_ids":[],"budget_used":0,"budget":15886,"sufficiency":"insufficient"}
+{"timestamp":"2026-10-14T20:22:55.033Z","task":"hacer X","selected_ids":[],"budget_used":0,"budget":15945,"sufficiency":"insufficient"}
+{"timestamp":"2026-10-14T20:22:55.121Z","task":"hacer Y","selected_ids":[],"budget_used":0,"budget":15945,"sufficiency":"insufficient"}
+{"timestamp":"2026-10-14T20:22:55.218Z","task":"implementar feature con tests","selected_ids":[],"budget_used":0,"budget":15944,"sufficiency":"insufficient"}
+{"timestamp":"2026-10-14T20:22:55.299Z","task":"terminé la tarea, está done","selected_ids":[],"budget_used":0,"budget":15947,"sufficiency":"insufficient"}
+{"timestamp":"2026-10-14T20:22:55.387Z","task":"implementar migración con tests","selected_ids":[],"budget_used":0,"budget":15941,"sufficiency":"insufficient"}
+{"timestamp":"2026-10-14T20:22:55.578Z","task":"hacer deployment","selected_ids":[],"budget_used":0,"budget":15945,"sufficiency":"insufficient"}
+{"timestamp":"2026-10-14T20:22:55.732Z","task":"todo listo, declare done","selected_ids":[],"budget_used":0,"budget":15948,"sufficiency":"insufficient"}
+{"timestamp":"2026-10-14T20:22:55.824Z","task":"continuar","selected_ids":[],"budget_used":0,"budget":15943,"sufficiency":"insufficient"}
+{"timestamp":"2026-10-14T20:22:56.090Z","task":"tarea de prueba","selected_ids":[],"budget_used":0,"budget":15945,"sufficiency":"insufficient"}

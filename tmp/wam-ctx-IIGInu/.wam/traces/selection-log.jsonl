@@ -1,0 +1,4 @@
+{"timestamp":"2026-10-14T20:22:46.601Z","task":"implementar refresh token rotation en auth","selected_ids":["cap_mv8k3wp3eugayr","cap_mv8k3woziy3luv","cap_mv8k3woykv0g2c"],"budget_used":43,"budget":2000,"sufficiency":"insufficient"}
+{"timestamp":"2026-10-14T20:22:46.602Z","task":"agregar cache redis para el scraper","selected_ids":["cap_mv8k3wp3eugayr","cap_mv8k3woziy3luv"],"budget_used":22,"budget":1000,"sufficiency":"insufficient"}
+{"timestamp":"2026-10-14T20:22:46.604Z","task":"token rotation","selected_ids":["cap_mv8k3wp3eugayr","cap_mv8k3woziy3luv","cap_mv8k3woykv0g2c"],"budget_used":43,"budget":500,"sufficiency":"insufficient"}
+{"timestamp":"2026-10-14T20:22:46.605Z","task":"cómo manejamos refresh token rotation","selected_ids":["cap_mv8k3wp3eugayr","cap_mv8k3woziy3luv","cap_mv8k3woykv0g2c"],"budget_used":43,"budget":2000,"sufficiency":"insufficient"}

@@ -1,0 +1,21 @@
+{
+  "context_id": "cap_mv8f6a74xy99iw",
+  "session_id": "ses_mv8f6a6ygfqsps",
+  "level": "L2",
+  "lifecycle": "active",
+  "purpose": "Migración Postgres",
+  "scope": "db",
+  "importance": 6,
+  "confidence": 0.5,
+  "provenance": "observed",
+  "created_at": "2026-10-14T18:04:39.328Z",
+  "updated_at": "2026-10-14T18:04:39.328Z",
+  "mutation_rate": "medium",
+  "reuse_probability": "medium",
+  "dependencies": [],
+  "supersedes": null,
+  "superseded_by": null,
+  "retrieval_hints": [],
+  "content": "schema migrations",
+  "evidence": ""
+}

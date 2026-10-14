@@ -1,0 +1,33 @@
+{
+  "traceId": "trace-tech",
+  "timestamp": "2026-10-14T18:27:50.424Z",
+  "entries": [
+    {
+      "type": "TECHNICAL_DECISION",
+      "timestamp": "2026-10-14T18:27:50.425Z",
+      "decisionPoint": "new service X",
+      "rationale": "lower latency",
+      "alternatives": [
+        {
+          "name": "monolith",
+          "pros": [
+            "simple"
+          ],
+          "cons": [
+            "slow"
+          ],
+          "whyRejected": "does not scale"
+        }
+      ],
+      "evidence": [
+        {
+          "type": "benchmark",
+          "value": "12ms p95"
+        }
+      ],
+      "technicalMetrics": {
+        "latencyMs": 12
+      }
+    }
+  ]
+}

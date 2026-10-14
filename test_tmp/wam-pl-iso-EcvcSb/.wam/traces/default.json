@@ -1,0 +1,103 @@
+{
+  "traceId": "default",
+  "timestamp": "2026-10-14T18:04:45.250Z",
+  "entries": [
+    {
+      "type": "CONCEPT_EXTRACTION",
+      "timestamp": "2026-10-14T18:04:45.250Z",
+      "concept": "write documentation",
+      "metadata": {
+        "source": "user"
+      }
+    },
+    {
+      "type": "CANDIDATE_RETRIEVAL",
+      "timestamp": "2026-10-14T18:04:45.250Z",
+      "query": "write documentation",
+      "candidatesCount": 453,
+      "metadata": {
+        "source": "registry"
+      }
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:04:45.251Z",
+      "candidateId": "dietrichgebert-ponytail-ponytail",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:04:45.251Z",
+      "candidateId": "dietrichgebert-ponytail-ponytail",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:04:45.251Z",
+      "candidateId": "github-awesome-copilot-doc-and-modernize",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Seleccionado por score 3 y keywords: doc"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:04:45.251Z",
+      "candidateId": "github-awesome-copilot-documentation-writer",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Seleccionado por score 3 y keywords: documentation"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:04:45.251Z",
+      "candidateId": "github-awesome-copilot-oo-component-documentation",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Seleccionado por score 3 y keywords: documentation"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:04:45.251Z",
+      "candidateId": "github-awesome-copilot-oo-component-documentation",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:04:45.251Z",
+      "candidateId": "github-awesome-copilot-signal-write",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:04:45.251Z",
+      "candidateId": "github-awesome-copilot-write-coding-standards-from-file",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    }
+  ]
+}

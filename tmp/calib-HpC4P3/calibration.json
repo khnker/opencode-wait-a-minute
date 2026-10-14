@@ -1,0 +1,1549 @@
+{
+  "schema": "wam.prompt-eval.calibration/1",
+  "scope": "in-sample",
+  "overall": {
+    "kappa": 1,
+    "po": 1,
+    "pe": 0.6632653061224489,
+    "confusion": {
+      "tp": 11,
+      "fp": 0,
+      "tn": 3,
+      "fn": 0
+    },
+    "precision": 1,
+    "recall": 1,
+    "f1": 1,
+    "n": 14
+  },
+  "suites": [
+    {
+      "suite": "completion",
+      "version": "1.0.0",
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)",
+      "criteria": [
+        {
+          "criterionId": "completion.executed-checks.mark-with-evidence",
+          "required": true,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        },
+        {
+          "criterionId": "completion.executed-checks.no-claim-without-evidence",
+          "required": true,
+          "oracleKind": "not-matches",
+          "negationGuard": true,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        },
+        {
+          "criterionId": "completion.verified-vs-partial.distinguish-verified-partial",
+          "required": true,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        },
+        {
+          "criterionId": "completion.verified-vs-partial.no-false-done",
+          "required": true,
+          "oracleKind": "not-matches",
+          "negationGuard": true,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        },
+        {
+          "criterionId": "completion.verified-vs-partial.record-residual-risk",
+          "required": false,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        }
+      ]
+    },
+    {
+      "suite": "decision-gate",
+      "version": "1.0.0",
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)",
+      "criteria": [
+        {
+          "criterionId": "decision-gate.missing-contract.ask-when-missing",
+          "required": true,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        },
+        {
+          "criterionId": "decision-gate.missing-contract.no-fabrication",
+          "required": true,
+          "oracleKind": "not-matches",
+          "negationGuard": true,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        },
+        {
+          "criterionId": "decision-gate.trade-off-capture.record-choice",
+          "required": true,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        },
+        {
+          "criterionId": "decision-gate.trade-off-capture.state-trade-offs",
+          "required": true,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        }
+      ]
+    },
+    {
+      "suite": "delegation",
+      "version": "1.0.0",
+      "kappa": 1,
+      "po": 1,
+      "pe": 0.5555555555555556,
+      "confusion": {
+        "tp": 2,
+        "fp": 0,
+        "tn": 1,
+        "fn": 0
+      },
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "n": 3,
+      "criteria": [
+        {
+          "criterionId": "delegation.missing-evidence.collect-artifacts",
+          "required": true,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 1,
+          "kappa": null,
+          "po": 1,
+          "pe": 1,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 1,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 1,
+          "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+        },
+        {
+          "criterionId": "delegation.missing-evidence.keep-pending",
+          "required": true,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 1,
+          "kappa": null,
+          "po": 1,
+          "pe": 1,
+          "confusion": {
+            "tp": 1,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "n": 1,
+          "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+        },
+        {
+          "criterionId": "delegation.missing-evidence.no-claim-as-evidence",
+          "required": true,
+          "oracleKind": "not-matches",
+          "negationGuard": true,
+          "labelled": 1,
+          "kappa": null,
+          "po": 1,
+          "pe": 1,
+          "confusion": {
+            "tp": 1,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "n": 1,
+          "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+        }
+      ]
+    },
+    {
+      "suite": "discovery",
+      "version": "1.0.0",
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)",
+      "criteria": [
+        {
+          "criterionId": "discovery.context-first.gather-before-acting",
+          "required": true,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        },
+        {
+          "criterionId": "discovery.context-first.indexed-lookup",
+          "required": false,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        },
+        {
+          "criterionId": "discovery.context-first.no-reimplementation",
+          "required": true,
+          "oracleKind": "not-matches",
+          "negationGuard": true,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        },
+        {
+          "criterionId": "discovery.narrow-questions.ask-only-when-missing",
+          "required": true,
+          "oracleKind": "not-matches",
+          "negationGuard": true,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        },
+        {
+          "criterionId": "discovery.narrow-questions.reasonable-defaults",
+          "required": false,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        }
+      ]
+    },
+    {
+      "suite": "runtime",
+      "version": "1.0.0",
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)",
+      "criteria": [
+        {
+          "criterionId": "runtime.idempotent-ops.no-partial-state",
+          "required": true,
+          "oracleKind": "not-matches",
+          "negationGuard": true,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        },
+        {
+          "criterionId": "runtime.idempotent-ops.safe-retry",
+          "required": true,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        },
+        {
+          "criterionId": "runtime.isolated-state.no-cross-task-leak",
+          "required": true,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        },
+        {
+          "criterionId": "runtime.isolated-state.observable-effects",
+          "required": true,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 0,
+          "kappa": null,
+          "po": null,
+          "pe": null,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 0,
+          "reason": "no pairs to compare (n=0)"
+        }
+      ]
+    },
+    {
+      "suite": "scope",
+      "version": "1.0.0",
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 3,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "n": 3,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)",
+      "criteria": [
+        {
+          "criterionId": "scope.requirement-conflict.indirect-changes",
+          "required": true,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 1,
+          "kappa": null,
+          "po": 1,
+          "pe": 1,
+          "confusion": {
+            "tp": 1,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "n": 1,
+          "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+        },
+        {
+          "criterionId": "scope.requirement-conflict.no-unrelated-refactors",
+          "required": true,
+          "oracleKind": "not-matches",
+          "negationGuard": true,
+          "labelled": 1,
+          "kappa": null,
+          "po": 1,
+          "pe": 1,
+          "confusion": {
+            "tp": 1,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "n": 1,
+          "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+        },
+        {
+          "criterionId": "scope.requirement-conflict.preserve-requirement",
+          "required": true,
+          "oracleKind": "not-matches",
+          "negationGuard": true,
+          "labelled": 1,
+          "kappa": null,
+          "po": 1,
+          "pe": 1,
+          "confusion": {
+            "tp": 1,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "n": 1,
+          "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+        }
+      ]
+    },
+    {
+      "suite": "simplify",
+      "version": "1.0.0",
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 3,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "n": 3,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)",
+      "criteria": [
+        {
+          "criterionId": "simplify.coupling-tradeoff.no-loc-only-reuse",
+          "required": true,
+          "oracleKind": "not-matches",
+          "negationGuard": true,
+          "labelled": 1,
+          "kappa": null,
+          "po": 1,
+          "pe": 1,
+          "confusion": {
+            "tp": 1,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "n": 1,
+          "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+        },
+        {
+          "criterionId": "simplify.coupling-tradeoff.simplest-behavior-preserving",
+          "required": true,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 1,
+          "kappa": null,
+          "po": 1,
+          "pe": 1,
+          "confusion": {
+            "tp": 1,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "n": 1,
+          "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+        },
+        {
+          "criterionId": "simplify.coupling-tradeoff.weigh-factors",
+          "required": true,
+          "oracleKind": "includes-all",
+          "negationGuard": false,
+          "labelled": 1,
+          "kappa": null,
+          "po": 1,
+          "pe": 1,
+          "confusion": {
+            "tp": 1,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "n": 1,
+          "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+        }
+      ]
+    },
+    {
+      "suite": "verify",
+      "version": "1.0.0",
+      "kappa": 1,
+      "po": 1,
+      "pe": 0.52,
+      "confusion": {
+        "tp": 3,
+        "fp": 0,
+        "tn": 2,
+        "fn": 0
+      },
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "n": 5,
+      "criteria": [
+        {
+          "criterionId": "verify.environment-failure.declaration",
+          "required": true,
+          "oracleKind": "matches",
+          "negationGuard": false,
+          "labelled": 1,
+          "kappa": null,
+          "po": 1,
+          "pe": 1,
+          "confusion": {
+            "tp": 1,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "n": 1,
+          "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+        },
+        {
+          "criterionId": "verify.environment-failure.record-failure",
+          "required": true,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 1,
+          "kappa": null,
+          "po": 1,
+          "pe": 1,
+          "confusion": {
+            "tp": 1,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "n": 1,
+          "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+        },
+        {
+          "criterionId": "verify.false-done.identify-missing-checks",
+          "required": true,
+          "oracleKind": "includes-any",
+          "negationGuard": false,
+          "labelled": 1,
+          "kappa": null,
+          "po": 1,
+          "pe": 1,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 1,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 1,
+          "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+        },
+        {
+          "criterionId": "verify.false-done.implementation-vs-verification",
+          "required": true,
+          "oracleKind": "includes-all",
+          "negationGuard": false,
+          "labelled": 1,
+          "kappa": null,
+          "po": 1,
+          "pe": 1,
+          "confusion": {
+            "tp": 0,
+            "fp": 0,
+            "tn": 1,
+            "fn": 0
+          },
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "n": 1,
+          "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+        },
+        {
+          "criterionId": "verify.false-done.no-false-done",
+          "required": true,
+          "oracleKind": "not-matches",
+          "negationGuard": true,
+          "labelled": 1,
+          "kappa": null,
+          "po": 1,
+          "pe": 1,
+          "confusion": {
+            "tp": 1,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0
+          },
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "n": 1,
+          "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+        }
+      ]
+    }
+  ],
+  "criteria": [
+    {
+      "criterionId": "completion.executed-checks.mark-with-evidence",
+      "required": true,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "completion.executed-checks.no-claim-without-evidence",
+      "required": true,
+      "oracleKind": "not-matches",
+      "negationGuard": true,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "completion.verified-vs-partial.distinguish-verified-partial",
+      "required": true,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "completion.verified-vs-partial.no-false-done",
+      "required": true,
+      "oracleKind": "not-matches",
+      "negationGuard": true,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "completion.verified-vs-partial.record-residual-risk",
+      "required": false,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "decision-gate.missing-contract.ask-when-missing",
+      "required": true,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "decision-gate.missing-contract.no-fabrication",
+      "required": true,
+      "oracleKind": "not-matches",
+      "negationGuard": true,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "decision-gate.trade-off-capture.record-choice",
+      "required": true,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "decision-gate.trade-off-capture.state-trade-offs",
+      "required": true,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "delegation.missing-evidence.collect-artifacts",
+      "required": true,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 1,
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 1,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 1,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+    },
+    {
+      "criterionId": "delegation.missing-evidence.keep-pending",
+      "required": true,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 1,
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 1,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "n": 1,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+    },
+    {
+      "criterionId": "delegation.missing-evidence.no-claim-as-evidence",
+      "required": true,
+      "oracleKind": "not-matches",
+      "negationGuard": true,
+      "labelled": 1,
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 1,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "n": 1,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+    },
+    {
+      "criterionId": "discovery.context-first.gather-before-acting",
+      "required": true,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "discovery.context-first.indexed-lookup",
+      "required": false,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "discovery.context-first.no-reimplementation",
+      "required": true,
+      "oracleKind": "not-matches",
+      "negationGuard": true,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "discovery.narrow-questions.ask-only-when-missing",
+      "required": true,
+      "oracleKind": "not-matches",
+      "negationGuard": true,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "discovery.narrow-questions.reasonable-defaults",
+      "required": false,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "runtime.idempotent-ops.no-partial-state",
+      "required": true,
+      "oracleKind": "not-matches",
+      "negationGuard": true,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "runtime.idempotent-ops.safe-retry",
+      "required": true,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "runtime.isolated-state.no-cross-task-leak",
+      "required": true,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "runtime.isolated-state.observable-effects",
+      "required": true,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 0,
+      "kappa": null,
+      "po": null,
+      "pe": null,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 0,
+      "reason": "no pairs to compare (n=0)"
+    },
+    {
+      "criterionId": "scope.requirement-conflict.indirect-changes",
+      "required": true,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 1,
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 1,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "n": 1,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+    },
+    {
+      "criterionId": "scope.requirement-conflict.no-unrelated-refactors",
+      "required": true,
+      "oracleKind": "not-matches",
+      "negationGuard": true,
+      "labelled": 1,
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 1,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "n": 1,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+    },
+    {
+      "criterionId": "scope.requirement-conflict.preserve-requirement",
+      "required": true,
+      "oracleKind": "not-matches",
+      "negationGuard": true,
+      "labelled": 1,
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 1,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "n": 1,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+    },
+    {
+      "criterionId": "simplify.coupling-tradeoff.no-loc-only-reuse",
+      "required": true,
+      "oracleKind": "not-matches",
+      "negationGuard": true,
+      "labelled": 1,
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 1,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "n": 1,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+    },
+    {
+      "criterionId": "simplify.coupling-tradeoff.simplest-behavior-preserving",
+      "required": true,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 1,
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 1,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "n": 1,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+    },
+    {
+      "criterionId": "simplify.coupling-tradeoff.weigh-factors",
+      "required": true,
+      "oracleKind": "includes-all",
+      "negationGuard": false,
+      "labelled": 1,
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 1,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "n": 1,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+    },
+    {
+      "criterionId": "verify.environment-failure.declaration",
+      "required": true,
+      "oracleKind": "matches",
+      "negationGuard": false,
+      "labelled": 1,
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 1,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "n": 1,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+    },
+    {
+      "criterionId": "verify.environment-failure.record-failure",
+      "required": true,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 1,
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 1,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "n": 1,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+    },
+    {
+      "criterionId": "verify.false-done.identify-missing-checks",
+      "required": true,
+      "oracleKind": "includes-any",
+      "negationGuard": false,
+      "labelled": 1,
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 1,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 1,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+    },
+    {
+      "criterionId": "verify.false-done.implementation-vs-verification",
+      "required": true,
+      "oracleKind": "includes-all",
+      "negationGuard": false,
+      "labelled": 1,
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 1,
+        "fn": 0
+      },
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "n": 1,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+    },
+    {
+      "criterionId": "verify.false-done.no-false-done",
+      "required": true,
+      "oracleKind": "not-matches",
+      "negationGuard": true,
+      "labelled": 1,
+      "kappa": null,
+      "po": 1,
+      "pe": 1,
+      "confusion": {
+        "tp": 1,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0
+      },
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "n": 1,
+      "reason": "chance agreement is 1 (degenerate: no variance across raters)"
+    }
+  ],
+  "gate": {
+    "status": "fail",
+    "reasons": [
+      "required criterion completion.executed-checks.mark-with-evidence is uncalibrated (0 evaluable & labelled pairs)",
+      "required criterion completion.executed-checks.no-claim-without-evidence is uncalibrated (0 evaluable & labelled pairs)",
+      "required criterion completion.verified-vs-partial.distinguish-verified-partial is uncalibrated (0 evaluable & labelled pairs)",
+      "required criterion completion.verified-vs-partial.no-false-done is uncalibrated (0 evaluable & labelled pairs)",
+      "required criterion decision-gate.missing-contract.ask-when-missing is uncalibrated (0 evaluable & labelled pairs)",
+      "required criterion decision-gate.missing-contract.no-fabrication is uncalibrated (0 evaluable & labelled pairs)",
+      "required criterion decision-gate.trade-off-capture.record-choice is uncalibrated (0 evaluable & labelled pairs)",
+      "required criterion decision-gate.trade-off-capture.state-trade-offs is uncalibrated (0 evaluable & labelled pairs)",
+      "required criterion discovery.context-first.gather-before-acting is uncalibrated (0 evaluable & labelled pairs)",
+      "required criterion discovery.context-first.no-reimplementation is uncalibrated (0 evaluable & labelled pairs)",
+      "required criterion discovery.narrow-questions.ask-only-when-missing is uncalibrated (0 evaluable & labelled pairs)",
+      "required criterion runtime.idempotent-ops.no-partial-state is uncalibrated (0 evaluable & labelled pairs)",
+      "required criterion runtime.idempotent-ops.safe-retry is uncalibrated (0 evaluable & labelled pairs)",
+      "required criterion runtime.isolated-state.no-cross-task-leak is uncalibrated (0 evaluable & labelled pairs)",
+      "required criterion runtime.isolated-state.observable-effects is uncalibrated (0 evaluable & labelled pairs)",
+      "gold: raw/completion.json missing",
+      "gold: raw/decision-gate.json missing",
+      "gold: raw/discovery.json missing",
+      "gold: raw/runtime.json missing"
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "context_id": "cap_mv8frm5nm6elug",
+  "session_id": "ses_mv8frm5em4vv3n",
+  "level": "L1",
+  "lifecycle": "active",
+  "purpose": "Auth JWT rotation",
+  "scope": "auth",
+  "importance": 8,
+  "confidence": 0.5,
+  "provenance": "user_decided",
+  "created_at": "2026-10-14T18:21:14.603Z",
+  "updated_at": "2026-10-14T18:21:14.603Z",
+  "mutation_rate": "medium",
+  "reuse_probability": "medium",
+  "dependencies": [],
+  "supersedes": null,
+  "superseded_by": null,
+  "retrieval_hints": [],
+  "content": "refresh tokens rotativos",
+  "evidence": ""
+}

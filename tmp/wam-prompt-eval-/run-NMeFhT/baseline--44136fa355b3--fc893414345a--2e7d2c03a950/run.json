@@ -1,0 +1,72 @@
+{
+  "schema": "wam.prompt-eval.run/1",
+  "runId": "baseline--44136fa355b3--fc893414345a--2e7d2c03a950",
+  "labels": [
+    {
+      "label": "baseline",
+      "suite": {
+        "id": "s",
+        "version": "1",
+        "hash": "fc893414345adcd325a763ffe791aeb2ad728bb99ac18e0276f00599cc9b6ded",
+        "scenarios": [
+          {
+            "id": "sc1",
+            "suite": "s",
+            "severity": "low",
+            "context": "x",
+            "promptRef": "p1",
+            "criteria": [
+              {
+                "id": "c",
+                "required": true,
+                "description": "must contain x",
+                "oracle": {
+                  "kind": "includes-all",
+                  "values": [
+                    "x"
+                  ],
+                  "flags": "i"
+                }
+              }
+            ],
+            "expectation": "x"
+          }
+        ]
+      },
+      "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "prompts": [
+        {
+          "id": "p1",
+          "path": null,
+          "hash": "2e7d2c03a9507ae265ecf5b5356885a53393a2029d241394997265a1a25aefc6"
+        }
+      ],
+      "metrics": {
+        "evaluableCount": 0,
+        "totalScenarios": 1,
+        "mandatoryCompliance": 0,
+        "targetChecksPassed": 0,
+        "criticalRegressions": 0
+      },
+      "details": [
+        {
+          "scenarioId": "sc1",
+          "severity": "low",
+          "passed": false,
+          "evaluable": false,
+          "mandatoryPassed": false,
+          "criteria": [
+            {
+              "criterionId": "c",
+              "kind": "includes-all",
+              "required": true,
+              "passed": false,
+              "evaluable": false,
+              "evidence": "Output missing or empty; not evaluable"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

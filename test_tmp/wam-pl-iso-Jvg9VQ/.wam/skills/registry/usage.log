@@ -1,0 +1,681 @@
+[
+  {
+    "at": "2026-10-14T18:54:06.090Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.090Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.090Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.214Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.215Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.215Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.215Z",
+    "skill_id": "structured-autonomy-implement",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (implement)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.289Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.289Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.296Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.297Z",
+    "skill_id": "tdd",
+    "source": "local",
+    "selected_because": "score 4 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.297Z",
+    "skill_id": "breakdown-test",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.297Z",
+    "skill_id": "creating-oracle-to-postgres-migration-integration-tests",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (tests)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.361Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.361Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.368Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.368Z",
+    "skill_id": "tdd",
+    "source": "local",
+    "selected_because": "score 4 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.368Z",
+    "skill_id": "breakdown-test",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.368Z",
+    "skill_id": "creating-oracle-to-postgres-migration-integration-tests",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (tests)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.443Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.443Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.444Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.503Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.503Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.503Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.555Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.555Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.555Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.555Z",
+    "skill_id": "tdd",
+    "source": "local",
+    "selected_because": "score 4 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.556Z",
+    "skill_id": "breakdown-test",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.556Z",
+    "skill_id": "creating-oracle-to-postgres-migration-integration-tests",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (tests)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.618Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.618Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.619Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.680Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.681Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.681Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.681Z",
+    "skill_id": "upstash-redis",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (redis)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.752Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.753Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.753Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.754Z",
+    "skill_id": "creating-oracle-to-postgres-migration-integration-tests",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 6 (postgres,tests)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.754Z",
+    "skill_id": "scaffolding-oracle-to-postgres-migration-test-project",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 6 (postgres,test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.754Z",
+    "skill_id": "tdd",
+    "source": "local",
+    "selected_because": "score 4 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.754Z",
+    "skill_id": "breakdown-test",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.754Z",
+    "skill_id": "creating-oracle-to-postgres-master-migration-plan",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (postgres)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.816Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.816Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.816Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.816Z",
+    "skill_id": "creating-oracle-to-postgres-migration-integration-tests",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 6 (postgres,tests)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.816Z",
+    "skill_id": "scaffolding-oracle-to-postgres-migration-test-project",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 6 (postgres,test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.817Z",
+    "skill_id": "tdd",
+    "source": "local",
+    "selected_because": "score 4 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.817Z",
+    "skill_id": "breakdown-test",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.817Z",
+    "skill_id": "creating-oracle-to-postgres-master-migration-plan",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (postgres)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.881Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.881Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.888Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.965Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.965Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.965Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.965Z",
+    "skill_id": "creating-oracle-to-postgres-migration-integration-tests",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 6 (postgres,tests)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.965Z",
+    "skill_id": "scaffolding-oracle-to-postgres-migration-test-project",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 6 (postgres,test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.965Z",
+    "skill_id": "tdd",
+    "source": "local",
+    "selected_because": "score 4 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.966Z",
+    "skill_id": "breakdown-test",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:06.966Z",
+    "skill_id": "creating-oracle-to-postgres-master-migration-plan",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (postgres)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.024Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.024Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.024Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.084Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.084Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.092Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.092Z",
+    "skill_id": "tdd",
+    "source": "local",
+    "selected_because": "score 4 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.092Z",
+    "skill_id": "breakdown-test",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.092Z",
+    "skill_id": "creating-oracle-to-postgres-migration-integration-tests",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (tests)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.092Z",
+    "skill_id": "playwright-generate-test",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.092Z",
+    "skill_id": "react19-test-patterns",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.156Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.157Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.158Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.228Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.228Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.228Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.228Z",
+    "skill_id": "creating-oracle-to-postgres-migration-integration-tests",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 6 (postgres,tests)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.229Z",
+    "skill_id": "scaffolding-oracle-to-postgres-migration-test-project",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 6 (postgres,test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.229Z",
+    "skill_id": "tdd",
+    "source": "local",
+    "selected_because": "score 4 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.229Z",
+    "skill_id": "breakdown-test",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (test)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.229Z",
+    "skill_id": "creating-oracle-to-postgres-master-migration-plan",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (postgres)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.290Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.290Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.297Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.297Z",
+    "skill_id": "structured-autonomy-implement",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (implement)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.357Z",
+    "skill_id": "codebase-design",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.357Z",
+    "skill_id": "writing-for-agents",
+    "source": "local",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.358Z",
+    "skill_id": "ponytail",
+    "source": "dietrichgebert-ponytail",
+    "selected_because": "Skill base (loadStrategy: \"base\")",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.358Z",
+    "skill_id": "nestjs-developer",
+    "source": "local",
+    "selected_because": "score 4 (api)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.358Z",
+    "skill_id": "api-breaking-change-detector",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (api)",
+    "loaded": true
+  },
+  {
+    "at": "2026-10-14T18:54:07.358Z",
+    "skill_id": "aspnet-minimal-api-openapi",
+    "source": "github-awesome-copilot",
+    "selected_because": "score 3 (api)",
+    "loaded": true
+  }
+]

@@ -1,0 +1,43 @@
+{
+  "runId": "baseline--44136fa355b3--02fdc06adc0f--d1988cd30198",
+  "labels": [
+    "baseline",
+    "candidate"
+  ],
+  "scenarios": [
+    {
+      "scenarioId": "s1",
+      "severity": "low",
+      "passed": false,
+      "evaluable": false,
+      "mandatoryPassed": false,
+      "criteria": [
+        {
+          "criterionId": "c1",
+          "kind": "includes-all",
+          "required": true,
+          "passed": false,
+          "evaluable": false,
+          "evidence": "Output missing or empty; not evaluable"
+        }
+      ]
+    },
+    {
+      "scenarioId": "s1",
+      "severity": "low",
+      "passed": false,
+      "evaluable": false,
+      "mandatoryPassed": false,
+      "criteria": [
+        {
+          "criterionId": "c1",
+          "kind": "includes-all",
+          "required": true,
+          "passed": false,
+          "evaluable": false,
+          "evidence": "Output missing or empty; not evaluable"
+        }
+      ]
+    }
+  ]
+}

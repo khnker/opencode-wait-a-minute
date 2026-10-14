@@ -1,0 +1,83 @@
+{
+  "traceId": "default",
+  "timestamp": "2026-10-14T18:04:09.315Z",
+  "entries": [
+    {
+      "type": "CONCEPT_EXTRACTION",
+      "timestamp": "2026-10-14T18:04:09.315Z",
+      "concept": "rename variable x to y",
+      "metadata": {
+        "source": "user"
+      }
+    },
+    {
+      "type": "CANDIDATE_RETRIEVAL",
+      "timestamp": "2026-10-14T18:04:09.316Z",
+      "query": "rename variable x to y",
+      "candidatesCount": 492,
+      "metadata": {
+        "source": "registry"
+      }
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:04:09.316Z",
+      "candidateId": "codebase-design",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:04:09.316Z",
+      "candidateId": "writing-for-agents",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:04:09.316Z",
+      "candidateId": "dietrichgebert-ponytail-ponytail",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:04:09.317Z",
+      "candidateId": "codebase-design",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:04:09.317Z",
+      "candidateId": "writing-for-agents",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:04:09.317Z",
+      "candidateId": "dietrichgebert-ponytail-ponytail",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    }
+  ]
+}

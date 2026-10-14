@@ -1,0 +1,24 @@
+{
+  "traceId": "load-github-awesome-copilot-agentic-workflows",
+  "timestamp": "2026-10-14T18:21:22.606Z",
+  "entries": [
+    {
+      "type": "CONCEPT_EXTRACTION",
+      "timestamp": "2026-10-14T18:21:22.606Z",
+      "concept": "Carga de skill github-awesome-copilot-agentic-workflows",
+      "metadata": {
+        "source": "demand"
+      }
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.606Z",
+      "candidateId": "github-awesome-copilot-agentic-workflows",
+      "evidenceClassification": 1,
+      "reason": {
+        "reason": "Cargada exitosamente"
+      },
+      "metadata": {}
+    }
+  ]
+}

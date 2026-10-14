@@ -219,10 +219,11 @@ function evaluateGate({ overall, criteria }) {
  */
 export function calibrate({ suites = [], gold, oracleVerdicts = {} } = {}) {
   const labels = normalizeLabels(gold);
+  const activeSuites = suites.filter((suite) => labels?.[suite.id]);
 
   // Materialize every scenario×criterion slot, keeping suite/criteria order.
   const slots = [];
-  for (const suite of suites) {
+  for (const suite of activeSuites) {
     for (const scenario of suite.scenarios || []) {
       for (const criterion of scenario.criteria || []) {
         const goldEntry = labels?.[suite.id]?.[scenario.id]?.[criterion.id];

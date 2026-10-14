@@ -1,0 +1,21 @@
+{
+  "context_id": "cap_mv8f6a7269bv4f",
+  "session_id": "ses_mv8f6a6ygfqsps",
+  "level": "L3",
+  "lifecycle": "superseded",
+  "purpose": "Decisión antigua",
+  "scope": "",
+  "importance": 7,
+  "confidence": 0.5,
+  "provenance": "user_decided",
+  "created_at": "2026-10-14T18:04:39.326Z",
+  "updated_at": "2026-10-14T18:04:39.326Z",
+  "mutation_rate": "medium",
+  "reuse_probability": "medium",
+  "dependencies": [],
+  "supersedes": null,
+  "superseded_by": "cap_mv8f6a720zkzyr",
+  "retrieval_hints": [],
+  "content": "SQLite",
+  "evidence": ""
+}

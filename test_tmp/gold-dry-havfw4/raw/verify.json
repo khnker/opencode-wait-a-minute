@@ -1,0 +1,22 @@
+{
+  "suite": "verify",
+  "model": "mock/dry-run",
+  "temperature": 0,
+  "outputs": {
+    "verify.false-done": "[mock-response] 2070 chars",
+    "verify.environment-failure": "[mock-response] 2061 chars"
+  },
+  "usage": {
+    "tokens": {
+      "input": 1034,
+      "output": 14,
+      "total": 1048
+    },
+    "latencyMs": {
+      "sum": 0.17935999999999552,
+      "mean": 0.08967999999999776,
+      "n": 2
+    },
+    "executionFailures": 0
+  }
+}

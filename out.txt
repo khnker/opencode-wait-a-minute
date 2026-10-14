@@ -1,0 +1,7 @@
+Task-Conditioned Role Replacement Benchmark
+==========================================
+Scenarios:           15
+Selection accuracy:  100.0%
+Idempotence:         100.0%
+Confidence match:    40.0%
+Conflict resolution: 100.0% (4 cases)

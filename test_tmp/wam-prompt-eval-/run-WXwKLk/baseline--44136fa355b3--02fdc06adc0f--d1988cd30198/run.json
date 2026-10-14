@@ -1,0 +1,138 @@
+{
+  "schema": "wam.prompt-eval.run/1",
+  "runId": "baseline--44136fa355b3--02fdc06adc0f--d1988cd30198",
+  "labels": [
+    {
+      "label": "baseline",
+      "suite": {
+        "id": "test-suite",
+        "version": "1.0",
+        "hash": "02fdc06adc0f6dbfe876596927f29f2fbf6512697fb94d1d5847c9d2b6916c42",
+        "scenarios": [
+          {
+            "id": "s1",
+            "suite": "test-suite",
+            "severity": "low",
+            "context": "x",
+            "promptRef": "p1",
+            "criteria": [
+              {
+                "id": "c1",
+                "required": true,
+                "description": "must contain x",
+                "oracle": {
+                  "kind": "includes-all",
+                  "values": [
+                    "x"
+                  ],
+                  "flags": "i"
+                }
+              }
+            ],
+            "expectation": "x"
+          }
+        ]
+      },
+      "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "prompts": [
+        {
+          "id": "p1",
+          "path": null,
+          "hash": "d1988cd3019824f075f61677e1a6f54b16035868488e4051757dde53adeef80f"
+        }
+      ],
+      "metrics": {
+        "evaluableCount": 0,
+        "totalScenarios": 1,
+        "mandatoryCompliance": 0,
+        "targetChecksPassed": 0,
+        "criticalRegressions": 0
+      },
+      "details": [
+        {
+          "scenarioId": "s1",
+          "severity": "low",
+          "passed": false,
+          "evaluable": false,
+          "mandatoryPassed": false,
+          "criteria": [
+            {
+              "criterionId": "c1",
+              "kind": "includes-all",
+              "required": true,
+              "passed": false,
+              "evaluable": false,
+              "evidence": "Output missing or empty; not evaluable"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "candidate",
+      "suite": {
+        "id": "test-suite",
+        "version": "1.0",
+        "hash": "02fdc06adc0f6dbfe876596927f29f2fbf6512697fb94d1d5847c9d2b6916c42",
+        "scenarios": [
+          {
+            "id": "s1",
+            "suite": "test-suite",
+            "severity": "low",
+            "context": "x",
+            "promptRef": "p1",
+            "criteria": [
+              {
+                "id": "c1",
+                "required": true,
+                "description": "must contain x",
+                "oracle": {
+                  "kind": "includes-all",
+                  "values": [
+                    "x"
+                  ],
+                  "flags": "i"
+                }
+              }
+            ],
+            "expectation": "x"
+          }
+        ]
+      },
+      "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "prompts": [
+        {
+          "id": "p1",
+          "path": null,
+          "hash": "9597d898814f165b7ed6118722c24271fec8c1254d46e437ad6ab24050763e2d"
+        }
+      ],
+      "metrics": {
+        "evaluableCount": 0,
+        "totalScenarios": 1,
+        "mandatoryCompliance": 0,
+        "targetChecksPassed": 0,
+        "criticalRegressions": 0
+      },
+      "details": [
+        {
+          "scenarioId": "s1",
+          "severity": "low",
+          "passed": false,
+          "evaluable": false,
+          "mandatoryPassed": false,
+          "criteria": [
+            {
+              "criterionId": "c1",
+              "kind": "includes-all",
+              "required": true,
+              "passed": false,
+              "evaluable": false,
+              "evidence": "Output missing or empty; not evaluable"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

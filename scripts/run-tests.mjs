@@ -24,21 +24,98 @@
  */
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = process.cwd();
+
+// Cleanup leftover temporary directories to prevent inode exhaustion
+function cleanupLeftoverTempDirs() {
+   const tmpDirsToClean = [
+     path.join(os.tmpdir(), 'wam-state-test-*'),
+     path.join(os.tmpdir(), 'wam-cfg-*'),
+     path.join(os.tmpdir(), 'wam-invariants-*'),
+     // Also check home directory for test_tmp patterns that might have been used
+     path.join(os.homedir(), 'test_tmp*'),
+   ];
+
+  for (const pattern of tmpDirsToClean) {
+    try {
+      const dirs = tempDirGlobSync(pattern);
+      const now = Date.now();
+      const maxAgeMs = 3600000; // 1 hour - only clean old dirs to avoid interfering with active tests
+
+      for (const dir of dirs) {
+        try {
+          const stats = fs.statSync(dir);
+          // Only remove directories older than maxAgeMs to avoid interfering with currently running tests
+          if (stats.isDirectory() && (now - stats.mtimeMs) > maxAgeMs) {
+            fs.rmSync(dir, { recursive: true, force: true });
+          }
+        } catch (fileErr) {
+          // Ignore errors on individual files (might have been deleted already)
+        }
+      }
+    } catch (patternErr) {
+      // Ignore errors on pattern matching
+    }
+  }
+}
+
+// Simple glob sync for patterns that only have a wildcard at the end (e.g., 'prefix*')
+function tempDirGlobSync(pattern) {
+  const { dirname, basename } = path;
+  const { readdirSync, statSync } = fs;
+  const dir = dirname(pattern);
+  const base = basename(pattern);
+  
+  // If the pattern doesn't end with *, treat it as an exact path
+  if (!base.endsWith('*')) {
+    try {
+      if (statSync(pattern).isDirectory()) {
+        return [pattern];
+      }
+    } catch (e) {
+      // Path doesn't exist or not a directory
+    }
+    return [];
+  }
+
+  const prefix = base.slice(0, -1); // Remove the trailing '*'
+  
+  try {
+    const entries = readdirSync(dir, { withFileTypes: true });
+    return entries
+      .filter(dirent => 
+        dirent.isDirectory() && 
+        dirent.name.startsWith(prefix))
+      .map(dirent => path.join(dir, dirent.name));
+  } catch (e) {
+    // Directory doesn't exist or no permission
+    return [];
+  }
+}
+
+// Run cleanup before starting tests
+try {
+  cleanupLeftoverTempDirs();
+} catch (cleanupErr) {
+  // Don't fail test execution if cleanup fails - just log and continue
+  console.warn('[run-tests] Warning: Temporary directory cleanup failed:', cleanupErr.message);
+}
+
 const IGNORE_DIRS = new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "build",
-  "coverage",
-  ".opencode",
-  ".openspec",
-  "upstream",
-  "vendor",
+   "node_modules",
+   ".git",
+   "dist",
+   "build",
+   "coverage",
+   ".opencode",
+   ".openspec",
+   "upstream",
+   "vendor",
 ]);
 
 let logStream = null;

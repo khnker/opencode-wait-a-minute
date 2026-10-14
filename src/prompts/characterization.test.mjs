@@ -132,10 +132,27 @@ test("characterization: policies preserve order", () => {
     "Cambiar la mínima superficie posible",
   ]);
   assert.deepEqual(loadPrompt("policy.verify.rules").split("\n"), [
-    "Toda implementación debe tener resultado verificable",
-    "Ninguna tarea se marca DONE sin evidencia satisfecha",
-    "Ejecutar tests/lint/typecheck de los artefactos tocados",
-    "Verificar consumidores de los cambios, no solo el cambio",
+    "Identificar cada criterio de aceptación obligatorio y la evidencia observable necesaria para satisfacerlo",
+    "Asociar cada criterio con un check concreto que produzca evidencia suficiente",
+    "Ejecutar los checks pertinentes y registrar su resultado, alcance y limitaciones",
+    "Distinguir entre la implementación realizada, el check ejecutado y el resultado verificado",
+    "Si un check falla, registrar el fallo y su causa; no declarar satisfecho el criterio",
+    "Si un check no puede ejecutarse por una limitación del entorno, registrar el bloqueo sin atribuirlo automáticamente al código ni tratarlo como éxito",
+    "No inferir éxito a partir de una afirmación, de la ausencia de errores visibles o de evidencia no relacionada con el criterio",
+    "Informar explícitamente los criterios pendientes, las limitaciones y la evidencia que permitiría resolverlos",
+    "Explicar claramente por qué NO se puede declarar DONE ni completado mientras no se ejecuten y verifiquen los tests o checks observables requeridos",
+  ]);
+  assert.deepEqual(loadPrompt("policy.completion.rules").split("\n"), [
+    "Listar los criterios de aceptación definidos para la tarea antes de cerrar",
+    "Ejecutar cada check y registrar su resultado (PASS/FAIL/SKIP) en el cierre",
+    "Adjuntar la salida ejecutable de cada check como evidencia, no un resumen",
+    "Distinguir tres estados: verificado, parcial, y no verificado — nunca fusionarlos",
+    "Reportar retries y tool-calls junto al veredicto de cada criterio",
+    "Declarar riesgo residual y pendientes explícitos antes de cerrar la subtarea",
+    "Prohibir enfáticamente declarar DONE o task completed sin haber ejecutado y verificado todos los checks definidos; si falta algún check, abortar y listar los checks pendientes",
+    "Nunca tratar la ausencia de errores visibles como evidencia de éxito",
+    "Cerrar solo cuando el veredicto agregado refleje checks ejecutados y exitosos, no inferencias ni aserciones",
+    "Registrar explícitamente qué checks se ejecutaron, su salida y su resultado antes de permitir cualquier declaración de finalización",
   ]);
   assert.deepEqual(loadPrompt("policy.simplify.rules").split("\n"), [
     "Identificar la responsabilidad de cada componente y el contrato que debe preservar",

@@ -1,0 +1,788 @@
+{
+  "validationVersion": "1.0.0",
+  "composition": {
+    "families": [
+      "local",
+      "contextual",
+      "continuation",
+      "negative"
+    ],
+    "familiesPresent": [
+      "local",
+      "contextual",
+      "continuation",
+      "negative"
+    ],
+    "scenarioCount": 8,
+    "turnCoverage": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "expectedTurnCoverage": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "scenarioIds": [
+      "local-1",
+      "contextual-1",
+      "continuation-1t",
+      "continuation-3t",
+      "continuation-5t",
+      "continuation-10t",
+      "continuation-20t",
+      "negative-1"
+    ]
+  },
+  "causal": {
+    "scenarios": {
+      "local-1": {
+        "scenarioId": "local-1",
+        "family": "local",
+        "turns": 1,
+        "contextRebuilds": 1,
+        "fastPathCount": 0,
+        "partialRebuildCount": 1,
+        "fullRebuildCount": 0,
+        "inputTokens": 407,
+        "outputTokens": 0,
+        "totalTokens": 407,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 1,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 0,
+          "Snapshot_hit": 1,
+          "Snapshot_miss": 0,
+          "Mandatory_items": 1,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 378,
+          "Tokens_after": 407,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 378
+      },
+      "contextual-1": {
+        "scenarioId": "contextual-1",
+        "family": "contextual",
+        "turns": 1,
+        "contextRebuilds": 1,
+        "fastPathCount": 0,
+        "partialRebuildCount": 1,
+        "fullRebuildCount": 0,
+        "inputTokens": 703,
+        "outputTokens": 0,
+        "totalTokens": 703,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 1,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 0,
+          "Snapshot_hit": 1,
+          "Snapshot_miss": 0,
+          "Mandatory_items": 4,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 1493,
+          "Tokens_after": 703,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 1493
+      },
+      "continuation-1t": {
+        "scenarioId": "continuation-1t",
+        "family": "continuation",
+        "turns": 1,
+        "contextRebuilds": 1,
+        "fastPathCount": 0,
+        "partialRebuildCount": 0,
+        "fullRebuildCount": 1,
+        "inputTokens": 3455,
+        "outputTokens": 0,
+        "totalTokens": 3455,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 1,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 0,
+          "Snapshot_hit": 0,
+          "Snapshot_miss": 1,
+          "Mandatory_items": 6,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 3275,
+          "Tokens_after": 3455,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 3275
+      },
+      "continuation-3t": {
+        "scenarioId": "continuation-3t",
+        "family": "continuation",
+        "turns": 3,
+        "contextRebuilds": 1,
+        "fastPathCount": 2,
+        "partialRebuildCount": 0,
+        "fullRebuildCount": 1,
+        "inputTokens": 4601,
+        "outputTokens": 0,
+        "totalTokens": 4601,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 3,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 2,
+          "Snapshot_hit": 2,
+          "Snapshot_miss": 1,
+          "Mandatory_items": 18,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 9825,
+          "Tokens_after": 4601,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 9825
+      },
+      "continuation-5t": {
+        "scenarioId": "continuation-5t",
+        "family": "continuation",
+        "turns": 5,
+        "contextRebuilds": 1,
+        "fastPathCount": 4,
+        "partialRebuildCount": 0,
+        "fullRebuildCount": 1,
+        "inputTokens": 5747,
+        "outputTokens": 0,
+        "totalTokens": 5747,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 5,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 4,
+          "Snapshot_hit": 4,
+          "Snapshot_miss": 1,
+          "Mandatory_items": 30,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 16375,
+          "Tokens_after": 5747,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 16375
+      },
+      "continuation-10t": {
+        "scenarioId": "continuation-10t",
+        "family": "continuation",
+        "turns": 10,
+        "contextRebuilds": 1,
+        "fastPathCount": 9,
+        "partialRebuildCount": 0,
+        "fullRebuildCount": 1,
+        "inputTokens": 8628,
+        "outputTokens": 0,
+        "totalTokens": 8628,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 10,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 9,
+          "Snapshot_hit": 9,
+          "Snapshot_miss": 1,
+          "Mandatory_items": 60,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 32829,
+          "Tokens_after": 8628,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 32829
+      },
+      "continuation-20t": {
+        "scenarioId": "continuation-20t",
+        "family": "continuation",
+        "turns": 20,
+        "contextRebuilds": 1,
+        "fastPathCount": 19,
+        "partialRebuildCount": 0,
+        "fullRebuildCount": 1,
+        "inputTokens": 14368,
+        "outputTokens": 0,
+        "totalTokens": 14368,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 20,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 19,
+          "Snapshot_hit": 19,
+          "Snapshot_miss": 1,
+          "Mandatory_items": 120,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 65659,
+          "Tokens_after": 14368,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 65659
+      },
+      "negative-1": {
+        "scenarioId": "negative-1",
+        "family": "negative",
+        "turns": 1,
+        "contextRebuilds": 1,
+        "fastPathCount": 0,
+        "partialRebuildCount": 1,
+        "fullRebuildCount": 0,
+        "inputTokens": 1641,
+        "outputTokens": 0,
+        "totalTokens": 1641,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 1,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 0,
+          "Snapshot_hit": 1,
+          "Snapshot_miss": 0,
+          "Mandatory_items": 1,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 267,
+          "Tokens_after": 1641,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 267
+      }
+    },
+    "byScenario": [
+      {
+        "scenarioId": "local-1",
+        "family": "local",
+        "turns": 1,
+        "contextRebuilds": 1,
+        "fastPathCount": 0,
+        "partialRebuildCount": 1,
+        "fullRebuildCount": 0,
+        "inputTokens": 407,
+        "outputTokens": 0,
+        "totalTokens": 407,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 1,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 0,
+          "Snapshot_hit": 1,
+          "Snapshot_miss": 0,
+          "Mandatory_items": 1,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 378,
+          "Tokens_after": 407,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 378
+      },
+      {
+        "scenarioId": "contextual-1",
+        "family": "contextual",
+        "turns": 1,
+        "contextRebuilds": 1,
+        "fastPathCount": 0,
+        "partialRebuildCount": 1,
+        "fullRebuildCount": 0,
+        "inputTokens": 703,
+        "outputTokens": 0,
+        "totalTokens": 703,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 1,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 0,
+          "Snapshot_hit": 1,
+          "Snapshot_miss": 0,
+          "Mandatory_items": 4,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 1493,
+          "Tokens_after": 703,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 1493
+      },
+      {
+        "scenarioId": "continuation-1t",
+        "family": "continuation",
+        "turns": 1,
+        "contextRebuilds": 1,
+        "fastPathCount": 0,
+        "partialRebuildCount": 0,
+        "fullRebuildCount": 1,
+        "inputTokens": 3455,
+        "outputTokens": 0,
+        "totalTokens": 3455,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 1,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 0,
+          "Snapshot_hit": 0,
+          "Snapshot_miss": 1,
+          "Mandatory_items": 6,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 3275,
+          "Tokens_after": 3455,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 3275
+      },
+      {
+        "scenarioId": "continuation-3t",
+        "family": "continuation",
+        "turns": 3,
+        "contextRebuilds": 1,
+        "fastPathCount": 2,
+        "partialRebuildCount": 0,
+        "fullRebuildCount": 1,
+        "inputTokens": 4601,
+        "outputTokens": 0,
+        "totalTokens": 4601,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 3,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 2,
+          "Snapshot_hit": 2,
+          "Snapshot_miss": 1,
+          "Mandatory_items": 18,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 9825,
+          "Tokens_after": 4601,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 9825
+      },
+      {
+        "scenarioId": "continuation-5t",
+        "family": "continuation",
+        "turns": 5,
+        "contextRebuilds": 1,
+        "fastPathCount": 4,
+        "partialRebuildCount": 0,
+        "fullRebuildCount": 1,
+        "inputTokens": 5747,
+        "outputTokens": 0,
+        "totalTokens": 5747,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 5,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 4,
+          "Snapshot_hit": 4,
+          "Snapshot_miss": 1,
+          "Mandatory_items": 30,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 16375,
+          "Tokens_after": 5747,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 16375
+      },
+      {
+        "scenarioId": "continuation-10t",
+        "family": "continuation",
+        "turns": 10,
+        "contextRebuilds": 1,
+        "fastPathCount": 9,
+        "partialRebuildCount": 0,
+        "fullRebuildCount": 1,
+        "inputTokens": 8628,
+        "outputTokens": 0,
+        "totalTokens": 8628,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 10,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 9,
+          "Snapshot_hit": 9,
+          "Snapshot_miss": 1,
+          "Mandatory_items": 60,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 32829,
+          "Tokens_after": 8628,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 32829
+      },
+      {
+        "scenarioId": "continuation-20t",
+        "family": "continuation",
+        "turns": 20,
+        "contextRebuilds": 1,
+        "fastPathCount": 19,
+        "partialRebuildCount": 0,
+        "fullRebuildCount": 1,
+        "inputTokens": 14368,
+        "outputTokens": 0,
+        "totalTokens": 14368,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 20,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 19,
+          "Snapshot_hit": 19,
+          "Snapshot_miss": 1,
+          "Mandatory_items": 120,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 65659,
+          "Tokens_after": 14368,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 65659
+      },
+      {
+        "scenarioId": "negative-1",
+        "family": "negative",
+        "turns": 1,
+        "contextRebuilds": 1,
+        "fastPathCount": 0,
+        "partialRebuildCount": 1,
+        "fullRebuildCount": 0,
+        "inputTokens": 1641,
+        "outputTokens": 0,
+        "totalTokens": 1641,
+        "verification": "success",
+        "counters": {
+          "Context_assembled": 1,
+          "Context_reconstructed": 1,
+          "Context_fast_path": 0,
+          "Snapshot_hit": 1,
+          "Snapshot_miss": 0,
+          "Mandatory_items": 1,
+          "Conditional_items": 0,
+          "Optional_items": 0,
+          "Tokens_before": 267,
+          "Tokens_after": 1641,
+          "Reconstruction_count": 1
+        },
+        "baselineTotalTokens": 267
+      }
+    ],
+    "totals": {
+      "tokensPerRebuild": 4943.75,
+      "tokensPerVerifiedTask": 4943.75,
+      "rebuildReductionPct": 80.95,
+      "inputReductionPct": 69.6,
+      "totalReductionPct": 69.6,
+      "scenarioCount": 8,
+      "turns": 42,
+      "contextRebuilds": 8,
+      "fastPathCount": 34,
+      "partialRebuildCount": 3,
+      "fullRebuildCount": 5,
+      "inputTokens": 39550,
+      "outputTokens": 0,
+      "totalTokens": 39550,
+      "baselineTotalTokens": 130101,
+      "verifiedTasks": 8
+    }
+  },
+  "snapshot": [
+    {
+      "caseId": "no-mutation",
+      "description": "Snapshot matches git, project context and task state → fast-path VALID.",
+      "mutates": false,
+      "expected": {
+        "status": "VALID",
+        "changedSignals": [],
+        "rebuild": {
+          "rebuildN1": false,
+          "rebuildN2": false,
+          "rebuildN3": false
+        }
+      },
+      "actual": {
+        "status": "VALID",
+        "changedSignals": [],
+        "rebuild": {
+          "rebuildN1": false,
+          "rebuildN2": false,
+          "rebuildN3": false
+        }
+      },
+      "rebuildInvoked": false,
+      "pass": true
+    },
+    {
+      "caseId": "task-mutation",
+      "description": "Task state phase changed → INVALID, full rebuild.",
+      "mutates": true,
+      "expected": {
+        "status": "INVALID",
+        "changedSignals": [
+          "task-state"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": true,
+          "rebuildN3": true
+        }
+      },
+      "actual": {
+        "status": "INVALID",
+        "changedSignals": [
+          "task-state"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": true,
+          "rebuildN3": true
+        }
+      },
+      "rebuildInvoked": true,
+      "pass": true
+    },
+    {
+      "caseId": "context-mutation",
+      "description": "Relevant file content changed → STALE, project-level rebuild.",
+      "mutates": true,
+      "expected": {
+        "status": "STALE",
+        "changedSignals": [
+          "relevant-files"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": false,
+          "rebuildN3": true
+        }
+      },
+      "actual": {
+        "status": "STALE",
+        "changedSignals": [
+          "relevant-files"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": false,
+          "rebuildN3": true
+        }
+      },
+      "rebuildInvoked": true,
+      "pass": true
+    },
+    {
+      "caseId": "file-mutation",
+      "description": "New relevant file appears → STALE, project-level rebuild.",
+      "mutates": true,
+      "expected": {
+        "status": "STALE",
+        "changedSignals": [
+          "relevant-files"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": false,
+          "rebuildN3": true
+        }
+      },
+      "actual": {
+        "status": "STALE",
+        "changedSignals": [
+          "relevant-files"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": false,
+          "rebuildN3": true
+        }
+      },
+      "rebuildInvoked": true,
+      "pass": true
+    },
+    {
+      "caseId": "git-mutation",
+      "description": "Git ref moved → STALE, project-level rebuild.",
+      "mutates": true,
+      "expected": {
+        "status": "STALE",
+        "changedSignals": [
+          "git-revision"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": false,
+          "rebuildN3": true
+        }
+      },
+      "actual": {
+        "status": "STALE",
+        "changedSignals": [
+          "git-revision"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": false,
+          "rebuildN3": true
+        }
+      },
+      "rebuildInvoked": true,
+      "pass": true
+    },
+    {
+      "caseId": "hash-mutation",
+      "description": "Stored taskStateHash tampered → INVALID, full rebuild.",
+      "mutates": true,
+      "expected": {
+        "status": "INVALID",
+        "changedSignals": [
+          "task-state"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": true,
+          "rebuildN3": true
+        }
+      },
+      "actual": {
+        "status": "INVALID",
+        "changedSignals": [
+          "task-state"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": true,
+          "rebuildN3": true
+        }
+      },
+      "rebuildInvoked": true,
+      "pass": true
+    },
+    {
+      "caseId": "stored-relevant-hash",
+      "description": "Stored relevantFilesHash tampered → STALE, project-level rebuild.",
+      "mutates": true,
+      "expected": {
+        "status": "STALE",
+        "changedSignals": [
+          "relevant-files"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": false,
+          "rebuildN3": true
+        }
+      },
+      "actual": {
+        "status": "STALE",
+        "changedSignals": [
+          "relevant-files"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": false,
+          "rebuildN3": true
+        }
+      },
+      "rebuildInvoked": true,
+      "pass": true
+    },
+    {
+      "caseId": "snapshot-missing",
+      "description": "Snapshot deleted → STALE no-snapshot, full rebuild.",
+      "mutates": true,
+      "expected": {
+        "status": "STALE",
+        "changedSignals": [
+          "no-snapshot"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": true,
+          "rebuildN3": true
+        }
+      },
+      "actual": {
+        "status": "STALE",
+        "changedSignals": [
+          "no-snapshot"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": true,
+          "rebuildN3": true
+        }
+      },
+      "rebuildInvoked": true,
+      "pass": true
+    },
+    {
+      "caseId": "snapshot-corrupt",
+      "description": "Snapshot is not valid JSON → safe fallback, full rebuild.",
+      "mutates": true,
+      "expected": {
+        "status": "STALE",
+        "changedSignals": [
+          "no-snapshot"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": true,
+          "rebuildN3": true
+        }
+      },
+      "actual": {
+        "status": "STALE",
+        "changedSignals": [
+          "no-snapshot"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": true,
+          "rebuildN3": true
+        }
+      },
+      "rebuildInvoked": true,
+      "pass": true
+    },
+    {
+      "caseId": "snapshot-schema-incompatible",
+      "description": "Snapshot parses but lacks hash fields → INVALID, full rebuild.",
+      "mutates": true,
+      "expected": {
+        "status": "INVALID",
+        "changedSignals": [
+          "relevant-files",
+          "task-state"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": true,
+          "rebuildN3": true
+        }
+      },
+      "actual": {
+        "status": "INVALID",
+        "changedSignals": [
+          "relevant-files",
+          "task-state"
+        ],
+        "rebuild": {
+          "rebuildN1": true,
+          "rebuildN2": true,
+          "rebuildN3": true
+        }
+      },
+      "rebuildInvoked": true,
+      "pass": true
+    }
+  ]
+}

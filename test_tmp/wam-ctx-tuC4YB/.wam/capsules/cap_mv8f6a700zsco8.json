@@ -1,0 +1,21 @@
+{
+  "context_id": "cap_mv8f6a700zsco8",
+  "session_id": "ses_mv8f6a6ygfqsps",
+  "level": "L3",
+  "lifecycle": "active",
+  "purpose": "Decisión de arquitectura de auth",
+  "scope": "auth module",
+  "importance": 8,
+  "confidence": 0.5,
+  "provenance": "user_decided",
+  "created_at": "2026-10-14T18:04:39.324Z",
+  "updated_at": "2026-10-14T18:04:39.324Z",
+  "mutation_rate": "medium",
+  "reuse_probability": "medium",
+  "dependencies": [],
+  "supersedes": null,
+  "superseded_by": null,
+  "retrieval_hints": [],
+  "content": "Usar JWT rotativo con refresh tokens",
+  "evidence": ""
+}

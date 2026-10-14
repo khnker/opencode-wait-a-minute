@@ -1,0 +1,173 @@
+{
+  "traceId": "default",
+  "timestamp": "2026-10-14T18:21:22.463Z",
+  "entries": [
+    {
+      "type": "CONCEPT_EXTRACTION",
+      "timestamp": "2026-10-14T18:21:22.463Z",
+      "concept": "refactoriza el scraper",
+      "metadata": {
+        "source": "user"
+      }
+    },
+    {
+      "type": "CANDIDATE_RETRIEVAL",
+      "timestamp": "2026-10-14T18:21:22.463Z",
+      "query": "refactoriza el scraper",
+      "candidatesCount": 492,
+      "metadata": {
+        "source": "registry"
+      }
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.464Z",
+      "candidateId": "codebase-design",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.464Z",
+      "candidateId": "writing-for-agents",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.465Z",
+      "candidateId": "dietrichgebert-ponytail-ponytail",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.465Z",
+      "candidateId": "codebase-design",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.465Z",
+      "candidateId": "writing-for-agents",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.465Z",
+      "candidateId": "dietrichgebert-ponytail-ponytail",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.465Z",
+      "candidateId": "github-awesome-copilot-refactor",
+      "evidenceClassification": 8,
+      "reason": {
+        "reason": "Seleccionado por score 8 y keywords: refactor"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.465Z",
+      "candidateId": "senior-refactor-reviewer",
+      "evidenceClassification": 4,
+      "reason": {
+        "reason": "Seleccionado por score 4 y keywords: "
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.465Z",
+      "candidateId": "github-awesome-copilot-refactor-method-complexity-reduce",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Seleccionado por score 3 y keywords: refactor"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.465Z",
+      "candidateId": "github-awesome-copilot-refactor",
+      "evidenceClassification": 8,
+      "reason": {
+        "reason": "Rechazado por score bajo (8)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.465Z",
+      "candidateId": "senior-refactor-reviewer",
+      "evidenceClassification": 4,
+      "reason": {
+        "reason": "Rechazado por score bajo (4)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.465Z",
+      "candidateId": "github-awesome-copilot-refactor-method-complexity-reduce",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.465Z",
+      "candidateId": "github-awesome-copilot-refactor-plan",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.465Z",
+      "candidateId": "github-awesome-copilot-review-and-refactor",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.465Z",
+      "candidateId": "github-awesome-copilot-x-twitter-scraper",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    }
+  ]
+}

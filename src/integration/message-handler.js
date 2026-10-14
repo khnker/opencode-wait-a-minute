@@ -17,6 +17,7 @@ import path from "node:path";
 
 import { hasWamMarkerFor, isWamSynthetic } from "./part-provenance.js";
 import { buildTaskInferenceDirective } from "../cognition/task-inference-engine.js";
+import { buildRoleDirective } from "../cognition/task-role-engine.js";
 import { detectCouplingIntent, traceCouplingForTask } from "../context/selection.js";
 import { loadPrompt } from "../prompts/loader.js";
 
@@ -535,15 +536,26 @@ export async function handleMessage(input, output, deps) {
     if (updatedState.contract?.objective && updatedState.phase !== "DONE" && analysis.intent?.classification !== "trivial") {
       if (!updatedState.inferenceDirectiveShown) {
         try {
-          const { lines } = buildTaskInferenceDirective({ 
-            objective: updatedState.contract.objective, 
-            requirements: updatedState.requirements 
+const { lines } = buildTaskInferenceDirective({
+            objective: updatedState.contract.objective,
+            requirements: updatedState.requirements
           });
           if (lines.length > 0) {
             inject.push(...lines);
             updatedState.inferenceDirectiveShown = true;
-            persistTaskState(taskId, updatedState, wamRoot);
           }
+          // Role-conditioned directive: pair with the task inference directive
+          // so the injected context uses the right voice (verifier, reviewer,
+          // operator, planner, implementer, doc-writer). Idempotent — same
+          // shape as buildTaskInferenceDirective so callers can concat safely.
+          const role = buildRoleDirective({
+            objective: updatedState.contract.objective,
+            requirements: updatedState.requirements,
+          });
+          if (role.lines.length > 0) {
+            inject.push(...role.lines);
+          }
+          persistTaskState(taskId, updatedState, wamRoot);
         } catch (e) {
           console.error("Failed to build task inference directive:", e);
         }

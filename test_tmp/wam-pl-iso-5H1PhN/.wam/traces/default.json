@@ -1,0 +1,213 @@
+{
+  "traceId": "default",
+  "timestamp": "2026-10-14T18:21:22.709Z",
+  "entries": [
+    {
+      "type": "CONCEPT_EXTRACTION",
+      "timestamp": "2026-10-14T18:21:22.709Z",
+      "concept": "implementa refresh-token rotation y agrega tests de integración",
+      "metadata": {
+        "source": "user"
+      }
+    },
+    {
+      "type": "CANDIDATE_RETRIEVAL",
+      "timestamp": "2026-10-14T18:21:22.709Z",
+      "query": "implementa refresh-token rotation y agrega tests de integración",
+      "candidatesCount": 492,
+      "metadata": {
+        "source": "registry"
+      }
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.709Z",
+      "candidateId": "codebase-design",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.709Z",
+      "candidateId": "writing-for-agents",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.710Z",
+      "candidateId": "dietrichgebert-ponytail-ponytail",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.710Z",
+      "candidateId": "codebase-design",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.710Z",
+      "candidateId": "writing-for-agents",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.710Z",
+      "candidateId": "dietrichgebert-ponytail-ponytail",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.710Z",
+      "candidateId": "tdd",
+      "evidenceClassification": 4,
+      "reason": {
+        "reason": "Seleccionado por score 4 y keywords: "
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.710Z",
+      "candidateId": "github-awesome-copilot-breakdown-test",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Seleccionado por score 3 y keywords: test"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.710Z",
+      "candidateId": "github-awesome-copilot-creating-oracle-to-postgres-migration-integration-tests",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Seleccionado por score 3 y keywords: tests"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.710Z",
+      "candidateId": "tdd",
+      "evidenceClassification": 4,
+      "reason": {
+        "reason": "Rechazado por score bajo (4)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.710Z",
+      "candidateId": "github-awesome-copilot-breakdown-test",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.710Z",
+      "candidateId": "github-awesome-copilot-creating-oracle-to-postgres-migration-integration-tests",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.710Z",
+      "candidateId": "github-awesome-copilot-playwright-generate-test",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.710Z",
+      "candidateId": "github-awesome-copilot-react19-test-patterns",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.710Z",
+      "candidateId": "github-awesome-copilot-scaffolding-oracle-to-postgres-migration-test-project",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.710Z",
+      "candidateId": "github-awesome-copilot-scoutqa-test",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.710Z",
+      "candidateId": "github-awesome-copilot-structured-autonomy-implement",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.711Z",
+      "candidateId": "github-awesome-copilot-test-gap-audit",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:21:22.711Z",
+      "candidateId": "github-awesome-copilot-unit-test-vue-pinia",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    }
+  ]
+}

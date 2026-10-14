@@ -1,0 +1,10 @@
+{
+  "_schemaVersion": 1,
+  "taskId": "test-task-001",
+  "createdAt": "2026-10-14T20:22:27.022Z",
+  "updatedAt": "2026-10-14T20:22:27.029Z",
+  "requirements": {},
+  "context": {},
+  "evidence": {},
+  "status": "active"
+}

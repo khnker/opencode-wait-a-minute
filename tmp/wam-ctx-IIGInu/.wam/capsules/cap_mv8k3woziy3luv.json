@@ -1,0 +1,26 @@
+{
+  "context_id": "cap_mv8k3woziy3luv",
+  "session_id": "ses_mv8k3wow0ex1qj",
+  "level": "L1",
+  "lifecycle": "active",
+  "purpose": "Inferencia de stack",
+  "scope": "",
+  "importance": 5,
+  "confidence": 0.5,
+  "provenance": "inferred",
+  "created_at": "2026-10-14T20:22:46.595Z",
+  "updated_at": "2026-10-14T20:22:46.595Z",
+  "mutation_rate": "medium",
+  "reuse_probability": "medium",
+  "dependencies": [],
+  "supersedes": null,
+  "superseded_by": null,
+  "retrieval_hints": [],
+  "content": "stack probable node",
+  "evidence": "confirmado en review",
+  "promotion": {
+    "approved_by": "user",
+    "at": "2026-10-14T20:22:46.595Z",
+    "from": "L2"
+  }
+}

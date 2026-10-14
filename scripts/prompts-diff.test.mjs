@@ -28,7 +28,7 @@ function withTempCandidate(body, fn) {
 test("fixture coverage: every catalog id has a fixture file", () => {
   const missing = CATALOG.map((p) => p.id).filter((id) => !fs.existsSync(fixturePathForId(id)));
   assert.deepEqual(missing, [], `missing fixtures for: ${missing.join(", ")}`);
-  assert.equal(CATALOG.length, 38, "catalog should register 38 prompts");
+  assert.equal(CATALOG.length, 42, "catalog should register 42 prompts");
 });
 
 test("self-diff of every prompt is unchanged and exits 0", () => {

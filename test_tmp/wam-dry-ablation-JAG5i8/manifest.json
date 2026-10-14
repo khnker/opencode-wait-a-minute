@@ -1,0 +1,224 @@
+{
+  "schema": "rc1-evidence-manifest@1",
+  "generatedAt": "2026-10-14T18:41:47.313Z",
+  "repoCommit": "5c09c2d4976c542c9321eb68553debb3796475ab",
+  "provider": "mock",
+  "model": "mock/dry-run",
+  "evidenceCategory": "unknown",
+  "counts": {
+    "runs": 150,
+    "trials": 25,
+    "pairs": 25
+  },
+  "ablations": [
+    {
+      "name": "full",
+      "runs": 30,
+      "fastPathCount": 25,
+      "netInputSavings": -225
+    },
+    {
+      "name": "no_snapshot",
+      "runs": 30,
+      "fastPathCount": 0,
+      "netInputSavings": -225
+    },
+    {
+      "name": "no_rebuild",
+      "runs": 30,
+      "fastPathCount": 25,
+      "netInputSavings": -225
+    },
+    {
+      "name": "unlimited_budget",
+      "runs": 30,
+      "fastPathCount": 25,
+      "netInputSavings": -225
+    },
+    {
+      "name": "no_verification",
+      "runs": 30,
+      "fastPathCount": 25,
+      "netInputSavings": -225
+    }
+  ],
+  "statistics": {
+    "baselineInputTokens": {
+      "n": 25,
+      "mean": 39,
+      "stddev": 57.85398286491029,
+      "median": 6,
+      "ci95": {
+        "low": 16.32123871695517,
+        "high": 61.678761283044835
+      }
+    },
+    "wamInputTokens": {
+      "n": 25,
+      "mean": 84,
+      "stddev": 105.38817137927134,
+      "median": 14,
+      "ci95": {
+        "low": 42.68783681932563,
+        "high": 125.31216318067436
+      }
+    },
+    "baselineLatencyMs": {
+      "n": 150,
+      "mean": 0,
+      "stddev": 0,
+      "median": 0,
+      "ci95": {
+        "low": 0,
+        "high": 0
+      }
+    },
+    "wamLatencyMs": {
+      "n": 150,
+      "mean": 0,
+      "stddev": 0,
+      "median": 0,
+      "ci95": {
+        "low": 0,
+        "high": 0
+      }
+    },
+    "latencyMs": {
+      "n": 300,
+      "mean": 0,
+      "stddev": 0,
+      "median": 0,
+      "ci95": {
+        "low": 0,
+        "high": 0
+      }
+    },
+    "paired": {
+      "n": 25,
+      "meanDelta": 45,
+      "medianDelta": 9,
+      "ci95": {
+        "low": 25.69458038097419,
+        "high": 64.30541961902581
+      },
+      "cohensD": -1.2922136753596376,
+      "t": -4.568665262943958,
+      "p": 0.0001243673265144539
+    },
+    "metrics": {
+      "context_reduction": {
+        "n": 1,
+        "mean": -60,
+        "stddev": 0,
+        "median": -60,
+        "ci95": {
+          "low": 0,
+          "high": 0
+        }
+      },
+      "wam_overhead": {
+        "n": 1,
+        "mean": 0,
+        "stddev": 0,
+        "median": 0,
+        "ci95": {
+          "low": 0,
+          "high": 0
+        }
+      },
+      "net_input_savings": {
+        "n": 1,
+        "mean": -60,
+        "stddev": 0,
+        "median": -60,
+        "ci95": {
+          "low": 0,
+          "high": 0
+        }
+      },
+      "SuccessfulTasks": {
+        "n": 1,
+        "mean": 0,
+        "stddev": 0,
+        "median": 0,
+        "ci95": {
+          "low": 0,
+          "high": 0
+        }
+      },
+      "SuccessRate": {
+        "n": 1,
+        "mean": 0,
+        "stddev": 0,
+        "median": 0,
+        "ci95": {
+          "low": 0,
+          "high": 0
+        }
+      },
+      "EquivalenceRate": {
+        "n": 1,
+        "mean": 0,
+        "stddev": 0,
+        "median": 0,
+        "ci95": {
+          "low": 0,
+          "high": 0
+        }
+      },
+      "ReconstructionReductionPct": {
+        "n": 1,
+        "mean": 70,
+        "stddev": 0,
+        "median": 70,
+        "ci95": {
+          "low": 0,
+          "high": 0
+        }
+      },
+      "FastPathRate": {
+        "n": 1,
+        "mean": 66.67,
+        "stddev": 0,
+        "median": 66.67,
+        "ci95": {
+          "low": 0,
+          "high": 0
+        }
+      },
+      "TokensPerSuccessfulTask": {
+        "n": 1,
+        "mean": 0,
+        "stddev": 0,
+        "median": 0,
+        "ci95": {
+          "low": 0,
+          "high": 0
+        }
+      },
+      "VerificationRate": {
+        "n": 1,
+        "mean": 0,
+        "stddev": 0,
+        "median": 0,
+        "ci95": {
+          "low": 0,
+          "high": 0
+        }
+      }
+    }
+  },
+  "claims": null,
+  "artifacts": [
+    {
+      "path": "real-report.json",
+      "bytes": 200720,
+      "sha256": "41f393b696d9fc952783ce7827f80cf79834548492a096ea57286c9e0080ae9a"
+    }
+  ],
+  "limitations": [
+    "dry-run results are deterministic simulations, not model executions",
+    "real provider runs require API credentials and are not reproduced by CI",
+    "statistical significance assumes independent paired trials"
+  ]
+}

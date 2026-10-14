@@ -7,8 +7,24 @@ import { assembleContext } from "../src/context/assembly.js";
 import { initMemory } from "../src/persistence/memory.js";
 import { createCapsule, getSessionId, resetSessionCache } from "../src/context/context.js";
 
-const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "wam-invariants-"));
-initMemory(ROOT);
+let ROOT;
+
+test.before(() => {
+  ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "wam-invariants-"));
+  try {
+    initMemory(ROOT);
+  } catch (err) {
+    // If initMemory fails, clean up the directory and rethrow
+    try {
+      fs.rmSync(ROOT, { recursive: true, force: true });
+    } catch (_) {}
+    throw err;
+  }
+});
+
+test.after(() => {
+  fs.rmSync(ROOT, { recursive: true, force: true });
+});
 
 test("Invariante: Determinismo", () => {
   createCapsule({ purpose: "P1", content: "C1", importance: 5 }, ROOT);

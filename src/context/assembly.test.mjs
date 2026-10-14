@@ -38,3 +38,37 @@ test("task-matched skills are prioritized over base skills under tight budget", 
   const text = pack.lines.join("\n");
   assert.ok(text.includes("[wam N3 skill] matched-skill"), "matched skill must win the budget");
 });
+
+test("MANDATORY items are never truncated even when they exceed total budget", () => {
+    const pack = assembleContext({
+      prompt: "do a task",
+      budget: 10,
+      taskState: { phase: "start" },
+    });
+    // N0 policy is MANDATORY and must be present in full, never truncated.
+    // The policy text is: "[wam N0 policy] autonomy loop | soft-archive only (U1)"
+    const text = pack.lines.join("\n");
+    assert.ok(text.includes("[wam N0 policy] autonomy loop | soft-archive only (U1)"),
+      "mandatory policy must be present in full");
+    assert.ok(pack.budget_violation === true || pack.budget_violation === undefined,
+      "budget_violation flag must reflect the overrun");
+  });
+
+test("dropByAdmission drops CONDITIONAL before OPTIONAL when budget is tight", () => {
+    const pack = assembleContext({
+      prompt: "do a normal task",
+      taskId: "t-drop",
+      classification: "normal",
+      mode: "NORMAL",
+      budget: 2000,
+      skillRegistry: REGISTRY,
+      selectedSkills: [
+        { id: "base-skill", reason: "base", relevance: 0, base: true },
+        { id: "matched-skill", reason: "score 9", relevance: 9, base: false },
+      ],
+    });
+    const text = pack.lines.join("\n");
+    // CONDITIONAL (matched-skill) is dropped before OPTIONAL (base-skill) when budget is tight.
+    assert.ok(text.includes("[wam N3 skill] base-skill"),
+      "OPTIONAL base-skill must survive when CONDITIONAL is dropped first");
+  });

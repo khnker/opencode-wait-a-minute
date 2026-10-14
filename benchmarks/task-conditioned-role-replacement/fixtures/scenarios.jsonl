@@ -1,0 +1,15 @@
+{"objective":"Implement the new caching layer","requirements":[{"id":"core","description":"build the cache"}],"expectedRole":"implementer","expectedConfidence":"med"}
+{"objective":"Plan the architecture of the new module","requirements":[],"expectedRole":"planner","expectedConfidence":"med"}
+{"objective":"Implement the auth endpoint","requirements":[{"id":"auth-verify","description":"verify auth flow"}],"expectedRole":"verifier","expectedConfidence":"high"}
+{"objective":"Build the data ingest pipeline","requirements":[{"id":"ingest-review","description":"review data"}],"expectedRole":"reviewer","expectedConfidence":"high"}
+{"objective":"Ship the new microservice","requirements":[{"id":"deploy-rollback","description":"rollback plan"}],"expectedRole":"operator","expectedConfidence":"high"}
+{"objective":"Ship the new microservice","requirements":[{"id":"health-monitor","description":"monitor service health","isService":true}],"expectedRole":"operator","expectedConfidence":"high"}
+{"objective":"Release the new public SDK","requirements":[{"id":"public-docs","description":"write docs","public":true}],"expectedRole":"doc-writer","expectedConfidence":"high"}
+{"objective":"Document the new CLI command","requirements":[],"expectedRole":"doc-writer","expectedConfidence":"med"}
+{"objective":"Implement the audit endpoint","requirements":[{"id":"audit","description":""}],"expectedRole":"implementer","expectedConfidence":"low"}
+{"objective":"Build a structured logger","requirements":[{"id":"core","description":"create logger"},{"id":"core-verify","description":"verify logger"}],"expectedRole":"verifier","expectedConfidence":"high"}
+{"objective":"Refactor the parser module","requirements":[{"id":"parser","description":"refactor parser"}],"expectedRole":"implementer","expectedConfidence":"low"}
+{"objective":"Implement the queue worker","requirements":[{"id":"worker-monitor","description":"monitor queue","isService":true},{"id":"worker-verify","description":"verify queue"}],"expectedRole":"verifier","expectedConfidence":"high"}
+{"objective":"Add rate limiting to the public API","requirements":[{"id":"public-docs","description":"docs"},{"id":"deploy-rollback","description":"rollback"}],"expectedRole":"operator","expectedConfidence":"high"}
+{"objective":"","requirements":[],"expectedRole":"implementer","expectedConfidence":"low"}
+{"objective":"Validate the new schema","requirements":[],"expectedRole":"verifier","expectedConfidence":"med"}

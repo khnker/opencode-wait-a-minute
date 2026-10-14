@@ -4,21 +4,44 @@
   "suite": {
     "id": "core",
     "version": "1.0.0",
-    "hash": "2922cdd0de2bcd46717421fe24a29846cf13181060f907de1d2deacfcf88d577"
+    "hash": "4beee4e9cbbbb1dbe8f38cbae87d6d1da72b61429cf3f74b5785445d6d17b6cc"
   },
   "configHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
   "coverage": {
     "scenarios": [
+      "completion.executed-checks",
+      "completion.verified-vs-partial",
+      "decision-gate.missing-contract",
+      "decision-gate.trade-off-capture",
       "delegation.missing-evidence",
+      "discovery.context-first",
+      "discovery.narrow-questions",
+      "runtime.idempotent-ops",
+      "runtime.isolated-state",
       "scope.requirement-conflict",
       "simplify.coupling-tradeoff",
       "verify.environment-failure",
       "verify.false-done"
     ],
     "requiredCriteria": [
+      "completion.executed-checks.mark-with-evidence",
+      "completion.executed-checks.no-claim-without-evidence",
+      "completion.verified-vs-partial.distinguish-verified-partial",
+      "completion.verified-vs-partial.no-false-done",
+      "decision-gate.missing-contract.ask-when-missing",
+      "decision-gate.missing-contract.no-fabrication",
+      "decision-gate.trade-off-capture.record-choice",
+      "decision-gate.trade-off-capture.state-trade-offs",
       "delegation.missing-evidence.collect-artifacts",
       "delegation.missing-evidence.keep-pending",
       "delegation.missing-evidence.no-claim-as-evidence",
+      "discovery.context-first.gather-before-acting",
+      "discovery.context-first.no-reimplementation",
+      "discovery.narrow-questions.ask-only-when-missing",
+      "runtime.idempotent-ops.no-partial-state",
+      "runtime.idempotent-ops.safe-retry",
+      "runtime.isolated-state.no-cross-task-leak",
+      "runtime.isolated-state.observable-effects",
       "scope.requirement-conflict.indirect-changes",
       "scope.requirement-conflict.no-unrelated-refactors",
       "scope.requirement-conflict.preserve-requirement",
@@ -31,7 +54,7 @@
       "verify.false-done.implementation-vs-verification",
       "verify.false-done.no-false-done"
     ],
-    "hash": "d9e292f73c85a012eb4de0cd9c535eef82ea76cdf83040b5a8254e63bd0d3d91"
+    "hash": "0f4104590e5f8c4985bf17fa84e9ae8b454c14da1403a98e55e7ae355cd80f69"
   },
   "prompts": [
     {
@@ -39,23 +62,39 @@
       "hash": "098f4b084099f8f65a5d9fd3e7693322d82929f89c2ca07a16dbccf4eded62a1"
     },
     {
+      "id": "policy.completion.rules",
+      "hash": "1dd7c47dd058a547b5e0baefb9e949090addf4dd1728d3fae7d4a2c9ddf9af2e"
+    },
+    {
+      "id": "policy.decision-gate.rules",
+      "hash": "cf9dcbe2d99a5d7ba0c96af1c1a691ebc6bb491a45727781252945d18cd0aa0f"
+    },
+    {
+      "id": "policy.discovery.rules",
+      "hash": "f66ae0f0b1728509f1deec78a27fb2a1b3fd1c8314b5607a8faff584f8f8a677"
+    },
+    {
+      "id": "policy.runtime.rules",
+      "hash": "31ea92d91ea1f61b8aa35d7e4e776b6acd85d8359736e294d9d9856a5fa6b52c"
+    },
+    {
       "id": "policy.scope.rules",
       "hash": "8d1bef8d25d5de43208cf7a917aa791caee0dfa35eae844b2e54e8ff4f28ddc3"
     },
     {
       "id": "policy.simplify.rules",
-      "hash": "7350bd08c04568b9670d270618ff8014b96833f932aa9de6bc79f55dd9449af3"
+      "hash": "694973d5b96da1c60b21dc9ce8646408e49c433a420056e35dea1ba7fa02102d"
     },
     {
       "id": "policy.verify.rules",
-      "hash": "055988b1b4164b9e71374d5fa8339e111965ee9ab574d2a9634d9b9393462e29"
+      "hash": "e102794b4f55451b47f1764632871a5db572fd10133fc6f671563ec700658aea"
     }
   ],
   "metrics": {
-    "totalScenarios": 5,
-    "mandatoryCompliance": 100,
+    "totalScenarios": 13,
+    "mandatoryCompliance": 48.275862068965516,
     "targetChecksPassed": 14,
-    "criticalRegressions": 0,
+    "criticalRegressions": 3,
     "evaluableCount": 5
   }
 }

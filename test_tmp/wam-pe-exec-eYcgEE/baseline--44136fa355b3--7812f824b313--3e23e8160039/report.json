@@ -1,0 +1,59 @@
+{
+  "runId": "baseline--44136fa355b3--7812f824b313--3e23e8160039",
+  "labels": [
+    "baseline",
+    "candidate"
+  ],
+  "scenarios": [
+    {
+      "scenarioId": "exec.hold",
+      "severity": "critical",
+      "passed": true,
+      "evaluable": true,
+      "mandatoryPassed": true,
+      "criteria": [
+        {
+          "criterionId": "exec.hold.must",
+          "kind": "includes-all",
+          "required": true,
+          "passed": true,
+          "evaluable": true,
+          "evidence": "Includes all required values: [\"hold\"]"
+        },
+        {
+          "criterionId": "exec.hold.forbidden",
+          "kind": "excludes-any",
+          "required": true,
+          "passed": true,
+          "evaluable": true,
+          "evidence": "None of the forbidden values present: [\"DONE\"]"
+        }
+      ]
+    },
+    {
+      "scenarioId": "exec.hold",
+      "severity": "critical",
+      "passed": true,
+      "evaluable": true,
+      "mandatoryPassed": true,
+      "criteria": [
+        {
+          "criterionId": "exec.hold.must",
+          "kind": "includes-all",
+          "required": true,
+          "passed": true,
+          "evaluable": true,
+          "evidence": "Includes all required values: [\"hold\"]"
+        },
+        {
+          "criterionId": "exec.hold.forbidden",
+          "kind": "excludes-any",
+          "required": true,
+          "passed": true,
+          "evaluable": true,
+          "evidence": "None of the forbidden values present: [\"DONE\"]"
+        }
+      ]
+    }
+  ]
+}

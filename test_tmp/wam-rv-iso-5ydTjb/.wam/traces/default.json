@@ -1,0 +1,243 @@
+{
+  "traceId": "default",
+  "timestamp": "2026-10-14T18:54:08.491Z",
+  "entries": [
+    {
+      "type": "CONCEPT_EXTRACTION",
+      "timestamp": "2026-10-14T18:54:08.491Z",
+      "concept": "implementar feature con tests",
+      "metadata": {
+        "source": "user"
+      }
+    },
+    {
+      "type": "CANDIDATE_RETRIEVAL",
+      "timestamp": "2026-10-14T18:54:08.492Z",
+      "query": "implementar feature con tests",
+      "candidatesCount": 492,
+      "metadata": {
+        "source": "registry"
+      }
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.492Z",
+      "candidateId": "codebase-design",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.492Z",
+      "candidateId": "writing-for-agents",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "dietrichgebert-ponytail-ponytail",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "codebase-design",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "writing-for-agents",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "dietrichgebert-ponytail-ponytail",
+      "evidenceClassification": 0,
+      "reason": {
+        "reason": "Skill base (loadStrategy: \"base\") — siempre seleccionada"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "tdd",
+      "evidenceClassification": 4,
+      "reason": {
+        "reason": "Seleccionado por score 4 y keywords: "
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "github-awesome-copilot-breakdown-feature-implementation",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Seleccionado por score 3 y keywords: feature"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "github-awesome-copilot-breakdown-feature-prd",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Seleccionado por score 3 y keywords: feature"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "tdd",
+      "evidenceClassification": 4,
+      "reason": {
+        "reason": "Rechazado por score bajo (4)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "github-awesome-copilot-breakdown-feature-implementation",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "github-awesome-copilot-breakdown-feature-prd",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "github-awesome-copilot-breakdown-test",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "github-awesome-copilot-create-github-issue-feature-from-specification",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "github-awesome-copilot-create-github-issues-feature-from-implementation-plan",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "github-awesome-copilot-creating-oracle-to-postgres-migration-integration-tests",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "github-awesome-copilot-playwright-generate-test",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "github-awesome-copilot-react19-test-patterns",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "github-awesome-copilot-scaffolding-oracle-to-postgres-migration-test-project",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "github-awesome-copilot-scoutqa-test",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "github-awesome-copilot-structured-autonomy-implement",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    },
+    {
+      "type": "SELECTION_DECISION",
+      "timestamp": "2026-10-14T18:54:08.493Z",
+      "candidateId": "github-awesome-copilot-test-gap-audit",
+      "evidenceClassification": 3,
+      "reason": {
+        "reason": "Rechazado por score bajo (3)"
+      },
+      "metadata": {}
+    }
+  ]
+}

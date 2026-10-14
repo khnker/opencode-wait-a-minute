@@ -112,9 +112,10 @@ function printTable(cal) {
 export function runCalibration({ gold, out } = {}) {
   const goldDir = resolveGoldDir(gold);
   const outPath = out ? path.resolve(out) : DEFAULT_OUT;
-  const suites = listSuites();
+  const allSuites = listSuites();
 
   const goldSet = loadGold(goldDir);
+  const suites = allSuites.filter((s) => goldSet.labels[s.id]);
   const { outputs, missing } = loadRawOutputs(goldDir, suites);
   const oracleVerdicts = collectOracleVerdicts({ suites, outputs });
 
