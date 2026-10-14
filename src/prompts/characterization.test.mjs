@@ -138,12 +138,14 @@ test("characterization: policies preserve order", () => {
     "Verificar consumidores de los cambios, no solo el cambio",
   ]);
   assert.deepEqual(loadPrompt("policy.simplify.rules").split("\n"), [
-    "YAGNI — no construir para necesidades futuras especulativas",
-    "Reusar código y abstracciones existentes",
-    "Preferir mecanismos nativos y stdlib cuando aplique",
-    "Implementación mínima y superficie de cambio mínima",
-    "Evitar dependencias innecesarias y generalización prematura",
-    "Abstracción solo cuando el requerimiento la exige ahora",
+    "Identificar la responsabilidad de cada componente y el contrato que debe preservar",
+    "Buscar mecanismos, funciones y abstracciones existentes antes de agregar nuevos",
+    "Comparar alternativas por comportamiento, acoplamiento, dependencias, mantenibilidad y garantías",
+    "Reusar una abstracción cuando sus responsabilidades y condiciones de cambio encajen",
+    "No fusionar componentes independientes solo para reducir líneas o duplicación aparente",
+    "No agregar abstracción especulativa",
+    "Elegir la alternativa más simple que preserve el comportamiento requerido",
+    "Verificar consumidores y tests relevantes tras el cambio",
   ]);
 });
 

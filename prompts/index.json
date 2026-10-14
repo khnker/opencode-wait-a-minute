@@ -316,7 +316,7 @@
       "id": "policy.simplify.rules",
       "path": "policies/simplify.md",
       "status": "active",
-      "responsibility": "Owns the persistent Simplify policy: YAGNI, reuse existing code, minimal implementation.",
+      "responsibility": "Owns the persistent Simplify policy: identify responsibility, reuse existing abstractions, compare alternatives, minimal change that preserves behavior.",
       "consumers": [
         "src/skills/engine.js"
       ],
