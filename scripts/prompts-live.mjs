@@ -8,8 +8,8 @@
  * offsets a regression).
  *
  * Usage:
- *   node scripts/prompts-live.mjs [--suite verify|scope|simplify|delegation|discovery|runtime|decision-gate|completion|all] \
- *     [--variant V1|S1|P1|D1|D5|R1|G1|C1] [--out <dir>] [--dry-run] [--trials N] [--temperature <t>]
+*     node scripts/prompts-live.mjs [--suite verify|scope|simplify|delegation|discovery|runtime|decision-gate|completion|all] \
+*       [--variant V1|V2|S1|P1|P2|D1|D5|R1|G1|C1] [--out <dir>] [--dry-run] [--trials N] [--temperature <t>]
  *
  * Defaults: suite=all, out=benchmarks/results/live-<iso>, trials=1, temperature=0.
  * `--dry-run` uses the mock provider (no network); live output dirs are
@@ -43,9 +43,9 @@ const ACTIVE_BY_REF = Object.freeze({
 
 /** Suite → default experimental variant + its experiment file. */
 const VARIANT_BY_SUITE = Object.freeze({
-  verify: "V1",
+  verify: "V2",
   scope: "S1",
-  simplify: "P1",
+  simplify: "P2",
   delegation: "D1",
   discovery: "D5",
   runtime: "R1",
@@ -57,6 +57,8 @@ const VARIANT_POLICY = Object.freeze({
   V1: "verify",
   S1: "scope",
   P1: "simplify",
+  P2: "simplify",
+  V2: "verify",
   D1: "delegation",
   D5: "discovery",
   R1: "runtime",
@@ -142,7 +144,7 @@ for (const suite of selectedSuites) {
   const variantId = args.variant ?? VARIANT_BY_SUITE[suite.id];
   const policyFolder = VARIANT_POLICY[variantId];
   if (!policyFolder) {
-    throw new Error(`unknown variant "${variantId}" (expected V1|S1|P1|D1|D5|R1|G1|C1)`);
+    throw new Error(`unknown variant "${variantId}" (expected V1|V2|S1|P1|P2|D1|D5|R1|G1|C1)`);
   }
   const variantRel = `prompts/experiments/${policyFolder}/${variantId}.md`;
 

@@ -17,12 +17,14 @@ const EXPERIMENTS_ROOT = path.join(PROMPTS_ROOT, "experiments");
 
 const EXPECTED_VARIANTS = [
   ["verify", "V1"],
+  ["verify", "V2"],
   ["scope", "S1"],
   ["simplify", "P1"],
+  ["simplify", "P2"],
   ["delegation", "D1"],
 ];
 
-test("experiments: the four variants exist on disk", () => {
+test("experiments: the six variants exist on disk", () => {
   for (const [policy, variant] of EXPECTED_VARIANTS) {
     const rel = path.join(EXPERIMENTS_ROOT, policy, `${variant}.md`);
     assert.ok(fs.existsSync(rel), `missing experimental variant: ${rel}`);
@@ -43,6 +45,9 @@ test("experiments: active prompt count is unchanged and exposes no variant", () 
     "active prompt count changed after adding experiments",
   );
   const experimentIds = EXPECTED_VARIANTS.map(([p, v]) => `policy.${p}.${v}`);
+const expectedExperimentFiles = EXPECTED_VARIANTS.map(([p, v]) => 
+  path.join(EXPERIMENTS_ROOT, p, `${v}.md`)
+);
   for (const entry of active) {
     assert.ok(
       !String(entry.path).split("/").includes("experiments"),

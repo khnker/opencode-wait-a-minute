@@ -33,6 +33,8 @@ const VARIANT_POLICY = Object.freeze({
   V1: "verify",
   S1: "scope",
   P1: "simplify",
+  P2: "simplify",
+  V2: "verify",
   D1: "delegation",
 });
 
@@ -64,14 +66,14 @@ const {
 
 if (!variant) {
   console.error(
-    "Usage: node scripts/prompts-experiment.mjs --suite <id|core> --variant <V1|S1|P1|D1|baseline> [--outputs <baseline|candidate>] [--outDir <dir>]",
+    "Usage: node scripts/prompts-experiment.mjs --suite <id|core> --variant <V1|V2|S1|P1|P2|D1|baseline> [--outputs <baseline|candidate>] [--outDir <dir>]",
   );
   process.exit(1);
 }
 
 const policy = VARIANT_POLICY[variant];
 if (policy === undefined && variant !== "baseline") {
-  console.error(`Unknown variant "${variant}" (expected V1|S1|P1|D1|baseline)`);
+  console.error(`Unknown variant "${variant}" (expected V1|V2|S1|P1|P2|D1|baseline)`);
   process.exit(1);
 }
 
