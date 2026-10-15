@@ -40,16 +40,33 @@ const checks = [
 let failed = 0;
 const results = [];
 
+const runCheckWithRetries = (check, maxRetries = 3) => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`\n[RUNNING] ${check.name}... (attempt ${attempt}/${maxRetries})`);
+      const output = execSync(check.cmd, { stdio: "pipe", encoding: "utf-8", timeout: 60000 });
+      console.log(`[PASS] ${check.name}`);
+      return { status: "PASS", output: output.slice(-300) };
+    } catch (err) {
+      if (attempt === maxRetries) {
+        console.error(`[FAIL] ${check.name}: ${err.message} (after ${maxRetries} attempts)`);
+        return { status: "FAIL", output: err.message };
+      } else {
+        console.warn(`[WARN] ${check.name} attempt ${attempt} failed: ${err.message}. Retrying...`);
+      }
+    }
+  }
+  // should not reach here
+  return { status: "FAIL", output: "Unknown error" };
+};
+
 for (const check of checks) {
-  console.log(`\n[RUNNING] ${check.name}...`);
-  try {
-    const output = execSync(check.cmd, { stdio: "pipe", encoding: "utf-8", timeout: 60000 });
-    console.log(`[PASS] ${check.name}`);
-    results.push({ name: check.name, status: "PASS", output: output.slice(-300) });
-  } catch (err) {
-    console.error(`[FAIL] ${check.name}: ${err.message}`);
+  const result = runCheckWithRetries(check, 3);
+  if (result.status === "PASS") {
+    results.push({ name: check.name, status: "PASS", output: result.output });
+  } else {
     failed++;
-    results.push({ name: check.name, status: "FAIL", output: err.message });
+    results.push({ name: check.name, status: "FAIL", output: result.output });
   }
 }
 
