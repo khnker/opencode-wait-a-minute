@@ -21,7 +21,7 @@ const checks = [
   },
   {
     name: "API Health Check (curl)",
-    cmd: "curl -fsSI http://localhost:4000/health || curl -fsSI http://localhost:4001/health || echo 'API check: service not running or skipped'",
+    cmd: "bash -c 'if curl -fsSI http://localhost:4000/health; then exit 0; elif curl -fsSI http://localhost:4001/health; then exit 0; else exit 1; fi'",
   },
   {
     name: "Database Query / Persistence Verification",
@@ -29,7 +29,7 @@ const checks = [
   },
   {
     name: "Frontend Smoke / Playwright Check",
-    cmd: "node -e \"console.log('Playwright/FE integration verified via test suite')\"",
+    cmd: "npm run test:e2e || echo 'No e2e script, running tests/e2e directly' && node tests/e2e/restart-recovery.test.mjs",
   },
   {
     name: "Benchmarks & Calibration",
@@ -48,13 +48,8 @@ for (const check of checks) {
     results.push({ name: check.name, status: "PASS", output: output.slice(-300) });
   } catch (err) {
     console.error(`[FAIL] ${check.name}: ${err.message}`);
-    if (check.name.includes("API") || check.name.includes("Frontend")) {
-      console.warn(`[WARN] Service layer check skipped/failed gracefully in headless environment.`);
-      results.push({ name: check.name, status: "SKIP_OR_FAIL", output: err.message });
-    } else {
-      failed++;
-      results.push({ name: check.name, status: "FAIL", output: err.message });
-    }
+    failed++;
+    results.push({ name: check.name, status: "FAIL", output: err.message });
   }
 }
 
