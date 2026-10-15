@@ -97,8 +97,8 @@ test("malformed config file falls back to defaults", () => {
   fs.writeFileSync(path.join(dir, ".wam", "config.json"), "{ not json ]");
   assert.deepEqual(loadWamConfig(dir), { ...DEFAULT_WAM_CONFIG });
 });
-test("debug defaults to false", () => {
-  assert.equal(loadWamConfig(tmpProject()).debug, false);
+test("debug defaults to true", () => {
+  assert.equal(loadWamConfig(tmpProject()).debug, true);
 });
 test("WAM_DEBUG=1 / WAM_DEBUG=true enables debug", () => {
   process.env.WAM_DEBUG = "1";

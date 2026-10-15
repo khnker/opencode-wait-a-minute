@@ -30,7 +30,7 @@ export const DEFAULT_WAM_CONFIG = Object.freeze({
   skills: true,
   logging: true,
   enforcement: true,
-  debug: false,
+  debug: true,
 });
 
 const TRUE_VALUES = new Set(["1", "true", "on", "yes", "enabled", "enable"]);
