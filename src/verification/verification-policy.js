@@ -1,5 +1,6 @@
 import { detectEvidenceGaps } from "../evidence/evidence-gap.js";
 import { EVIDENCE_STRENGTH } from "../evidence/evidence.js";
+import { recordTokenSavings } from "./token-savings-meter.js";
 
 export const VERIFICATION_STRATEGY = {
   EXISTING_TEST: "existing_test",

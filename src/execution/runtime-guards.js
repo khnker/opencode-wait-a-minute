@@ -5,6 +5,10 @@ import { evaluateAction } from "../policy/risk-engine.js";
 import { getCapability, CAPABILITY_LEVELS } from "../policy/action-capabilities.js";
 import { guardSubagentDispatch, loadModelRegistry } from "../skills/subagent-model-availability.js";
 import { loadPrompt } from "../prompts/loader.js";
+import {
+  evaluateAutonomousResolution,
+  mustResolveAutonomously,
+} from "./autonomous-resolution.js";
 import fs from "node:fs";
 
 const HARD_DELETE_RE =
@@ -162,6 +166,20 @@ export async function guardAction(tool, args, taskRoot, taskId) {
       ...baseReturn,
       warning: loadPrompt("warning.runtime.repetition", { status: repeated.status }),
     };
+  }
+
+  const verification = (args && args.verification) || risk.verification || null;
+  if (verification) {
+    const decision = evaluateAutonomousResolution(
+      verification,
+      args && args.operatorInstruction,
+    );
+    baseReturn.autonomousResolution = decision;
+    if (mustResolveAutonomously(decision)) {
+      baseReturn.nudge = baseReturn.nudge
+        ? `${baseReturn.nudge} | ${decision.directive}`
+        : decision.directive;
+    }
   }
 
   return baseReturn;
