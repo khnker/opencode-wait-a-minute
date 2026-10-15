@@ -164,7 +164,7 @@ function genPartId() {
 
 // Inyecta texto visible al frente del mensaje de usuario; fallback a .system (API vieja).
 function emitTextPart(output, text, meta = {}) {
-  if (!output) return;
+  if (!output) return { status: "error", reason: "no-output" };
   let prefixedText = `[wam] WAM toma control de ejecución. ${text}`;
   if (meta.phase) {
     prefixedText += ` Etapa actual: ${meta.phase}.`;
@@ -176,7 +176,13 @@ function emitTextPart(output, text, meta = {}) {
     ...(meta.sessionID ? { sessionID: meta.sessionID } : {}),
     ...(meta.messageID ? { messageID: meta.messageID } : {}),
   };
+  const sink = Array.isArray(output.parts) ? output.parts : (Array.isArray(output.system) ? output.system : null);
+  if (!sink) {
+    wamWarn(`[WAM] emitTextPart: no valid sink (parts/system) for injection`);
+    return { status: "unsupported-output-shape", reason: "missing-parts-or-system" };
+  }
   injectWamParts(output, [part], { messageID: meta.messageID, phase: "emit", idFactory: genPartId, position: "prepend" });
+  return { status: "inserted" };
 }
 
 // -- v1-enforcement: estado durable, contrato y progreso --------
@@ -382,24 +388,43 @@ function readActiveTaskIdFresh(root, options = {}) {
  * carpeta; tras 60s sin actividad el active-task se considera obsoleto.
  */
 function effectiveTaskId(input, sessionTasks, wamRoot, promptText) {
+  // Priority 1: Explicit taskId (must not be generic)
   if (input?.taskId && !GENERIC_TASK.test(input.taskId)) {
     return { taskId: input.taskId, fallbackKind: "explicit" };
   }
+  
+  // Priority 2: Session-specific cached task (strict session binding)
   const cached = sessionTasks?.get?.(input?.sessionID);
   if (cached) return { taskId: cached, fallbackKind: "cached" };
-  const fresh = readActiveTaskIdFresh(wamRoot);
+  
+  // Priority 3: Fresh active task with strict session/project ownership.
+  // readActiveTaskIdFresh enforces the 60s TTL and rejects records whose
+  // sessionId/projectRoot don't match the caller — this is what stops a
+  // session from silently adopting another session's active task.
+  const fresh = readActiveTaskIdFresh(wamRoot, {
+    sessionId: input?.sessionID,
+    projectRoot: wamRoot,
+  });
   if (fresh) return { taskId: fresh, fallbackKind: "active" };
+  
+  // Priority 4: Derive slug ONLY for new task creation (not continuation)
   // Prompts NO continuación y con sustantivo descriptivo → derivar slug.
   // Esto evita caer en default-task o ses-<id> cuando el usuario describió
   // claramente una tarea específica (ej: "Implementar X en módulo Z").
   if (promptText && !isContinuationPrompt(promptText)) {
     const slug = slugifyTaskPrompt(promptText);
-    if (slug) return { taskId: `task-${slug}`, fallbackKind: "slug" };
+    if (slug) {
+      // For slug-based tasks, bind to session to prevent cross-session sharing
+      const sessionSlugTaskId = `task-${slug}-sess-${input.sessionID?.slice(-8) || "nosess"}`;
+      return { taskId: sessionSlugTaskId, fallbackKind: "slug-session-bound" };
+    }
   }
-  // Sin slug derivable y con sessionID → namespace por sesión.
+  
+  // Priority 5: Session-namespaced fallback (explicit session binding)
   if (input?.sessionID) {
-    return { taskId: `ses-${input.sessionID.slice(-10)}`, fallbackKind: "session" };
+    return { taskId: `ses-${input.sessionID}`, fallbackKind: "session" };
   }
+  
   // Último recurso: default-task. El caller debería saludar al usuario y
   // pedirle que describa la tarea para sacarlo de este namespace genérico.
   return { taskId: "default-task", fallbackKind: "default" };
@@ -754,7 +779,7 @@ async function postToolExecution(input, output) {
     if (bypassed) return;
     const sid = input?.sessionID;
     const taskRoot = await resolveSessionBase(sid);
-    const taskId = sessionTasks.get(sid) || readActiveTaskIdFresh(taskRoot) || "default-task";
+    const taskId = sessionTasks.get(sid) || readActiveTaskIdFresh(taskRoot, { sessionId: sid, projectRoot: taskRoot }) || "default-task";
     const wamRoot = taskRoot;
     const key = input._wamCallID || input?.callID || `${sid}:${toolName}`;
     const mapping = sessionExecutions.get(key) || {};
@@ -863,7 +888,7 @@ async function postToolExecution(input, output) {
       output.parts = output.parts || [];
       const sid = input.sessionID;
       const root = await resolveSessionBase(sid);
-      const taskKey = sessionTasks.get(sid) || readActiveTaskIdFresh(root) || (sid ? `ses-${sid.slice(-10)}` : "default-task");
+      const taskKey = sessionTasks.get(sid) || readActiveTaskIdFresh(root, { sessionId: sid, projectRoot: root }) || (sid ? `ses-${sid.slice(-10)}` : "default-task");
       const argsArr = Array.isArray(input.arguments)
         ? input.arguments
         : (typeof input.arguments === "string" ? input.arguments.split(/\s+/) : []);
@@ -891,11 +916,11 @@ async function postToolExecution(input, output) {
         // leyera resolveSessionBase() y chat.message escribiera en otro root,
         // el estado leido no coincidiria con el escrito (misfire o bypass).
         taskRoot = sessionWamRoots.get(sid) || await resolveSessionBase(sid);
-        taskId = sessionTasks.get(sid) || readActiveTaskIdFresh(taskRoot) || (sid ? `ses-${sid.slice(-10)}` : "default-task");
+        taskId = sessionTasks.get(sid) || readActiveTaskIdFresh(taskRoot, { sessionId: sid, projectRoot: taskRoot }) || (sid ? `ses-${sid.slice(-10)}` : "default-task");
         st = getTaskState(taskId, taskRoot);
         // Fallback: try the active task from disk if first lookup failed
         if (!st && !sid) {
-          const activeId = readActiveTaskIdFresh(taskRoot);
+          const activeId = readActiveTaskIdFresh(taskRoot, { projectRoot: taskRoot });
           if (activeId && activeId !== taskId) {
             taskId = activeId;
             st = getTaskState(taskId, taskRoot);

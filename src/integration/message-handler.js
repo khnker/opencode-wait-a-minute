@@ -372,9 +372,9 @@ export async function handleMessage(input, output, deps) {
       if (!claim.blocked && !claim.allDone) {
         const snapshotCheck = checkContinuation(taskId, existingState, wamRoot);
 
-        if (snapshotCheck.status === "VALID") {
-          if (collector) collector.record("Context_fast_path");
-          input.waitAnalysis = sessionStore.get("waitAnalysis") || null;
+         if (snapshotCheck.status === "VALID") {
+           if (collector) collector.record("Context_fast_path");
+           input.waitAnalysis = sessionStore.get(`${input.sessionID}:waitAnalysis`) || null;
           try { updateProjectMemo({}, wamRoot); } catch {}
           try {
             persistLiveContext(taskId, existingState, wamRoot);
@@ -386,9 +386,9 @@ export async function handleMessage(input, output, deps) {
           return;
         }
 
-        const scope = rebuildScope(snapshotCheck.changedSignals, collector);
-        if (scope.rebuildN1 || scope.rebuildN3) {
-          input.waitAnalysis = sessionStore.get("waitAnalysis") || null;
+         const scope = rebuildScope(snapshotCheck.changedSignals, collector);
+         if (scope.rebuildN1 || scope.rebuildN3) {
+           input.waitAnalysis = sessionStore.get(`${input.sessionID}:waitAnalysis`) || null;
           try { updateProjectMemo({}, wamRoot); } catch {}
           try {
             persistLiveContext(taskId, existingState, wamRoot);
@@ -442,10 +442,10 @@ export async function handleMessage(input, output, deps) {
     }
 
     // Store analysis in session
-    sessionStore.set("waitAnalysis", analysis);
-    sessionStore.set("completionContract", state.contract);
-    sessionStore.set("persistentPolicies", analysis.persistentPolicies || []);
-    sessionStore.set("skillRegistry", analysis.skillRegistry || {});
+     sessionStore.set(`${input.sessionID}:waitAnalysis`, analysis);
+     sessionStore.set(`${input.sessionID}:completionContract`, state.contract);
+     sessionStore.set(`${input.sessionID}:persistentPolicies`, analysis.persistentPolicies || []);
+     sessionStore.set(`${input.sessionID}:skillRegistry`, analysis.skillRegistry || {});
 
     // Blocking questions → ASKING
     const blockingUnknowns = (state.contract?.unknowns || []).filter((u) => u.status === "blocking");

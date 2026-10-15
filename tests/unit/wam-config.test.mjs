@@ -12,6 +12,7 @@ const ENV_KEYS = [
   "WAM_SKILLS", "WAM_DISABLE_SKILLS",
   "WAM_LOGGING", "WAM_SILENT", "WAM_DISABLE_LOGGING",
   "WAM_ENFORCEMENT", "WAM_GOVERNANCE", "WAM_BYPASS",
+  "WAM_DEBUG", "WAM_DISABLE_DEBUG", "WAM_LOG_LEVEL", "WAM_CONFIG",
 ];
 let saved = {};
 
@@ -79,7 +80,7 @@ test("WAM_GOVERNANCE=off / WAM_BYPASS disable enforcement", () => {
 
 test("config file is honored", () => {
   const cfg = loadWamConfig(tmpProject({ skills: false, logging: false, enforcement: false }));
-  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false });
+  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false, debug: false });
 });
 
 test("env overrides config file", () => {
@@ -95,6 +96,53 @@ test("malformed config file falls back to defaults", () => {
   fs.mkdirSync(path.join(dir, ".wam"), { recursive: true });
   fs.writeFileSync(path.join(dir, ".wam", "config.json"), "{ not json ]");
   assert.deepEqual(loadWamConfig(dir), { ...DEFAULT_WAM_CONFIG });
+});
+test("debug defaults to false", () => {
+  assert.equal(loadWamConfig(tmpProject()).debug, false);
+});
+test("WAM_DEBUG=1 / WAM_DEBUG=true enables debug", () => {
+  process.env.WAM_DEBUG = "1";
+  assert.equal(loadWamConfig(tmpProject()).debug, true);
+  delete process.env.WAM_DEBUG;
+  process.env.WAM_DEBUG = "true";
+  assert.equal(loadWamConfig(tmpProject()).debug, true);
+  delete process.env.WAM_DEBUG;
+});
+test("WAM_LOG_LEVEL=debug enables debug", () => {
+  process.env.WAM_LOG_LEVEL = "debug";
+  assert.equal(loadWamConfig(tmpProject()).debug, true);
+  delete process.WAM_LOG_LEVEL;
+});
+test("WAM_DISABLE_DEBUG=1 disables debug even if config file says true", () => {
+  const dir = tmpProject({ debug: true });
+  process.env.WAM_DISABLE_DEBUG = "1";
+  assert.equal(loadWamConfig(dir).debug, false);
+  delete process.env.WAM_DISABLE_DEBUG;
+});
+test("config file debug=true is honored", () => {
+  assert.equal(loadWamConfig(tmpProject({ debug: true })).debug, true);
+});
+test("env WAM_DEBUG overrides config file debug", () => {
+  const dir = tmpProject({ debug: false });
+  process.env.WAM_DEBUG = "true";
+  assert.equal(loadWamConfig(dir).debug, true);
+  delete process.env.WAM_DEBUG;
+});
+test("WAM_CONFIG overrides default config file location", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wam-cfg-override-"));
+  const alt = path.join(dir, "alt-config.json");
+  fs.writeFileSync(alt, JSON.stringify({ skills: false, logging: false, enforcement: false, debug: true }));
+  process.env.WAM_CONFIG = alt;
+  const cfg = loadWamConfig(dir);
+  assert.equal(cfg.skills, false);
+  assert.equal(cfg.logging, false);
+  assert.equal(cfg.debug, true);
+  delete process.env.WAM_CONFIG;
+});
+test("WAM_CONFIG pointing at missing file falls back to defaults", () => {
+  process.env.WAM_CONFIG = path.join(os.tmpdir(), "does-not-exist-" + Date.now() + ".json");
+  assert.deepEqual(loadWamConfig(tmpProject()), { ...DEFAULT_WAM_CONFIG });
+  delete process.env.WAM_CONFIG;
 });
 
 test("configureLogger gates file logging", () => {
