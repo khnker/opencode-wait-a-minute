@@ -133,17 +133,25 @@ export async function startExperiment(taskRoot, taskId, { statement, tool, args 
 
   const loopResult = loopGuard.record(tool, input);
   if (loopResult.directive || loopResult.budgetExhausted) {
-    const reason = `loop guard triggered: directive=${loopResult.directive}, count=${loopResult.count}`;
+    const reason = `loop guard triggered: directive=${loopResult.directive}, count=${loopResult.count}, streak=${loopResult.streak}, steps=${loopResult.steps}`;
     archiveHypothesis(taskRoot, taskId, hypothesis.id, reason);
+    // ABORT / STUCK are terminal: no further tool calls this session.
+    // STOP_CHECKPOINT is a soft block (checkpoint + continue).
+    // CHECKPOINT / ESCALATE are warnings that still allow the call.
+    const terminalDirectives = new Set(["ABORT", "STUCK", "STOP_CHECKPOINT"]);
+    const isTerminal = terminalDirectives.has(loopResult.directive) || loopResult.budgetExhausted;
     return {
       ok: false,
       hypothesis,
       guard: {
         allowed: false,
-        level: loopResult.directive === "STOP_CHECKPOINT" ? "BLOCKED" : "WARN",
+        level: (loopResult.directive === "ABORT" || loopResult.directive === "STOP_CHECKPOINT") ? "BLOCKED" : "WARN",
         reason,
         directive: loopResult.directive,
         loopCount: loopResult.count,
+        loopStreak: loopResult.streak,
+        loopSteps: loopResult.steps,
+        terminal: isTerminal,
       },
     };
   }

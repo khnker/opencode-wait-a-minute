@@ -51,6 +51,63 @@ export function enforceReadDelegation(tool, ctx = {}) {
   };
 }
 
+/**
+ * Scratch-script guard — prevents ad-hoc throwaway test/debug scripts
+ * (test_tipo.js, debug_full.js, scratch-*.mjs, etc.) when a real unit
+ * test already exists for the same module.
+ *
+ * The agent should extend the existing test file, not spawn a temp script.
+ * Returns null when no restriction applies; otherwise a decision object.
+ */
+// Matches ad-hoc scratch scripts: test_<anything>, debug_<anything>,
+// scratch-*, _tmp_*, repro-*, and similar. Deliberately broad: the point
+// is to catch the common "I'll just write a quick script to verify" pattern.
+const SCRATCH_NAME_RE = /^(test_|debug_|scratch-|_tmp_|repro_|quick-|tmp-|_debug_|_test_|diagnose_|investigate_)/i;
+const SCRATCH_DIR_RE = /(^|[\\/])(tmp|scratch|_scratch|diagnostics?)([\\/]|$)/i;
+
+export function enforceNoScratchScripts(tool, args, { taskRoot, existingTests = [] } = {}) {
+  if (tool !== "write" && tool !== "edit" && tool !== "apply_patch" && tool !== "patch") {
+    return null;
+  }
+  const targetPath = args?.filePath || args?.path || args?.file;
+  if (!targetPath || typeof targetPath !== "string") return null;
+
+  // Only restrict paths that look like scratch: /tmp, scratch dirs, or
+  // ad-hoc names. Real repo test files (tests/unit/*.test.mjs) are fine.
+  const isTmp = NON_REPO_PATH_PREFIXES.some((p) => p && targetPath.startsWith(p));
+  const inScratchDir = SCRATCH_DIR_RE.test(targetPath);
+  const isScratchName = SCRATCH_NAME_RE.test(targetPath.split(/[\\/]/).pop() || "");
+  if (!isTmp && !inScratchDir && !isScratchName) return null;
+
+  // If a real test file exists in the repo for the same area, redirect.
+  // Normalize hyphens/underscores so "test_loop_budget.js" matches
+  // "loop-budget-guard.test.mjs" — the separator is cosmetic.
+  const basename = targetPath.split(/[\\/]/).pop() || "";
+  const stem = basename
+    .replace(/^test_|^debug_|^scratch-|^_tmp_|^repro_|^quick-|^tmp-|^diagnose_|^investigate_/i, "")
+    .replace(/\.(js|mjs)$/i, "")
+    .replace(/[-_]/g, "");
+  const match = existingTests.find((t) => {
+    const tBase = (t.split(/[\\/]/).pop() || "")
+      .replace(/\.(mjs|js)$/i, "")
+      .replace(/\.test$/i, "")
+      .replace(/[-_]/g, "");
+    return tBase.includes(stem) || (stem.length > 0 && stem.includes(tBase));
+  });
+
+  // A scratch script is always blocked (allowed=false). The distinction is
+  // whether we can redirect the agent to an existing test file (match) or
+  // must give a generic nudge (no match). Both are BLOCKED; neither permits
+  // the write.
+  return {
+    allowed: false,
+    reason: match ? "existing-test-found" : "scratch-script",
+    directive: match
+      ? `[wait-a-minute] Script temporal detectado (${basename}). En su lugar, extendé el test existente ${match} (usá el mismo framework) en lugar de crear un script ad-hoc.`
+      : `[wait-a-minute] Script temporal detectado (${basename}). Evitá scripts basura en /tmp o con nombres ad-hoc; usá los tests unitarios existentes del repo.`,
+  };
+}
+
 /** Phases from which no further mutation gate applies. */
 export const TERMINAL_PHASES = new Set(["COMPLETE", "DONE"]);
 

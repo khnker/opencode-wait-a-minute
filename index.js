@@ -5,7 +5,7 @@ import { handleMessage } from "./src/integration/message-handler.js";
 import { injectWamParts } from "./src/integration/part-provenance.js";
 import { loadWamConfig } from "./src/config/wam-config.js";
 import { configureLogger } from "./src/integration/logger.js";
-import { setLoggingEnabled, wamLog, wamError } from "./src/shared/wam-log.js";
+import { setLoggingEnabled, setDebugEnabled, registerLogicGate, wamDebug, wamLog, wamError } from "./src/shared/wam-log.js";
 import { evaluateCompletionGate, applyPhaseTransition } from "./src/integration/orchestration.js";
 import { loadPrompt } from "./src/prompts/loader.js";
 
@@ -165,10 +165,14 @@ function genPartId() {
 // Inyecta texto visible al frente del mensaje de usuario; fallback a .system (API vieja).
 function emitTextPart(output, text, meta = {}) {
   if (!output) return;
+  let prefixedText = `[wam] WAM toma control de ejecución. ${text}`;
+  if (meta.phase) {
+    prefixedText += ` Etapa actual: ${meta.phase}.`;
+  }
   const part = {
     id: genPartId(),
     type: "text",
-    text,
+    text: prefixedText,
     ...(meta.sessionID ? { sessionID: meta.sessionID } : {}),
     ...(meta.messageID ? { messageID: meta.messageID } : {}),
   };
@@ -285,6 +289,65 @@ function listTaskIds(root) {
 // -- Persistencia por sesión: N sesiones pueden trabajar la MISMA carpeta sin
 // colisionar en default-task / task-context.md / active-task. ----------------
 const GENERIC_TASK = /^(default-task|task|general|)$/;
+// Longitud máxima del slug derivado del prompt (task-<slug> => 5 + N)
+const MAX_SLUG_LEN = 48;
+// Prompts de continuación/cortos: "sigue", "continua", vacíos, genéricos o
+// mensajes de ejecución de herramientas. NUNCA deben derivar un nuevo task id
+// descriptivo; reutilizan la tarea cacheada de la sessión o la activa fresca,
+// y solo si nada existe recurren al namespace de sessión (fallback graceful).
+const CONTINUATION_RE = /^(sigue|sigues|sigamos|siguiente|continua|continuas|continuemos|continuar|continuará|retoma|retomas|retomar|seguir|continue|continues|continuing|proceed|go on|next|ok|okay|yes|ya|listo|dale|vamos|finish|finished|done|wait|wam)\b/i;
+
+/**
+ * Convierte el texto del prompt del usuario en un slug descriptivo para el
+ * task id automático: `task-<slug>`. Evita que la tarea caiga en el namespace
+ * monolítico `ses-<sessionID>` o `default-task`, que mezcla state entre
+ * conversaciones distintas del mismo proyecto.
+ *
+ * Reglas:
+ *   - minúsculas, sin acentos, solo [a-z0-9-], longitud acotada (<=48)
+ *   - si el texto es vacío/generic → null (el caller decide fallback)
+ *   - si el slug resultante es genérico (una palabra común) → null
+ *
+ * @param {string} text - texto del prompt del usuario
+ * @returns {string|null} slug sin prefijo `task-`, o null si no es usable
+ */
+function slugifyTaskPrompt(text) {
+  if (typeof text !== "string") return null;
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.length < 4) return null;
+  // Heurística: si el texto es solo comandos/ops sin sustantivo → no slugificar
+  if (/^(\/[\w-]+(\s+|$))/.test(trimmed)) {
+    // un solo comando sin argumentos descriptivos → no usable
+    if (trimmed.split(/\s+/).length < 3) return null;
+  }
+  const slug = trimmed
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // quita diacríticos
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  if (!slug || slug.length < 4) return null;
+  if (slug.length > MAX_SLUG_LEN) {
+    // Cortar en límite de palabra para no dejar media palabra al final
+    const cut = slug.slice(0, MAX_SLUG_LEN);
+    const lastHyphen = cut.lastIndexOf("-");
+    return (lastHyphen > 0 ? cut.slice(0, lastHyphen) : cut).replace(/-$/, "");
+  }
+  // Rechazar slugs genéricos de una palabra común
+  if (GENERIC_SLUGS.has(slug)) return null;
+  return slug;
+}
+
+// Palabras que, solas, no describen una tarea
+const GENERIC_SLUGS = new Set([
+  "hola", "hello", "hi", "hey", "ok", "okay", "yes", "no", "test",
+  "run", "go", "start", "stop", "help", "what", "how", "why", "the",
+  "and", "for", "with", "from", "this", "that", "fix", "make", "do",
+  "add", "use", "get", "set", "see", "try", "can", "will", "should",
+]);
 
 function readActiveTaskIdFresh(root, options = {}) {
   const rec = readActiveTaskRecord(root);
@@ -306,21 +369,61 @@ function readActiveTaskIdFresh(root, options = {}) {
  * - taskId conocido en sessionTasks (cache de chat.message) → ese
  * - active-task reciente (<=60s, escrito por /wam task switch o /wam resume) →
  *   ese (intención explícita reciente del usuario)
- * - sin taskId ni sesión conocida → namespace por sesión: ses-<sessionID>
+ * - prompt NO continuación y con sustantivo descriptivo → `task-<slug>` derivado
+ * - con sessionID conocida → namespace por sesión: ses-<sessionID>
+ * - sin sessionID y prompt vacío/genérico → "default-task" (último recurso)
+ *
+ * Devuelve `{ taskId, fallbackKind }` para que el caller pueda decidir si
+ * saluda al usuario cuando el resultado cayó en `default-task` o `session`.
  *
  * active-task global NO se usa como fallback automático: solo /wam task switch
  * o /wam resume lo consultan vía readActiveTaskIdFresh() con TTL de 60s. Esto
  * evita que sesiones nuevas adopten estado de tareas previas en la misma
  * carpeta; tras 60s sin actividad el active-task se considera obsoleto.
  */
-function effectiveTaskId(input, sessionTasks, wamRoot) {
-  if (input?.taskId && !GENERIC_TASK.test(input.taskId)) return input.taskId;
+function effectiveTaskId(input, sessionTasks, wamRoot, promptText) {
+  if (input?.taskId && !GENERIC_TASK.test(input.taskId)) {
+    return { taskId: input.taskId, fallbackKind: "explicit" };
+  }
   const cached = sessionTasks?.get?.(input?.sessionID);
-  if (cached) return cached;
+  if (cached) return { taskId: cached, fallbackKind: "cached" };
   const fresh = readActiveTaskIdFresh(wamRoot);
-  if (fresh) return fresh;
-  if (input?.sessionID) return `ses-${input.sessionID.slice(-10)}`;
-  return "default-task";
+  if (fresh) return { taskId: fresh, fallbackKind: "active" };
+  // Prompts NO continuación y con sustantivo descriptivo → derivar slug.
+  // Esto evita caer en default-task o ses-<id> cuando el usuario describió
+  // claramente una tarea específica (ej: "Implementar X en módulo Z").
+  if (promptText && !isContinuationPrompt(promptText)) {
+    const slug = slugifyTaskPrompt(promptText);
+    if (slug) return { taskId: `task-${slug}`, fallbackKind: "slug" };
+  }
+  // Sin slug derivable y con sessionID → namespace por sesión.
+  if (input?.sessionID) {
+    return { taskId: `ses-${input.sessionID.slice(-10)}`, fallbackKind: "session" };
+  }
+  // Último recurso: default-task. El caller debería saludar al usuario y
+  // pedirle que describa la tarea para sacarlo de este namespace genérico.
+  return { taskId: "default-task", fallbackKind: "default" };
+}
+/**
+ * Predicado puro: true cuando el prompt es de continuación, vacío, genérico
+ * o un mensaje de ejecución de herramienta. Estos no deben spawnear un nuevo
+ * task-<slug> descriptivo; reutilizan la tarea cacheada de la sessión o la
+ * activa fresca, y solo si nada existe recurren al namespace de sessión.
+ *
+ * @param {string} text - texto del prompt del usuario
+ * @returns {boolean}
+ */
+function isContinuationPrompt(text) {
+  if (typeof text !== "string") return true;
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  if (trimmed.length < 4) return true;
+  if (CONTINUATION_RE.test(trimmed)) return true;
+  // Mensajes de ejecución de herramienta (tool.execute.before): solo nombre
+  // de herramienta o salida técnica → no es una nueva tarea.
+  if (/^(tool|bash|read|write|edit|grep|glob|ls|node|npm|python|git)\b/i.test(trimmed)) return true;
+  if (/^\[tool\b/i.test(trimmed)) return true;
+  return false;
 }
 
 function taskDir(root, taskId) {
@@ -582,7 +685,13 @@ const WaitAMinutePlugin = async (pluginInput) => {
   const wamConfig = loadWamConfig(projectDirectory);
   configureLogger({ enabled: wamConfig.logging });
   setLoggingEnabled(wamConfig.logging);
-  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement };
+  setDebugEnabled(wamConfig.debug);
+  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement, debug: wamConfig.debug };
+  // Audit which WAM logic gates are loaded so WAM_DEBUG=1 output is self-describing.
+  registerLogicGate("skills", { loaded: wamConfig.skills, source: "wam-config", note: "skill discovery/routing/injection" });
+  registerLogicGate("logging", { loaded: wamConfig.logging, source: "wam-config", note: "file + console log emission" });
+  registerLogicGate("enforcement", { loaded: wamConfig.enforcement, source: "wam-config", note: "governance/mutating-tool blocking" });
+  registerLogicGate("debug", { loaded: wamConfig.debug, source: "wam-config", note: "structured WAM-DEBUG traces" });
 
   // Track if plugin is bypassed
   let bypassed = false;
@@ -840,8 +949,9 @@ async function postToolExecution(input, output) {
         // Action Risk Envelope: evaluar riesgo de la herramienta antes de cualquier
         // otra lógica. Bloquea BLOCKED con WamPolicyBlock (no genérico Error) para
         // evitar que catch genérico lo trague.
-        const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot);
-        if (risk.level === "BLOCKED") {
+const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot);
+          wamDebug("risk-envelope", `evaluateAction(${tool}) -> level=${risk.level}`, { reason: risk.reason, tool, enforcement: cfg.enforcement });
+          if (risk.level === "BLOCKED") {
           const directive = `[wait-a-minute] RISK BLOCK (${tool}): ${risk.reason || "acción fuera del envelope de riesgo"}. Requiere autorización explícita del usuario.`;
           input.output = directive;
           // Soft mode: log warning and allow execution to continue unless strict mode
@@ -885,7 +995,9 @@ async function postToolExecution(input, output) {
               declaredFiles,
               enforcementEnabled: cfg.enforcement !== false,
             });
+            wamDebug("governance", `enforceGovernance(${tool}) -> ALLOWED`, { isSubagent, phase: st?.phase, enforcement: cfg.enforcement });
           } catch (err) {
+            wamDebug("governance", `enforceGovernance(${tool}) -> BLOCKED`, { isSubagent, phase: st?.phase, reason: err?.message });
             if (err?.wamPolicyBlock) {
               input.output = err.message;
               // Soft mode: log warning and allow execution to continue unless strict mode
@@ -1037,8 +1149,9 @@ async function wamCli(args, cfg = {}, root = process.cwd(), taskId = readActiveT
     if (action === "explain") {
       const prompt = rest.join(" ");
       if (!prompt) return "Uso: /wam skills explain <prompt>";
-      const sel = routeSkillsV2(prompt, {}, waitAMinute.getRegistry(), "STANDARD");
-      return sel.selected.length
+const sel = routeSkillsV2(prompt, {}, waitAMinute.getRegistry(), "STANDARD");
+          wamDebug("skills", `routeSkillsV2(prompt="${prompt.slice(0,80)}") -> ${sel.selected.length} skills`, { selected: sel.selected.map(s => s.name), registry: waitAMinute.getRegistry().length });
+          return sel.selected.length
         ? sel.selected.map(s => `${s.name}: ${s.reason}`).join("\n")
         : "Ninguna skill seleccionada para ese prompt";
     }
@@ -1862,5 +1975,10 @@ Object.keys(waitAMinute).forEach((k) => {
   if (k === "name") return;
   WaitAMinutePlugin[k] = waitAMinute[k];
 });
+
+WaitAMinutePlugin.slugifyTaskPrompt = slugifyTaskPrompt;
+WaitAMinutePlugin.effectiveTaskId = effectiveTaskId;
+WaitAMinutePlugin.isContinuationPrompt = isContinuationPrompt;
+WaitAMinutePlugin.writeActiveTaskId = writeActiveTaskId;
 
 export default WaitAMinutePlugin;

@@ -4,6 +4,7 @@
 
 import { loadTask, saveTask, taskExists, deleteTask } from "./task-store.js";
 import { createState, normalizeState, validateState } from "./task-state.js";
+import { archiveAndPruneSingleTask } from "../persistence/retention-manager.js";
 
 const TERMINAL_PHASES = new Set(["DONE"]);
 
@@ -38,6 +39,22 @@ export function switchTo(taskId, newPhase, root) {
   state.phase = newPhase;
   state.updatedAt = Date.now();
   saveTask(taskId, state, root);
+
+  // When the task reaches the DONE terminal phase, immediately archive it
+  // out of `.wam/tasks/` so completed tasks do not linger there. This is
+  // fire-and-forget: the per-task file (source of truth) is already saved,
+  // and a failed archive/prune must never throw out of the lifecycle.
+  if (newPhase === "DONE") {
+    archiveAndPruneSingleTask(taskId, root).catch((err) => {
+      if (process.env.WAM_DEBUG) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[wam] archive/prune failed for task ${taskId}: ${err?.message ?? err}`,
+        );
+      }
+    });
+  }
+
   return state;
 }
 

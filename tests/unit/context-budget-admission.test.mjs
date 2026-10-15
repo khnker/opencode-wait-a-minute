@@ -10,7 +10,7 @@ import { resolveContext } from "../../src/context/context-router.js";
 import { adaptRouterResult, routeAndAdapt, buildGraphFromTaskState } from "../../src/integration/router-adapter.js";
 
 describe("ADMISSION constants", () => {
-  it("defines MANDATORY, CONDITIONAL, OPTIONAL", () => {
+  it("defines MANDATORY, CONDITIONAL, OPTIONAL", async () => {
     assert.equal(ADMISSION.MANDATORY, "MANDATORY");
     assert.equal(ADMISSION.CONDITIONAL, "CONDITIONAL");
     assert.equal(ADMISSION.OPTIONAL, "OPTIONAL");
@@ -18,8 +18,8 @@ describe("ADMISSION constants", () => {
 });
 
 describe("assembleContext admission policy", () => {
-  it("returns admission report with sufficiency", () => {
-    const result = assembleContext({
+  it("returns admission report with sufficiency", async () => {
+    const result = await assembleContext({
       prompt: "test task",
       taskId: "test-1",
       classification: "normal",
@@ -37,8 +37,8 @@ describe("assembleContext admission policy", () => {
     assert.ok(typeof result.admission.mandatoryTokens === "number");
   });
 
-  it("MANDATORY items are never dropped", () => {
-    const result = assembleContext({
+  it("MANDATORY items are never dropped", async () => {
+    const result = await assembleContext({
       prompt: "test task",
       taskId: "test-2",
       classification: "normal",
@@ -55,8 +55,8 @@ describe("assembleContext admission policy", () => {
     assert.ok(result.lines.some((l) => l.includes("task:")));
   });
 
-  it("OPTIONAL items are dropped first when budget is tight", () => {
-    const result = assembleContext({
+  it("OPTIONAL items are dropped first when budget is tight", async () => {
+    const result = await assembleContext({
       prompt: "test task",
       taskId: "test-3",
       classification: "normal",
@@ -83,8 +83,8 @@ describe("assembleContext admission policy", () => {
     assert.ok(true); // Just verify it doesn't crash
   });
 
-  it("budget_violation triggers admission cleanup", () => {
-    const result = assembleContext({
+  it("budget_violation triggers admission cleanup", async () => {
+    const result = await assembleContext({
       prompt: "test task",
       taskId: "test-4",
       classification: "normal",
@@ -102,8 +102,8 @@ describe("assembleContext admission policy", () => {
     assert.ok(result.lines.some((l) => l.includes("N0 policy")));
   });
 
-  it("sufficiency is insufficient when MANDATORY exceeds budget", () => {
-    const result = assembleContext({
+  it("sufficiency is insufficient when MANDATORY exceeds budget", async () => {
+    const result = await assembleContext({
       prompt: "test task",
       taskId: "test-5",
       classification: "normal",
@@ -122,8 +122,8 @@ describe("assembleContext admission policy", () => {
 // ─── Focused tests for wam-context-admission-enforcement ─────────────────────
 
 describe("mandatory overflow no se elimina", () => {
-  it("N0 (MANDATORY) present even when budget is zero", () => {
-    const result = assembleContext({
+  it("N0 (MANDATORY) present even when budget is zero", async () => {
+    const result = await assembleContext({
       prompt: "test",
       taskId: "test-m1",
       classification: "normal",
@@ -138,8 +138,8 @@ describe("mandatory overflow no se elimina", () => {
     assert.ok(result.lines.some((l) => l.includes("N0 policy")), "N0 policy must be in output");
   });
 
-  it("N2 task state (MANDATORY) present even when budget is zero", () => {
-    const result = assembleContext({
+  it("N2 task state (MANDATORY) present even when budget is zero", async () => {
+    const result = await assembleContext({
       prompt: "test",
       taskId: "test-m2",
       classification: "normal",
@@ -154,8 +154,8 @@ describe("mandatory overflow no se elimina", () => {
     assert.ok(result.lines.some((l) => l.includes("task:")), "N2 task state must be in output");
   });
 
-  it("mandatoryCount >= 2 (N0 + N2) when taskState has requirements", () => {
-    const result = assembleContext({
+  it("mandatoryCount >= 2 (N0 + N2) when taskState has requirements", async () => {
+    const result = await assembleContext({
       prompt: "test",
       taskId: "test-m3",
       classification: "normal",
@@ -172,7 +172,7 @@ describe("mandatory overflow no se elimina", () => {
 });
 
 describe("conditional/optional degradation respeta decisión router", () => {
-  it("Router OPTIONAL omission does not produce budget_violation from Assembly", () => {
+  it("Router OPTIONAL omission does not produce budget_violation from Assembly", async () => {
     const graph = new ContextGraph();
     graph.addNode({ id: "t1", type: "task", content: "test", verified: false });
     graph.addNode({ id: "o1", type: "output", content: "output", verified: true });
@@ -185,7 +185,7 @@ describe("conditional/optional degradation respeta decisión router", () => {
     assert.ok(adapted.source === "router" || adapted.source === "fallback");
   });
 
-  it("Router CONDITIONAL omission does not override Assembly MANDATORY", () => {
+  it("Router CONDITIONAL omission does not override Assembly MANDATORY", async () => {
     const routerResult = {
       nodes: [],
       edges: [],
@@ -208,7 +208,7 @@ describe("conditional/optional degradation respeta decisión router", () => {
 });
 
 describe("Router y Assembly reportan misma sufficiency", () => {
-  it("Assembly sufficiency matches Router sufficiency when Router available", () => {
+  it("Assembly sufficiency matches Router sufficiency when Router available", async () => {
     const graph = new ContextGraph();
     graph.addNode({ id: "t1", type: "task", content: "test task", verified: false });
     graph.addNode({ id: "o1", type: "output", content: "output", verified: true });
@@ -224,7 +224,7 @@ describe("Router y Assembly reportan misma sufficiency", () => {
     }
   });
 
-  it("Assembly sufficiency = insufficient when Router reports insufficient", () => {
+  it("Assembly sufficiency = insufficient when Router reports insufficient", async () => {
     const routerResult = {
       nodes: [],
       edges: [],
@@ -240,7 +240,7 @@ describe("Router y Assembly reportan misma sufficiency", () => {
 });
 
 describe("Router sufficient no se vuelve insufficient silenciosamente", () => {
-  it("Router sufficient result preserved in Assembly output", () => {
+  it("Router sufficient result preserved in Assembly output", async () => {
     const graph = new ContextGraph();
     graph.addNode({ id: "t1", type: "task", content: "task", verified: false });
     graph.addNode({ id: "o1", type: "output", content: "output", verified: true });
@@ -256,8 +256,8 @@ describe("Router sufficient no se vuelve insufficient silenciosamente", () => {
 });
 
 describe("fallback/source explícito", () => {
-  it("Assembly reports source='legacy' when Router unavailable", () => {
-    const result = assembleContext({
+  it("Assembly reports source='legacy' when Router unavailable", async () => {
+    const result = await assembleContext({
       prompt: "test",
       taskId: "test-fallback",
       classification: "normal",
@@ -268,13 +268,13 @@ describe("fallback/source explícito", () => {
     assert.ok(["router", "legacy"].includes(result.source), `source should be explicit, got: ${result.source}`);
   });
 
-  it("adaptRouterResult source='fallback' for null router result", () => {
+  it("adaptRouterResult source='fallback' for null router result", async () => {
     const result = adaptRouterResult(null);
     assert.equal(result.source, "fallback");
     assert.equal(result.sufficiency, "insufficient");
   });
 
-  it("adaptRouterResult source='router' for valid router result", () => {
+  it("adaptRouterResult source='router' for valid router result", async () => {
     const routerResult = {
       nodes: [{ id: "n1", type: "task", content: "test" }],
       edges: [],
@@ -290,7 +290,7 @@ describe("fallback/source explícito", () => {
 });
 
 describe("mandatory omitting produce budget_violation/insufficient", () => {
-  it("Mandatory omitted by Router → Assembly reports insufficient", () => {
+  it("Mandatory omitted by Router → Assembly reports insufficient", async () => {
     const routerResult = {
       nodes: [],
       edges: [],
@@ -305,8 +305,8 @@ describe("mandatory omitting produce budget_violation/insufficient", () => {
     assert.ok(adapted.missing.some((m) => m.includes("Omitted")), "Missing should include omitted info");
   });
 
-  it("Assembly budget_violation true when mandatory tokens exceed budget", () => {
-    const result = assembleContext({
+  it("Assembly budget_violation true when mandatory tokens exceed budget", async () => {
+    const result = await assembleContext({
       prompt: "test",
       taskId: "test-budget-violation",
       classification: "normal",
@@ -322,7 +322,7 @@ describe("mandatory omitting produce budget_violation/insufficient", () => {
       "Should report insufficient or budget_violation when budget=1");
   });
 
-  it("Mandatory omitting produces explicit rationale entry", () => {
+  it("Mandatory omitting produces explicit rationale entry", async () => {
     const routerResult = {
       nodes: [],
       edges: [],

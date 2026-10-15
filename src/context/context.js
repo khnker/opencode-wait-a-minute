@@ -19,8 +19,12 @@ import { generateContract, evaluateContract, mergeAssumptions } from "./sufficie
 import { retrieveWithCqe } from "./cqe-adapter.js";
 
 export function detectFileSearchIntent(task) {
-  const q = task.toLowerCase();
-  return /\b(find|search|grep|locate|where is)\b/.test(q);
+  if (typeof task !== "string" || !task) return false;
+  // Normalize common Spanish diacritics so patterns like "dónde"/"donde" match uniformly.
+  const q = task.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+  // English + Spanish intent keywords (intent detection only — does not capture the query itself).
+  // `\b` boundaries keep us from matching substrings inside larger words (e.g. "archivo" inside "desarchivo").
+  return /\b(find|search|grep|locate|where\s+is|busca|buscar|encuentra|donde|revisa|revise|ver|archivo|archivos|codigo|file|files)\b/.test(q);
 }
 
 const LEVELS = ["L1", "L2", "L3", "L4"];

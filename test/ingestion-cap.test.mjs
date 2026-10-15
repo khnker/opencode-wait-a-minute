@@ -37,7 +37,7 @@ function cleanup(d) {
 // --- synthesizeContract caps ---
 
 describe("synthesizeContract: caps y filtrado", () => {
-  it("spec largo >2000 chars genera max 2-3 reqs, no 54", () => {
+  it("spec largo >2000 chars genera max 2-3 reqs, no 54", async () => {
     const longSpec = "Implementar Resolvio división de cuentas. " +
       "Spec: objetivo agregar funcionalidad. Flujo: crear cuenta, agregar personas, " +
       "ingresar total, calcular, resultado, compartir. " +
@@ -50,27 +50,27 @@ describe("synthesizeContract: caps y filtrado", () => {
     assert.ok(result.requirements.length <= 5, `reqs: ${result.requirements.length} (esperado <=5)`);
   });
 
-  it("prompt corto natural no genera 3 reqs de ruido", () => {
+  it("prompt corto natural no genera 3 reqs de ruido", async () => {
     const natural = "Tengo un problema con la session de ts-resolvio http://10.10.10.100:5000/session/abc123. No me responde. Está pegada. Analiza qué pasa";
     const result = synthesizeContract(natural);
     assert.ok(result.requirements.length <= 3, `reqs: ${result.requirements.length} (esperado <=3)`);
   });
 
-  it("cláusulas con URLs no se convierten en reqs", () => {
+  it("cláusulas con URLs no se convierten en reqs", async () => {
     const withUrls = "implementar login y revisar https://example.com/api y crear tests";
     const result = synthesizeContract(withUrls);
     const hasUrl = result.requirements.some((r) => /https?:\/\//.test(r));
     assert.ok(!hasUrl, "no debe haber URLs en requisitos");
   });
 
-  it("cláusulas tipo pregunta no se convierten en reqs", () => {
+  it("cláusulas tipo pregunta no se convierten en reqs", async () => {
     const withQuestions = "implementar X y ¿cuánto cuesta? y crear tests y ¿es viable?";
     const result = synthesizeContract(withQuestions);
     const hasQuestion = result.requirements.some((r) => /\?$/.test(r));
     assert.ok(!hasQuestion, "no debe haber preguntas como requisitos");
   });
 
-  it("max 10 reqs incluso con 30 cláusulas limpias", () => {
+  it("max 10 reqs incluso con 30 cláusulas limpias", async () => {
     const many = Array.from({ length: 30 }, (_, i) => `implementar feature ${i}`).join(" y ");
     const result = synthesizeContract(many);
     assert.ok(result.requirements.length <= 10, `reqs: ${result.requirements.length} (esperado <=10)`);
@@ -80,7 +80,7 @@ describe("synthesizeContract: caps y filtrado", () => {
 // --- nextActionFrom truncation ---
 
 describe("nextActionFrom: truncación de títulos", () => {
-  it("título >80 chars se trunca en nextAction", () => {
+  it("título >80 chars se trunca en nextAction", async () => {
     // nextActionFrom is internal, but we can verify the behavior through
     // the fact that synthesizeContract caps reqs, and assembly N2 truncates
     // Let's verify the truncate function exists and works
@@ -119,7 +119,7 @@ describe("delegationLines: consolidación de excedentes", () => {
 // --- assembly.js N2 truncation ---
 
 describe("assembly N2: nextAction truncation", () => {
-  it("nextAction >80 chars se trunca en N2", () => {
+  it("nextAction >80 chars se trunca en N2", async () => {
     const d = tmpRoot();
     try {
       const taskDir = path.join(d, ".wam", "tasks", "test-task");
@@ -133,7 +133,7 @@ describe("assembly N2: nextAction truncation", () => {
         nextAction: longNextAction,
       };
 
-      const pack = assembleContext({
+      const pack = await assembleContext({
         prompt: "test prompt",
         taskId: "test-task",
         classification: "normal",
@@ -153,7 +153,7 @@ describe("assembly N2: nextAction truncation", () => {
     }
   });
 
-  it("54 reqs no explotan el pack N2", () => {
+  it("54 reqs no explotan el pack N2", async () => {
     const d = tmpRoot();
     try {
       const manyReqs = Array.from({ length: 54 }, (_, i) => ({
@@ -169,7 +169,7 @@ describe("assembly N2: nextAction truncation", () => {
         nextAction: "Implementar Feature 1 (req-1 pending)",
       };
 
-      const pack = assembleContext({
+      const pack = await assembleContext({
         prompt: "test prompt",
         taskId: "test-task",
         classification: "normal",

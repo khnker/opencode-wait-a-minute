@@ -20,7 +20,7 @@ const PROMPT =
   "Implement a REST API from an OpenAPI spec, write an Oracle-to-Postgres migration plan, " +
   "and generate Playwright tests for the endpoints.";
 
-test("multi-layer prompt selects multiple matched skills and injects their real content", () => {
+test("multi-layer prompt selects multiple matched skills and injects their real content", async () => {
   const routing = routeSkillsV2(PROMPT, {}, REGISTRY, "STRICT");
   const selected = routing.selected || [];
   assert.ok(selected.length >= 2, `expected multiple selected skills, got ${selected.length}`);
@@ -28,7 +28,7 @@ test("multi-layer prompt selects multiple matched skills and injects their real 
   assert.ok(matched.length >= 2, `expected several task-matched skills, got ${matched.length}`);
   for (const s of matched) assert.ok(s.reason, `${s.id} must be explainable`);
 
-  const pack = assembleContext({
+  const pack = await assembleContext({
     prompt: PROMPT,
     taskId: "multilayer-test",
     classification: "architectural",

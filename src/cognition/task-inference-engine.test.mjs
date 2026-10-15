@@ -3,6 +3,7 @@ import {
   generateCompletionCriteria,
   evaluateCompletion,
   buildTaskInferenceDirective,
+  decomposeTasks,
   COMPLETION_TYPE,
 } from "./task-inference-engine.js";
 import assert from "assert/strict";
@@ -259,6 +260,69 @@ test("buildTaskInferenceDirective: no requirements → empty directive", () => {
   assert.equal(lines.length, 0);
   assert.equal(inferred.length, 0);
   assert.equal(objective, "Empty");
+});
+
+test("decomposeTasks: short requirement is not split", () => {
+  const tasks = decomposeTasks([{ title: "Fix bug", description: "Fix the bug" }]);
+  assert.equal(tasks.length, 1);
+  assert.equal(tasks[0].id, "fix-bug-0");
+});
+test("decomposeTasks: numbered list is split into atomic subtasks", () => {
+  const longReq = "1. Setup the database schema. 2. Ingest the dataset. 3. Expose the health endpoint.";
+  const tasks = decomposeTasks([{ title: "Build pipeline", description: longReq }], { minDescriptionLength: 0 });
+  assert.ok(tasks.length >= 3, `expected >=3 subtasks, got ${tasks.length}`);
+  assert.ok(tasks.every((t) => t.id.startsWith("build-pipeline-0-")));
+  assert.ok(tasks.every((t) => t.decomposedFrom === "build-pipeline-0"));
+});
+test("decomposeTasks: bulleted list is split into atomic subtasks", () => {
+  const longReq = "- Create the API endpoint.\n- Add tests for the endpoint.\n- Document the endpoint.";
+  const tasks = decomposeTasks([{ title: "Ship API", description: longReq }], { minDescriptionLength: 0 });
+  assert.equal(tasks.length, 3);
+  assert.ok(tasks[0].description.toLowerCase().includes("api"));
+  assert.ok(tasks[1].description.toLowerCase().includes("test"));
+  assert.ok(tasks[2].description.toLowerCase().includes("document"));
+});
+test("decomposeTasks: long prose with sentences is split", () => {
+  const longReq = "First sentence. Second sentence. Third sentence. Fourth sentence. Fifth sentence.";
+  const tasks = decomposeTasks([{ title: "Long task", description: longReq }], { minDescriptionLength: 0 });
+  assert.equal(tasks.length, 5);
+});
+test("decomposeTasks: maxSubtasks truncates and folds remainder", () => {
+  const longReq = "1. A. 2. B. 3. C. 4. D. 5. E. 6. F.";
+  const tasks = decomposeTasks([{ title: "Big", description: longReq }], { minDescriptionLength: 0, maxSubtasks: 3 });
+  assert.equal(tasks.length, 4);
+  // The folded remainder must be present so no directive is silently dropped.
+  assert.ok(tasks[3].description.toLowerCase().includes("continue"));
+});
+test("decomposeTasks: subtasks inherit flag detection from parent", () => {
+  const longReq = "1. Expose the API endpoint. 2. Ingest the dataset.";
+  const tasks = decomposeTasks([{ title: "Ship", description: longReq }], { minDescriptionLength: 0 });
+  const apiTask = tasks.find((t) => t.description.toLowerCase().includes("api"));
+  const dataTask = tasks.find((t) => t.description.toLowerCase().includes("dataset"));
+  assert.ok(apiTask);
+  assert.ok(dataTask);
+  assert.equal(apiTask.isService, true);
+  assert.equal(dataTask.dataIntensive, true);
+});
+test("decomposeTasks: rejects non-array input", () => {
+  assert.throws(() => decomposeTasks(null), TypeError);
+  assert.throws(() => decomposeTasks("nope"), TypeError);
+});
+test("decomposeTasks: short requirement below threshold is not split", () => {
+  const tasks = decomposeTasks([{ title: "X", description: "x".repeat(100) }]);
+  assert.equal(tasks.length, 1);
+});
+test("buildTaskInferenceDirective: long monolithic requirement is decomposed before inference", () => {
+  const longReq = "1. Setup the database schema. 2. Ingest the dataset. 3. Expose the health endpoint.";
+  const { inferred } = buildTaskInferenceDirective({
+    objective: "Build pipeline",
+    requirements: [{ title: "Build pipeline", description: longReq }],
+  }, { minDescriptionLength: 0 });
+  // Each atomic subtask should produce at least one inferred verification task.
+  assert.ok(inferred.length >= 3, `expected >=3 inferred, got ${inferred.length}`);
+  const descriptions = inferred.map((t) => t.description);
+  assert.ok(descriptions.some((d) => d.includes("health") || d.includes("endpoint")));
+  assert.ok(descriptions.some((d) => d.includes("dataset") || d.includes("ingest")));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

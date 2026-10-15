@@ -135,6 +135,37 @@ Once installed, WAM intercepts requests before skill resolution and agent execut
 
 **Requirements:** Node `>=20` · OpenCode `>=1.18.0` — tested on Ubuntu 24.04, Node 24.16.0, OpenCode 1.18.33 ([docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md)).
 
+## Debugging and diagnostics
+WAM emits structured, greppable traces when debug mode is on. They audit which WAM logic is loaded, which is skipped, and what runtime decisions were made — useful for benchmarking, regression detection and logic-gap analysis.
+
+Enable debug (any of):
+```bash
+WAM_DEBUG=1 opencode ...        # boolean true
+WAM_DEBUG=true opencode ...
+WAM_LOG_LEVEL=debug opencode ...
+```
+
+Disable debug even if `.wam/config.json` says `true`:
+```bash
+WAM_DISABLE_DEBUG=1 opencode ...
+```
+
+Point WAM at an arbitrary config file:
+```bash
+WAM_CONFIG=/path/to/config.json opencode ...
+```
+
+Expected trace categories (each prefixed `[WAM-DEBUG <ISO-timestamp>] [<category>]`):
+
+| Category | What it reports |
+|----------|-----------------|
+| `logic-gate` | which WAM gates are loaded (`skills`, `logging`, `enforcement`, `debug`) and their source |
+| `risk-envelope` | `evaluateAction(tool)` outcome and reason |
+| `governance` | `enforceGovernance(tool)` ALLOWED vs BLOCKED, with phase and subagent flag |
+| `skills` | `routeSkillsV2` selection count and chosen skill names |
+
+Benchmark samples are accumulated in memory and available via `getBenchmarkStats()` (module loads + latency records); `resetBenchmarkStats()` clears them. In a running plugin instance the gates are registered at startup so the first trace is self-describing.
+
 ## Where WAM fits
 
 WAM operates at the boundary between prompting and agent execution, enhancing the control plane without replacing existing layers:

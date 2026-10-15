@@ -29,6 +29,9 @@
     "!vendor/**/node_modules/**"
   ],
   "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "test:e2e": "node scripts/test-e2e.mjs",
+    "build": "node scripts/build.mjs",
     "gate": "node scripts/release-gate.mjs",
     "rc1": "WAM_RC1_EVIDENCE=1 node scripts/release-gate.mjs",
     "docs:check": "node scripts/docs-check.mjs",

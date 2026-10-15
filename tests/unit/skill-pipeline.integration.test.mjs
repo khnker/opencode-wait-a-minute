@@ -28,8 +28,8 @@ function select(prompt) {
   return routeSkillsV2(prompt, {}, REGISTRY, "STANDARD");
 }
 
-function assembleWithSkills(prompt, selected, overrides = {}) {
-  return assembleContext({
+async function assembleWithSkills(prompt, selected, overrides = {}) {
+  return await assembleContext({
     prompt,
     skillRegistry: REGISTRY,
     selectedSkills: selected,
@@ -48,7 +48,7 @@ const SCENARIOS = [
 ];
 
 describe("skill pipeline integration (detect -> select -> inject)", () => {
-  it("loads the real bundled catalog with embedded content", () => {
+  it("loads the real bundled catalog with embedded content", async () => {
     const ids = Object.keys(REGISTRY);
     assert.ok(ids.length > 300, `expected a large catalog, got ${ids.length}`);
     for (const { expect } of SCENARIOS) {
@@ -63,7 +63,7 @@ describe("skill pipeline integration (detect -> select -> inject)", () => {
   });
 
   for (const { prompt, expect } of SCENARIOS) {
-    it(`DETECTS and SELECTS the right skill(s) for: "${prompt}"`, () => {
+    it(`DETECTS and SELECTS the right skill(s) for: "${prompt}"`, async () => {
       const result = select(prompt);
       const ids = result.selected.map((s) => s.id);
       for (const skill of expect) {
@@ -77,9 +77,9 @@ describe("skill pipeline integration (detect -> select -> inject)", () => {
   }
 
   for (const { prompt, expect } of SCENARIOS) {
-    it(`INJECTS the real content of "${expect[0]}" into the assembled context`, () => {
+    it(`INJECTS the real content of "${expect[0]}" into the assembled context`, async () => {
       const result = select(prompt);
-      const pack = assembleWithSkills(prompt, result.selected);
+      const pack = await assembleWithSkills(prompt, result.selected);
       const text = pack.lines.join("\n");
       const marker = `[wam N3 skill] ${expect[0]}`;
       assert.ok(text.includes(marker), `expected injected marker "${marker}"`);
@@ -98,17 +98,17 @@ describe("skill pipeline integration (detect -> select -> inject)", () => {
     });
   }
 
-  it("does NOT inject skill content for a trivial classification", () => {
+  it("does NOT inject skill content for a trivial classification", async () => {
     const { prompt, expect } = SCENARIOS[0];
     const result = select(prompt);
-    const pack = assembleWithSkills(prompt, result.selected, { classification: "trivial" });
+    const pack = await assembleWithSkills(prompt, result.selected, { classification: "trivial" });
     assert.ok(!pack.lines.join("\n").includes(`[wam N3 skill] ${expect[0]}`));
   });
 
-  it("wraps the injected skill context as a synthetic WAM part (injectWamParts)", () => {
+  it("wraps the injected skill context as a synthetic WAM part (injectWamParts)", async () => {
     const { prompt, expect } = SCENARIOS[0];
     const result = select(prompt);
-    const pack = assembleWithSkills(prompt, result.selected);
+    const pack = await assembleWithSkills(prompt, result.selected);
     const skillLines = pack.lines.filter((l) => l.includes("[wam N3 skill]"));
     assert.ok(skillLines.length > 0, "there must be skill lines to inject");
     const skillText = skillLines.join("\n");
@@ -131,7 +131,7 @@ describe("skill pipeline integration (detect -> select -> inject)", () => {
     assert.ok(part.text.includes(expect[0]), "injected part must carry the skill content");
   });
 
-  it("tagWamPart marks provenance without mutating the source part", () => {
+  it("tagWamPart marks provenance without mutating the source part", async () => {
     const source = { type: "text", text: "hello" };
     const tagged = tagWamPart(source, { messageID: "m", phase: "emit" });
     assert.equal(source.synthetic, undefined);
@@ -145,7 +145,7 @@ describe("skill pipeline integration (detect -> select -> inject)", () => {
 describe("local skill content embedding (fail-open registry)", () => {
   const LOCAL = buildRegistry(discoverSkills({ root: process.cwd() }), process.cwd()).registry;
 
-  it("embeds SKILL.md content for local skills instead of metadata-only entries", () => {
+  it("embeds SKILL.md content for local skills instead of metadata-only entries", async () => {
     const locals = Object.values(LOCAL).filter((s) => s.source?.kind === "local");
     assert.ok(locals.length > 0, "expected discovered local skills");
     const withContent = locals.filter((s) => typeof s.content === "string" && s.content.trim().length > 0);
@@ -153,13 +153,13 @@ describe("local skill content embedding (fail-open registry)", () => {
     assert.ok(!withContent[0].content.startsWith("---"), "YAML frontmatter must be stripped");
   });
 
-  it("injects a LOCAL skill's content into the assembled context", () => {
+  it("injects a LOCAL skill's content into the assembled context", async () => {
     const localWithContent = Object.values(LOCAL).filter(
       (s) => s.source?.kind === "local" && typeof s.content === "string" && s.content.trim().length > 0
     );
     assert.ok(localWithContent.length > 0, "need at least one local skill with embedded content");
     const skill = localWithContent[0];
-    const pack = assembleContext({
+    const pack = await assembleContext({
       prompt: "assemble context for a local skill",
       skillRegistry: LOCAL,
       selectedSkills: [{ id: skill.id, name: skill.name, reason: "test", relevance: 1 }],

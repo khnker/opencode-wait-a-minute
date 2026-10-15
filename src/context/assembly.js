@@ -69,7 +69,8 @@ function overlap(aTokens, bTokens) {
 }
 
 function estTokens(text) {
-  return Math.ceil((text || "").length / 4);
+  const str = typeof text === "string" ? text : String(text || "");
+  return Math.ceil(str.length / 4);
 }
 
 function extractRelevantSections(docName, body, taskTokens, { base = false } = {}) {
@@ -100,7 +101,24 @@ function isRequirementCapsule(c) {
  *
  * @returns { levels, lines, budget_used, budget, budget_violation, reserved, flex, rationale, continuation }
  */
-export function assembleContext({
+import { wamStartTimer, wamWarn } from "../shared/wam-log.js";
+
+export async function assembleContext(params = {}) {
+  const timer = wamStartTimer("assemble-context", { taskId: params.taskId || "" });
+  try {
+    const res = await _assembleContextImpl(params);
+    timer.end({ budget_violation: res.budget_violation });
+    if (res.budget_violation) {
+      wamWarn(`[WAM-ASSEMBLY] Context budget violation detected for task '${params.taskId || ""}'`);
+    }
+    return res;
+  } catch (err) {
+    timer.end({ error: err.message });
+    throw err;
+  }
+}
+
+async function _assembleContextImpl({
   prompt = "",
   taskId = "",
   classification = "normal",
@@ -463,6 +481,14 @@ if (!isTrivial) {
   }
 
   const lines = [...levels.N0, ...levels.N1, ...levels.N2, ...levels.N3];
+
+  try {
+    const { recordTokenSavings } = await import("../verification/token-savings-meter.js");
+    const promptTokens = estTokens(prompt || "");
+    const actualTokens = lines.reduce((sum, line) => sum + estTokens(line), 0);
+    const historyTokens = estTokens(lines.join(""));
+    recordTokenSavings(projectPath, taskId || "unknown", actualTokens, promptTokens, historyTokens);
+  } catch {}
 
   // Admission report — Router is canonical authority for sufficiency when available.
   const mandatoryItems = admissionItems.filter((i) => i.admission === ADMISSION.MANDATORY);

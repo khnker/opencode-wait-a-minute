@@ -18,9 +18,20 @@
 import fs from 'fs';
 import path from 'path';
 import { retrieveContext } from './context-retrieval.js';
-import { wamLog } from '../shared/wam-log.js';
+import { wamLog, wamWarn, isDebugEnabled } from '../shared/wam-log.js';
 
 const VALID_MODES = new Set(['disabled', 'shadow', 'enabled']);
+
+/**
+ * Diagnostic logger for CQE failures. Activated only when debug mode is on
+ * (WAM_DEBUG=1, WAM_DEBUG=true, or WAM_LOG_LEVEL=debug). Keeps the plugin
+ * silent in normal runs while still surfacing interception problems
+ * (failed dynamic import, retrieval throws) when investigating.
+ */
+function cqeDebugWarn(category, message, detail) {
+  if (!isDebugEnabled()) return;
+  wamWarn(category, message, detail);
+}
 
 let defaultEngine = null;
 let defaultEngineKey = null;
@@ -46,10 +57,23 @@ function resolveMode(explicit) {
  * the vendor transitively imports `node:sqlite`, which opencode's Bun runtime
  * cannot resolve. A failed dynamic import must degrade to native retrieval
  * instead of preventing the whole plugin from loading.
+ *
+ * Diagnostic: when debug mode is on, a failed import is logged with the
+ * underlying error (and stack when available) so the interception can be
+ * inspected without crashing the surrounding plugin.
  */
 async function loadCreateEngine() {
-  const mod = await import('../../vendor/context-query-core/src/index.js');
-  return mod.createEngine;
+  try {
+    const mod = await import('../../vendor/context-query-core/src/index.js');
+    return mod.createEngine;
+  } catch (err) {
+    cqeDebugWarn('cqe-adapter.import', 'CQE vendor dynamic import failed; falling back to native retrieval', {
+      error: err && err.message ? err.message : String(err),
+      code: err && err.code ? err.code : null,
+      stack: err && err.stack ? err.stack.split('\n').slice(0, 5).join('\n') : null,
+    });
+    throw err;
+  }
 }
 
 /**
@@ -190,6 +214,14 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
         mode,
         timeout: timedOut,
         error: err && err.message,
+      });
+      cqeDebugWarn('cqe-adapter.retrieve', 'CQE execution failed; falling back to native retrieval', {
+        query: queryText,
+        mode,
+        timedOut,
+        error: err && err.message ? err.message : String(err),
+        code: err && err.code ? err.code : null,
+        stack: err && err.stack ? err.stack.split('\n').slice(0, 5).join('\n') : null,
       });
     }
   }

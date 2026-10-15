@@ -4,6 +4,7 @@ import {
   VERIFICATION_STRATEGY,
   selectMinimalVerification,
   evaluateCompletionGate,
+  confirmCompletion,
 } from "../../src/verification/verification-policy.js";
 import { detectEvidenceGaps } from "../../src/evidence/evidence-gap.js";
 import { createEvidence, EVIDENCE_STRENGTH } from "../../src/evidence/evidence.js";
@@ -186,5 +187,104 @@ describe("evaluateCompletionGate", () => {
 
     assert.equal(result.blocked, true);
     assert.ok(result.evidenceGaps.length > 0);
+  });
+});
+
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+describe("confirmCompletion", () => {
+  it("imprime el resumen de token savings cuando DONE está confirmado y projectRoot presente", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wam-confirm-"));
+    const metricsDir = path.join(tmp, ".wam", "metrics");
+    fs.mkdirSync(metricsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(metricsDir, "token-savings.json"),
+      JSON.stringify([
+        {
+          taskId: "final-task",
+          timestamp: Date.now(),
+          actualTokens: 50,
+          baselineTokens: 5000,
+          savingsPct: 99,
+          savingsTokens: 4950,
+        },
+      ])
+    );
+
+    const task = {
+      requirements: [{ id: "req-1", optional: false, status: "VERIFIED" }],
+      evidence: [
+        createEvidence({
+          requirementId: "req-1",
+          source: "test",
+          type: "DIRECT",
+          observation: "ok",
+          strength: EVIDENCE_STRENGTH.L3_DIRECT,
+        }),
+      ],
+    };
+
+    const captured = [];
+    const result = confirmCompletion(task, {
+      projectRoot: tmp,
+      logger: { log: (line) => captured.push(line) },
+    });
+
+    fs.rmSync(tmp, { recursive: true, force: true });
+
+    assert.equal(result.blocked, false);
+    assert.equal(captured.length, 1);
+    assert.equal(
+      captured[0],
+      "[WAM Token Savings] Task final-task saved 99% tokens: 4950 tokens saved vs baseline"
+    );
+  });
+
+  it("no imprime nada cuando la tarea sigue bloqueada", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wam-confirm-"));
+    const metricsDir = path.join(tmp, ".wam", "metrics");
+    fs.mkdirSync(metricsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(metricsDir, "token-savings.json"),
+      JSON.stringify([
+        { taskId: "x", timestamp: 1, actualTokens: 1, baselineTokens: 100, savingsPct: 99, savingsTokens: 99 },
+      ])
+    );
+
+    const task = {
+      requirements: [{ id: "req-1", optional: false, status: "PENDING" }],
+      evidence: [],
+    };
+
+    const captured = [];
+    const result = confirmCompletion(task, {
+      projectRoot: tmp,
+      logger: { log: (line) => captured.push(line) },
+    });
+
+    fs.rmSync(tmp, { recursive: true, force: true });
+
+    assert.equal(result.blocked, true);
+    assert.equal(captured.length, 0);
+  });
+
+  it("funciona sin projectRoot (DONE confirmado sin imprimir nada)", () => {
+    const task = {
+      requirements: [{ id: "req-1", optional: false, status: "VERIFIED" }],
+      evidence: [
+        createEvidence({
+          requirementId: "req-1",
+          source: "test",
+          type: "DIRECT",
+          observation: "ok",
+          strength: EVIDENCE_STRENGTH.L3_DIRECT,
+        }),
+      ],
+    };
+
+    const result = confirmCompletion(task);
+    assert.equal(result.blocked, false);
   });
 });

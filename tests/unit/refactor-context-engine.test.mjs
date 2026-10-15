@@ -35,30 +35,30 @@ function taskState() {
 
 // -- 1. Budget reservation ---------------------------------------------------
 
-test("P0-1: budget 10 tokens → N0 siempre presente + budget_violation true (reserved > budget)", () => {
+test("P0-1: budget 10 tokens → N0 siempre presente + budget_violation true (reserved > budget)", async () => {
   const ROOT = tmpRoot("wam-budget-");
   bootstrapMemory(ROOT);
-  const p = assembleContext({ prompt: "refactor jwt", taskId: "t-50", projectPath: ROOT, budget: 10, taskState: taskState() });
+  const p = await assembleContext({ prompt: "refactor jwt", taskId: "t-50", projectPath: ROOT, budget: 10, taskState: taskState() });
   const hasN0 = p.lines.some((l) => l.startsWith("[wam N0 policy]"));
   assert.ok(hasN0, "N0 emitido incluso bajo presupuesto mínimo");
   assert.equal(p.budget_violation, true, "budget_violation marcado cuando reserved > budget");
   fs.rmSync(ROOT, { recursive: true, force: true });
 });
 
-test("P0-1: budget 100 tokens + taskState → N0 y N2 presentes, N1/N3 vacíos", () => {
+test("P0-1: budget 100 tokens + taskState → N0 y N2 presentes, N1/N3 vacíos", async () => {
   const ROOT = tmpRoot("wam-budget-");
   bootstrapMemory(ROOT);
-  const p = assembleContext({ prompt: "refactor jwt", taskId: "t-100", projectPath: ROOT, budget: 100, taskState: taskState() });
+  const p = await assembleContext({ prompt: "refactor jwt", taskId: "t-100", projectPath: ROOT, budget: 100, taskState: taskState() });
   assert.ok(p.lines.some((l) => l.startsWith("[wam N0 policy]")), "N0 presente");
   assert.ok(p.lines.some((l) => l.startsWith("[wam N2 task]")), "N2 presente");
   assert.equal(p.budget_violation, false, "reserved (≈36) cabe en budget=100");
   fs.rmSync(ROOT, { recursive: true, force: true });
 });
 
-test("P0-1: budget 150 tokens admite N2 + flex; budget_violation false", () => {
+test("P0-1: budget 150 tokens admite N2 + flex; budget_violation false", async () => {
   const ROOT = tmpRoot("wam-budget-");
   bootstrapMemory(ROOT);
-  const p = assembleContext({ prompt: "refactor jwt", taskId: "t-150", projectPath: ROOT, budget: 150, taskState: taskState() });
+  const p = await assembleContext({ prompt: "refactor jwt", taskId: "t-150", projectPath: ROOT, budget: 150, taskState: taskState() });
   assert.ok(p.lines.some((l) => l.startsWith("[wam N0 policy]")), "N0 presente");
   assert.ok(p.lines.some((l) => l.startsWith("[wam N2 task]")), "N2 presente");
   assert.equal(p.budget_violation, false, "150 tokens cubre N0+N2 + algo de flex");
@@ -67,7 +67,7 @@ test("P0-1: budget 150 tokens admite N2 + flex; budget_violation false", () => {
 
 // -- 2. Session isolation strictness -----------------------------------------
 
-test("P0-2: legacy capsule (sin session_id) excluida de session-scoped list", () => {
+test("P0-2: legacy capsule (sin session_id) excluida de session-scoped list", async () => {
   const ROOT = tmpRoot("wam-session-");
   // Crear cápsula sin session_id escribiendo el archivo directamente.
   const dir = path.join(ROOT, ".wam", "capsules");
@@ -82,7 +82,7 @@ test("P0-2: legacy capsule (sin session_id) excluida de session-scoped list", ()
   fs.rmSync(ROOT, { recursive: true, force: true });
 });
 
-test("P0-2: migrateLegacyCapsules asigna LEGACY_SESSION_ID", () => {
+test("P0-2: migrateLegacyCapsules asigna LEGACY_SESSION_ID", async () => {
   const ROOT = tmpRoot("wam-session-");
   const dir = path.join(ROOT, ".wam", "capsules");
   fs.mkdirSync(dir, { recursive: true });
@@ -95,7 +95,7 @@ test("P0-2: migrateLegacyCapsules asigna LEGACY_SESSION_ID", () => {
   fs.rmSync(ROOT, { recursive: true, force: true });
 });
 
-test("P0-2: migrateLegacyCapsules dryRun no toca archivos", () => {
+test("P0-2: migrateLegacyCapsules dryRun no toca archivos", async () => {
   const ROOT = tmpRoot("wam-session-");
   const dir = path.join(ROOT, ".wam", "capsules");
   fs.mkdirSync(dir, { recursive: true });
@@ -107,7 +107,7 @@ test("P0-2: migrateLegacyCapsules dryRun no toca archivos", () => {
   fs.rmSync(ROOT, { recursive: true, force: true });
 });
 
-test("P0-2: migración es idempotente", () => {
+test("P0-2: migración es idempotente", async () => {
   const ROOT = tmpRoot("wam-session-");
   const dir = path.join(ROOT, ".wam", "capsules");
   fs.mkdirSync(dir, { recursive: true });
@@ -120,7 +120,7 @@ test("P0-2: migración es idempotente", () => {
 
 // -- 3. Confidence unification ------------------------------------------------
 
-test("P0-3: normalizeConfidence acepta string y número", () => {
+test("P0-3: normalizeConfidence acepta string y número", async () => {
   assert.equal(normalizeConfidence("high"), 0.9);
   assert.equal(normalizeConfidence("MEDIUM"), 0.5);
   assert.equal(normalizeConfidence("low"), 0.2);
@@ -131,18 +131,18 @@ test("P0-3: normalizeConfidence acepta string y número", () => {
   assert.equal(normalizeConfidence(-0.3), 0, "clamp a 0");
 });
 
-test("P0-3: confidenceLabel con boundaries exactos", () => {
+test("P0-3: confidenceLabel con boundaries exactos", async () => {
   assert.equal(confidenceLabel(0.7), "high");
   assert.equal(confidenceLabel(0.4), "medium");
   assert.equal(confidenceLabel(0.39), "low");
 });
 
-test("P0-3: provenance warning emite para conf numérico bajo (sin NaN)", () => {
+test("P0-3: provenance warning emite para conf numérico bajo (sin NaN)", async () => {
   const ROOT = tmpRoot("wam-conf-");
   bootstrapMemory(ROOT);
   // Forzar un documento inferred + confidence 0.3
   updateContext("decisions", "# Decisions\n- decX", { source: "inferred", confidence: 0.3 }, ROOT);
-  const p = assembleContext({ prompt: "auth work", taskId: "t-conf", projectPath: ROOT, budget: 4000, taskState: taskState() });
+  const p = await assembleContext({ prompt: "auth work", taskId: "t-conf", projectPath: ROOT, budget: 4000, taskState: taskState() });
   const w = p.lines.find((l) => /wam N1 WARNING/.test(l) && /decisions\.md/.test(l));
   assert.ok(w, "warning numérico emitido (sin NaN silencioso)");
   fs.rmSync(ROOT, { recursive: true, force: true });
@@ -150,7 +150,7 @@ test("P0-3: provenance warning emite para conf numérico bajo (sin NaN)", () => 
 
 // -- 4. Alias normalization ---------------------------------------------------
 
-test("P0-4: alias 'auth' matchea cápsula 'authentication'", () => {
+test("P0-4: alias 'auth' matchea cápsula 'authentication'", async () => {
   const ROOT = tmpRoot("wam-alias-");
   bootstrapMemory(ROOT);
   createCapsule({ level: "L2", purpose: "JWT refresh rotation", scope: "authentication", content: "tokens rotativos", provenance: "user_decided", importance: 8, retrieval_hints: ["authentication", "jwt", "token"] }, ROOT);
@@ -160,7 +160,7 @@ test("P0-4: alias 'auth' matchea cápsula 'authentication'", () => {
   fs.rmSync(ROOT, { recursive: true, force: true });
 });
 
-test("P0-4: alias 'postgres' matchea cápsula 'postgresql'", () => {
+test("P0-4: alias 'postgres' matchea cápsula 'postgresql'", async () => {
   const ROOT = tmpRoot("wam-alias-");
   bootstrapMemory(ROOT);
   createCapsule({ level: "L2", purpose: "Postgres migration", scope: "postgresql", content: "schema", provenance: "observed", importance: 7, retrieval_hints: ["postgresql"] }, ROOT);

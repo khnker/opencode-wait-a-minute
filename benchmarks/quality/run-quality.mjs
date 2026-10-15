@@ -30,6 +30,7 @@
  *
  * When run directly, it uses the existing command-line interface and writes a legacy report to benchmarks/results/.
  */
+import os from "node:os";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";

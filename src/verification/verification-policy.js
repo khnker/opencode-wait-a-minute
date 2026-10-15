@@ -1,6 +1,6 @@
 import { detectEvidenceGaps } from "../evidence/evidence-gap.js";
 import { EVIDENCE_STRENGTH } from "../evidence/evidence.js";
-import { recordTokenSavings } from "./token-savings-meter.js";
+import { recordTokenSavings, printTokenSavingsSummary } from "./token-savings-meter.js";
 
 export const VERIFICATION_STRATEGY = {
   EXISTING_TEST: "existing_test",
@@ -125,4 +125,12 @@ export function evaluateCompletionGate(task) {
     evidenceGaps: gaps,
     unresolvedRequirements: gaps.map(g => g.requirementId)
   };
+}
+
+export function confirmCompletion(task, opts = {}) {
+  const result = evaluateCompletionGate(task);
+  if (!result.blocked && opts.projectRoot) {
+    printTokenSavingsSummary(opts.projectRoot, opts.logger);
+  }
+  return result;
 }

@@ -157,7 +157,24 @@ function evaluateBashCommand(cmd) {
  * @param {string} taskRoot — Root de la tarea activa (para validación de scope).
  * @returns {{level: string, reason?: string, requiresUser: boolean}}
  */
+import { wamStartTimer, wamWarn } from "../shared/wam-log.js";
+
 export function evaluateAction(tool, args = {}, taskRoot = "") {
+  const timer = wamStartTimer("evaluate-action", { tool });
+  try {
+    const res = _evaluateActionImpl(tool, args, taskRoot);
+    timer.end({ level: res.level });
+    if (res.level === "BLOCKED") {
+      wamWarn(`[WAM-RISK] Action blocked for tool '${tool}': ${res.reason}`);
+    }
+    return res;
+  } catch (err) {
+    timer.end({ error: err.message });
+    throw err;
+  }
+}
+
+function _evaluateActionImpl(tool, args = {}, taskRoot = "") {
   const lowerTool = (tool || "").toLowerCase();
 
   // 0. Resolución de capability explícita (fail-closed para UNKNOWN).

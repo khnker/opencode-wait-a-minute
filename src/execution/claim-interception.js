@@ -1,4 +1,5 @@
 import { classifyClaim } from "../verification/false-completion-prevention.js";
+import { evaluateAutonomousResolution, AUTONOMOUS_RESOLUTION_MODES } from "./autonomous-resolution.js";
 
 export function interceptAgentClaim(message) {
   const claimPatterns = {
@@ -49,6 +50,14 @@ export function validateClaim(claim, taskState) {
   if (claim.type === "COMPLETION") {
     result.requiresVerification = true;
     result.reason = "Completion claim requires verification";
+    const resolution = evaluateAutonomousResolution(
+      { status: "pending", checkId: claim.id, reason: "completion claim requires verification" },
+      {}
+    );
+    result.autonomousResolution = resolution;
+    if (resolution.mode === AUTONOMOUS_RESOLUTION_MODES.RESOLVE) {
+      result.directive = resolution.directive;
+    }
   } else if (claim.type === "HYPOTHESIS") {
     result.reason = "Hypothesis requires validation";
   } else if (claim.type === "FACT") {

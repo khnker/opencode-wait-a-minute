@@ -41,6 +41,19 @@ test("module namespace expone solo funciones (contrato del loader legacy de open
   }
 });
 
+test("cada export del entry module devuelve un objeto de hooks (getLegacyPlugins push-ea el retorno a hooks[])", async () => {
+  const entries = Object.entries(pluginNamespace);
+  for (const [name, value] of entries) {
+    const hooks = await value({ directory: process.cwd(), client: {}, project: {}, $: {} });
+    assert.ok(
+      hooks !== null && typeof hooks === "object",
+      `export "${name}" debe retornar el objeto de hooks; opencode hace hooks.push(await export(input, options)) ` +
+        `y un null/string en hooks[] rompe Provider.list (TypeError "n.provider", GET /provider 500), ` +
+        `"plugin config hook failed" (N.config) y "V.event"`,
+    );
+  }
+});
+
 test("factory retorna objeto de hooks (no usa ctx.on / ctx.system / ctx.command)", async () => {
   const hooks = await pluginDefault({
     directory: process.cwd(),
@@ -575,22 +588,21 @@ test("multi-sesión: 2 sesiones sobre la MISMA carpeta tienen tareas aisladas (n
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wam-2sess-"));
   const hooks = await pluginDefault({ directory: tmp, client: {}, project: {}, $: {} });
 
-  // sesión A (taskId genérico → namespace ses-A)
+// sesión A (taskId genérico → task-<slug> descriptivo, aislado por slug)
   await hooks["chat.message"]({ sessionID: "sesA-aaaaaaaaaa", parts: [{ type: "text", text: "refactoriza el scraper con tests" }] }, { parts: [], system: [] });
-  // sesión B (misma carpeta, taskId genérico → namespace ses-B)
+  // sesión B (misma carpeta, taskId genérico → task-<slug> descriptivo, aislado por slug)
   await hooks["chat.message"]({ sessionID: "sesB-bbbbbbbbbb", parts: [{ type: "text", text: "arregla el bug del frontend" }] }, { parts: [], system: [] });
-
-  const taskA = getTaskState("ses-" + "sesA-aaaaaaaaaa".slice(-10), tmp);
-  const taskB = getTaskState("ses-" + "sesB-bbbbbbbbbb".slice(-10), tmp);
+  const taskA = getTaskState("task-refactoriza-el-scraper-con-tests", tmp);
+  const taskB = getTaskState("task-arregla-el-bug-del-frontend", tmp);
   assert.ok(taskA, "sesión A con su propia tarea");
   assert.ok(taskB, "sesión B con su propia tarea");
   assert.notEqual(taskA.taskId ?? JSON.stringify(taskA.contract?.requirements), JSON.stringify(taskB.contract?.requirements), "contratos distintos");
   assert.ok(taskA.contract?.requirements?.some((r) => /scrap/i.test(r)), "A conserva su dominio (scraper)");
   assert.ok(taskB.contract?.requirements?.some((r) => /front/i.test(r)), "B conserva su dominio (frontend)");
 
-  // live context aislado por sesión
-  const liveA = fs.existsSync(path.join(tmp, ".wam", "tasks", "ses-" + "sesA-aaaaaaaaaa".slice(-10), "context.md"));
-  const liveB = fs.existsSync(path.join(tmp, ".wam", "tasks", "ses-" + "sesB-bbbbbbbbbb".slice(-10), "context.md"));
+  // live context aislado por task (slug descriptivo)
+  const liveA = fs.existsSync(path.join(tmp, ".wam", "tasks", "task-refactoriza-el-scraper-con-tests", "context.md"));
+  const liveB = fs.existsSync(path.join(tmp, ".wam", "tasks", "task-arregla-el-bug-del-frontend", "context.md"));
   assert.ok(liveA, "live context aislado para sesión A");
   assert.ok(liveB, "live context aislado para sesión B");
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}

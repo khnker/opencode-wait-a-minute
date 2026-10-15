@@ -20,6 +20,7 @@ import { buildTaskInferenceDirective } from "../cognition/task-inference-engine.
 import { buildRoleDirective } from "../cognition/task-role-engine.js";
 import { detectCouplingIntent, traceCouplingForTask } from "../context/selection.js";
 import { loadPrompt } from "../prompts/loader.js";
+import { confirmCompletion } from "../verification/verification-policy.js";
 
 // Idempotency guard: a chat.message invocation must be processed at most once
 // per message id + kind. The store is normally owned by the plugin instance
@@ -27,6 +28,11 @@ import { loadPrompt } from "../prompts/loader.js";
 // tests working. Bounded so a long session cannot grow unbounded.
 const PROCESSED_MESSAGE_LIMIT = 1000;
 const fallbackProcessedMessages = new Map();
+
+// Sesiones a las que ya se les emitió el saludo de bienvenida/desambiguación.
+// Evita emitir el notice en cada continuación de la misma sesión; solo se
+// dispara una vez cuando la primera inferencia cayó en namespace genérico.
+const greetedSessions = new Set();
 
 function markProcessed(key, store = fallbackProcessedMessages) {
   store.set(key, true);
@@ -198,7 +204,8 @@ export async function handleMessage(input, output, deps) {
     if (input?.tool && output?.result !== undefined) {
       const toolName = input.tool;
       const wamRoot = await ensureWamMemory(input.sessionID, promptText);
-      const taskId = effectiveTaskId(input, sessionTasks, wamRoot);
+      const resolved = effectiveTaskId(input, sessionTasks, wamRoot, promptText);
+      const taskId = resolved.taskId;
 
       try { migrateLegacyCognition(wamRoot, taskId); } catch (e) { console.log(`[wait-a-minute] migration error:`, e.message); }
 
@@ -220,7 +227,8 @@ export async function handleMessage(input, output, deps) {
     if (input?.tool && output?.error) {
       const toolName = input.tool;
       const wamRoot = await ensureWamMemory(input.sessionID, promptText);
-      const taskId = effectiveTaskId(input, sessionTasks, wamRoot);
+      const resolved = effectiveTaskId(input, sessionTasks, wamRoot, promptText);
+      const taskId = resolved.taskId;
 
       try { migrateLegacyCognition(wamRoot, taskId); } catch (e) { console.log(`[wait-a-minute] migration error:`, e.message); }
 
@@ -255,9 +263,38 @@ export async function handleMessage(input, output, deps) {
       return;
     }
 
-    // Effective taskId with session persistence
-    let taskId = effectiveTaskId(input, sessionTasks, wamRoot);
+    // Effective taskId with session persistence.
+    // promptText is passed so a brand-new session can derive a descriptive
+    // task-<slug> id from the user's prompt instead of falling back to the
+    // monolithic ses-<sessionID> / default-task namespaces.
+    let taskId, fallbackKind;
+    {
+      const resolved = effectiveTaskId(input, sessionTasks, wamRoot, promptText);
+      taskId = resolved.taskId;
+      fallbackKind = resolved.fallbackKind;
+    }
     if (input.sessionID) sessionTasks.set(input.sessionID, taskId);
+
+    // Welcome / disambiguation gate: cuando la primera inferencia cayó en
+    // default-task o ses-<id> sin pista específica, saludamos al usuario y
+    // le pedimos que describa la tarea para sacarlo del namespace genérico.
+    // Solo se emite una vez por sessionID (no en cada continuación).
+    const shouldGreet =
+      !input?.tool &&
+      (fallbackKind === "default" || fallbackKind === "session") &&
+      input.sessionID &&
+      !greetedSessions.has(input.sessionID);
+    if (shouldGreet) {
+      greetedSessions.add(input.sessionID);
+      const greeting = loadPrompt("notice.welcome_or_disambiguate", {
+        kind: fallbackKind,
+        namespace: taskId,
+      });
+      emitTextPart(output, greeting, {
+        sessionID: input.sessionID,
+        messageID: output.message?.id || input.messageID,
+      });
+    }
 
     // Clarification Gate: in ASKING classify the message
     const askingState = getTaskState(taskId, wamRoot);
@@ -470,7 +507,7 @@ export async function handleMessage(input, output, deps) {
       persistTaskState(taskId, state, wamRoot);
     }
 
-    const updatedState = getTaskState(taskId, wamRoot);
+    const updatedState = getTaskState(taskId, wamRoot) || state;
 
     // Live context snapshot
     try { persistLiveContext(taskId, updatedState, wamRoot); } catch {}
@@ -499,7 +536,7 @@ export async function handleMessage(input, output, deps) {
     try { initMemory(wamRoot); } catch {}
     try { updateProjectMemo(analysis, wamRoot); } catch {}
     try {
-      const pack = assembleContext({
+      const pack = await assembleContext({
         prompt: promptText,
         taskId,
         classification: analysis.intent?.classification,
@@ -528,6 +565,11 @@ export async function handleMessage(input, output, deps) {
         });
         if (cqePack.file_context && cqePack.file_context.length > 0) {
           inject.push(`\n[wam cqe file_context]\n${JSON.stringify(cqePack.file_context, null, 2)}`);
+          const cqeTarget = updatedState || state;
+          if (cqeTarget) {
+            cqeTarget.cqeCalls = (cqeTarget.cqeCalls || 0) + 1;
+            try { persistTaskState(taskId, cqeTarget, wamRoot); } catch {}
+          }
         }
       }
     } catch {}
@@ -578,12 +620,21 @@ const { lines } = buildTaskInferenceDirective({
         if (tp) tp.text = gateHold;
       }
     } else if (gate.allDone) {
+      try {
+        confirmCompletion(updatedState, {
+          projectRoot: wamRoot,
+          logger: { log: (msg) => inject.push(msg) },
+        });
+      } catch (e) {
+        console.error("confirmCompletion failed:", e);
+      }
       updateTaskMemory(taskId, {
         summary: [
           "# Task Summary", "", "## Objective",
           `- ${taskId} (${analysis.intent?.classification || "task"})`, "", "## Completed",
           ...(updatedState.contract?.requirements || []).map((r) => `- ${r}`), "", "## Verification",
-          ...(updatedState.requirements || []).map((r) => `- ${r.id}: ${r.status}`), "", "## Status", "COMPLETED",
+          ...(updatedState.requirements || []).map((r) => `- ${r.id}: ${r.status}`), "", "## Token Savings",
+          `- CQE file-context calls: ${updatedState.cqeCalls || 0}`, "", "## Status", "COMPLETED",
         ].join("\n"),
       }, wamRoot);
       addRecentChange({

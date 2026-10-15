@@ -737,7 +737,21 @@ function recordSkillUsage(usage, baseDir) {
 /**
  * Routing con scoring ponderado + persistencia. Reemplaza routeSkills() en analyze.
  */
+import { wamStartTimer } from "../shared/wam-log.js";
+
 export function routeSkillsV2(prompt, projectInfo, registry, mode, options = {}) {
+  const timer = wamStartTimer("route-skills-v2", { mode, taskId: options.taskId || "" });
+  try {
+    const res = _routeSkillsV2Impl(prompt, projectInfo, registry, mode, options);
+    timer.end({ selectedCount: res?.counts?.selected ?? 0 });
+    return res;
+  } catch (err) {
+    timer.end({ error: err.message });
+    throw err;
+  }
+}
+
+function _routeSkillsV2Impl(prompt, projectInfo, registry, mode, options = {}) {
   prompt = String(prompt ?? "");
   logger.info("pipeline-routing", `Starting routeSkillsV2. Mode: ${mode}, Prompt: ${prompt.substring(0, 50)}...`);
   const tracer = new ContextDecisionTracer(options.taskId || "default", options.projectRoot || process.cwd());

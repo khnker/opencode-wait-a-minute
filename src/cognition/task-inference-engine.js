@@ -26,25 +26,170 @@ export const COMPLETION_TYPE = Object.freeze({
 });
 
 /**
- * Maps requirements to task objects for the inference engine.
+ * Decomposition configuration.
+ *
+ * A "monolithic" requirement bundles multiple independent actions into a
+ * single task. Carried through the pipeline as one giant task it inflates
+ * context and makes completion criteria unfalsifiable. We split such
+ * requirements into atomic subtasks so each step is small, traceable, and
+ * independently completable.
+ *
+ * Splitting is deterministic and driven by surface signals only:
+ *   - explicit list markers (numbered or bulleted)
+ *   - sentence/clause boundaries
+ *   - coordinating conjunctions joining independent clauses
+ *   - explicit newlines
  */
-function mapRequirementsToTasks(requirements) {
-  return requirements.map((req, index) => {
-    const title = req.title || `Task ${index + 1}`;
-    const id = title.toLowerCase().replace(/[^a-z0-9]/g, "-") + "-" + index;
-    const isService = /endpoint|api|service|servicio|health|http|server/i.test(title) ||
-                      /endpoint|api|service|servicio|health|http|server/i.test(req.description || "");
-    const dataIntensive = /data|dato|dataset|ingest|sample|muestra|migrat/i.test(title) ||
-                          /data|dato|dataset|ingest|sample|muestra|migrat/i.test(req.description || "");
-    
-    return {
-      id,
-      description: req.description || title,
-      requiresVerification: true,
-      isService,
-      dataIntensive,
-    };
-  });
+const DECOMPOSE_CONFIG = Object.freeze({
+  minDescriptionLength: 200,
+  maxSubtasks: 6,
+});
+
+/**
+ * Build the base task object shared by every (sub)task derived from a
+ * requirement. Flag detection is identical to the previous inline logic so
+ * downstream inference keeps working on decomposed subtasks.
+ */
+function buildTaskFromRequirement(req, id) {
+  const title = req.title || `Task ${id}`;
+  const description = req.description || title;
+  const isService = /endpoint|api|service|servicio|health|http|server/i.test(title) ||
+                    /endpoint|api|service|servicio|health|http|server/i.test(description);
+  const dataIntensive = /data|dato|dataset|ingest|sample|muestra|migrat/i.test(title) ||
+                        /data|dato|dataset|ingest|sample|muestra|migrat/i.test(description);
+
+  return {
+    id,
+    description,
+    requiresVerification: true,
+    isService,
+    dataIntensive,
+  };
+}
+
+/**
+ * Split a description into candidate atomic chunks.
+ *
+ * Order of preference (strongest signal first):
+ *   1. Explicit list markers — the author clearly intended separate steps.
+ *   2. Sentence/clause boundaries — natural phrasing units.
+ *   3. Coordinating conjunctions — last resort, only when it yields a
+ *      small, plausible number of clauses.
+ *
+ * Returns a single-element array when no split is warranted.
+ */
+function splitIntoChunks(text) {
+  if (text == null || typeof text !== "string") return [];
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  // 1. Explicit list markers: "1. ", "- ", "* " on their own line.
+  const listSplit = trimmed.split(/\n\s*(?:[-*]|\d+\.)\s+/);
+  if (listSplit.length > 1) {
+    return listSplit
+      .map((c) => c.trim())
+      .filter((c) => c.length > 0);
+  }
+
+  // 2. Sentence/clause boundaries.
+  const sentenceSplit = trimmed
+    .split(/(?<=[.!?])\s+|;\s+|\n\s*\n/)
+    .map((c) => c.trim())
+    .filter((c) => c.length > 0);
+  if (sentenceSplit.length > 1) return sentenceSplit;
+
+  // 3. Coordinating conjunctions — only when the result is small and
+  //    plausible (avoids over-splitting on casual "and").
+  const conjSplit = trimmed.split(/\s+and\s+|\s+;\s+/);
+  if (conjSplit.length > 1 && conjSplit.length <= DECOMPOSE_CONFIG.maxSubtasks) {
+    return conjSplit
+      .map((c) => c.trim())
+      .filter((c) => c.length > 0);
+  }
+
+  return [trimmed];
+}
+
+function shouldDecompose(description, context) {
+  if (!description || typeof description !== "string") return false;
+  const minLen = context?.minDescriptionLength ?? DECOMPOSE_CONFIG.minDescriptionLength;
+  return description.trim().length >= minLen;
+}
+
+/**
+ * Decompose a single requirement into atomic subtasks.
+ *
+ * @param {object} req
+ * @param {number} index
+ * @param {object} context
+ * @returns {Array<object>} subtasks. Always returns at least one task; the
+ *   single-element case is the already-atomic requirement.
+ */
+function decomposeRequirement(req, index, context = {}) {
+  const baseId = (req.title || `Task ${index + 1}`)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "-") + "-" + index;
+
+  const base = buildTaskFromRequirement(req, baseId);
+
+  if (!shouldDecompose(req.description, context)) {
+    return [base];
+  }
+
+  const chunks = splitIntoChunks(req.description);
+  if (chunks.length <= 1) {
+    return [base];
+  }
+
+  const max = context?.maxSubtasks ?? DECOMPOSE_CONFIG.maxSubtasks;
+  const selected = chunks.slice(0, max);
+  // If we truncated, fold the remainder into a final "continue" chunk so no
+  // directive is silently dropped.
+  if (chunks.length > max) {
+    selected.push(`Continue remaining directives: ${chunks.slice(max).join(" ")}`);
+  }
+
+  return selected.map((chunk, i) => ({
+    ...buildTaskFromRequirement(req, `${baseId}-${i + 1}`),
+    id: `${baseId}-${i + 1}`,
+    description: chunk,
+    decomposedFrom: baseId,
+  }));
+}
+
+/**
+ * Maps requirements to task objects for the inference engine.
+ *
+ * Monolithic requirements are automatically decomposed into atomic subtasks
+ * before downstream inference, preventing a single giant task from bloating
+ * context.
+ *
+ * @param {Array<object>} requirements
+ * @param {object} [context] decomposition overrides (minDescriptionLength,
+ *   maxSubtasks)
+ * @returns {Array<object>}
+ */
+function mapRequirementsToTasks(requirements, context = {}) {
+  const tasks = [];
+  for (const [index, req] of requirements.entries()) {
+    if (!req || typeof req !== "object") continue;
+    tasks.push(...decomposeRequirement(req, index, context));
+  }
+  return tasks;
+}
+
+/**
+ * Public entry point: decompose a requirement list into atomic subtasks.
+ *
+ * @param {Array<object>} requirements
+ * @param {object} [context]
+ * @returns {Array<object>}
+ */
+export function decomposeTasks(requirements, context = {}) {
+  if (!Array.isArray(requirements)) {
+    throw new TypeError("decomposeTasks: requirements must be an array");
+  }
+  return mapRequirementsToTasks(requirements, context);
 }
 
 export function buildTaskInferenceDirective({ objective, requirements = [], prompt = "" }, context = {}) {
@@ -52,7 +197,7 @@ export function buildTaskInferenceDirective({ objective, requirements = [], prom
     return { lines: [], inferred: [], objective };
   }
 
-  const tasks = mapRequirementsToTasks(requirements);
+  const tasks = mapRequirementsToTasks(requirements, context);
   const inferred = inferNextTasks(tasks, context);
   
   const lines = [

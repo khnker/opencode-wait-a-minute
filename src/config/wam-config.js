@@ -6,18 +6,22 @@
  *   2. Project config file: <projectRoot>/.wam/config.json
  *   3. Built-in defaults
  *
- * Supported flags (all booleans, default true):
- *   - skills:      discover, route and inject skills into context
- *   - logging:     emit WAM logs (file + console)
- *   - enforcement: block mutating tools until the contract is approved
+ * Supported flags (all booleans):
+ *   - skills:      discover, route and inject skills into context        (default true)
+ *   - logging:     emit WAM logs (file + console)                       (default true)
+ *   - enforcement: block mutating tools until the contract is approved   (default true)
+ *   - debug:       emit structured WAM-DEBUG traces for auditing logic  (default false)
  *
  * Env overrides:
  *   - skills:      WAM_SKILLS=<bool>       | WAM_DISABLE_SKILLS=1
  *   - logging:     WAM_LOGGING=<bool>      | WAM_SILENT=1 | WAM_DISABLE_LOGGING=1
  *   - enforcement: WAM_ENFORCEMENT=<bool>  | WAM_GOVERNANCE=off | WAM_BYPASS=1
+ *   - debug:       WAM_DEBUG=1 | WAM_DEBUG=true | WAM_LOG_LEVEL=debug | WAM_DISABLE_DEBUG=1
+ *
+ * Config file path override: WAM_CONFIG=<absolute-path-to-config.json>
  *
  * Config file example (.wam/config.json):
- *   { "skills": false, "logging": false, "enforcement": false }
+ *   { "skills": false, "logging": false, "enforcement": false, "debug": true }
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -26,6 +30,7 @@ export const DEFAULT_WAM_CONFIG = Object.freeze({
   skills: true,
   logging: true,
   enforcement: true,
+  debug: false,
 });
 
 const TRUE_VALUES = new Set(["1", "true", "on", "yes", "enabled", "enable"]);
@@ -58,6 +63,18 @@ function governanceEnvOverride() {
 }
 
 export function readConfigFile(baseDir) {
+  // WAM_CONFIG overrides the default .wam/config.json location entirely.
+  const override = process.env.WAM_CONFIG;
+  if (override) {
+    try {
+      if (!fs.existsSync(override)) return {};
+      const parsed = JSON.parse(fs.readFileSync(override, "utf8"));
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+      return parsed;
+    } catch {
+      return {};
+    }
+  }
   try {
     const file = path.join(baseDir || process.cwd(), ".wam", "config.json");
     if (!fs.existsSync(file)) return {};
@@ -72,7 +89,7 @@ export function readConfigFile(baseDir) {
 /**
  * Resolve the effective WAM config for a project root.
  * @param {string} [baseDir]
- * @returns {{skills: boolean, logging: boolean, enforcement: boolean}}
+ * @returns {{skills: boolean, logging: boolean, enforcement: boolean, debug: boolean}}
  */
 export function loadWamConfig(baseDir = process.cwd()) {
   const file = readConfigFile(baseDir);
@@ -99,5 +116,13 @@ export function loadWamConfig(baseDir = process.cwd()) {
     DEFAULT_WAM_CONFIG.enforcement,
   );
 
-  return { skills, logging, enforcement };
+  const debug = firstDefined(
+    parseBoolean(process.env.WAM_DEBUG),
+    invert(parseBoolean(process.env.WAM_DISABLE_DEBUG)),
+    parseBoolean(process.env.WAM_LOG_LEVEL === "debug" ? "true" : undefined),
+    parseBoolean(file.debug),
+    DEFAULT_WAM_CONFIG.debug,
+  );
+
+  return { skills, logging, enforcement, debug };
 }

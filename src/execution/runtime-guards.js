@@ -3,7 +3,13 @@ import { readLedger } from "../context/session-file-read-ledger.js";
 import { evaluateDiscovery } from "../policy/discovery-classifier.js";
 import { evaluateAction } from "../policy/risk-engine.js";
 import { getCapability, CAPABILITY_LEVELS } from "../policy/action-capabilities.js";
-import { guardSubagentDispatch, loadModelRegistry } from "../skills/subagent-model-availability.js";
+import {
+  guardSubagentDispatch,
+  loadModelRegistry,
+  escalateTier,
+  tierForSubagentType,
+} from "../skills/subagent-model-availability.js";
+import { enforceNoScratchScripts } from "../policy/governance-enforcement.js";
 import { loadPrompt } from "../prompts/loader.js";
 import {
   evaluateAutonomousResolution,
@@ -16,6 +22,37 @@ const HARD_DELETE_RE =
 
 const HARD_DELETE_TOOLS = new Set(["rm", "rmdir"]);
 
+/**
+ * Consecutive-failure counters per (taskRoot, taskId, subagent_type).
+ * Incremented when a subagent's experiment fails; reset on success.
+ * Feeds tier escalation: 2 consecutive failures → walk up TIER_LADDER.
+ */
+const subagentFailureCounters = new Map();
+
+function failureKey(taskRoot, taskId, subagentType) {
+  return `${taskRoot || ""}:${taskId || ""}:${subagentType || ""}`;
+}
+
+export function recordSubagentFailure(taskRoot, taskId, subagentType) {
+  const key = failureKey(taskRoot, taskId, subagentType);
+  const current = subagentFailureCounters.get(key) || 0;
+  subagentFailureCounters.set(key, current + 1);
+  return current + 1;
+}
+
+export function recordSubagentSuccess(taskRoot, taskId, subagentType) {
+  const key = failureKey(taskRoot, taskId, subagentType);
+  subagentFailureCounters.delete(key);
+}
+
+export function getSubagentConsecutiveFailures(taskRoot, taskId, subagentType) {
+  return subagentFailureCounters.get(failureKey(taskRoot, taskId, subagentType)) || 0;
+}
+
+export function resetSubagentFailureCounter(taskRoot, taskId, subagentType) {
+  subagentFailureCounters.delete(failureKey(taskRoot, taskId, subagentType));
+}
+
 function isHardDelete(tool, args = {}) {
   const t = String(tool || "").toLowerCase();
   if (HARD_DELETE_TOOLS.has(t)) return true;
@@ -26,6 +63,23 @@ function isHardDelete(tool, args = {}) {
 function actionDescription(tool, args = {}) {
   const { hypothesisId: _h, ...rest } = args;
   return `${tool}:${JSON.stringify(rest)}`;
+}
+
+/**
+ * List existing unit test files under taskRoot/tests/unit so the
+ * scratch-script guard can redirect ad-hoc scripts to the real suite.
+ * Fail-open: never throws; returns [] on any I/O error.
+ */
+function listExistingTests(taskRoot) {
+  try {
+    const dir = `${taskRoot}/tests/unit`;
+    if (!fs.existsSync(dir)) return [];
+    return fs.readdirSync(dir)
+      .filter((f) => f.endsWith(".test.mjs") || f.endsWith(".test.js"))
+      .map((f) => `${dir}/${f}`);
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -90,8 +144,21 @@ export async function guardAction(tool, args, taskRoot, taskId) {
   if (tool === "task" || tool === "subagent") {
     const registry = loadModelRegistry({ configPath: process.env.WAM_MODEL_ROUTER_CONFIG });
     const maxDepth = parseInt(process.env.WAM_SUBAGENT_MAX_DEPTH || "1", 10);
-    const guardResult = guardSubagentDispatch(tool, args, { registry, maxDepth });
+    const subagentType = args?.subagent_type || args?.type || "";
+    const consecutiveFailures = getSubagentConsecutiveFailures(taskRoot, taskId, subagentType);
+    const guardResult = guardSubagentDispatch(tool, args, {
+      registry,
+      maxDepth,
+      consecutiveFailures,
+      escalateOnFailure: process.env.WAM_TIER_ESCALATION !== "off",
+    });
     if (!guardResult.allowed) return guardResult;
+    if (guardResult.escalated) {
+      return {
+        ...guardResult,
+        nudge: `[wait-a-minute] Subagente ${subagent_type} ascendido de ${guardResult.baseTier} a ${guardResult.effectiveTier} tras ${consecutiveFailures} fallos consecutivos sin resolver el bug de lógica.`,
+      };
+    }
   }
 
   if (isHardDelete(tool, args)) {
@@ -145,6 +212,22 @@ export async function guardAction(tool, args, taskRoot, taskId) {
     } catch (e) {
       // Fail open: if classification throws, we allow the action
       discovery = null;
+    }
+  }
+
+  // Scratch-script guard: redirect ad-hoc temp scripts to existing tests.
+  if (process.env.WAM_NO_SCRATCH_SCRIPTS !== "off") {
+    const existingTests = (taskRoot && taskId)
+      ? listExistingTests(taskRoot)
+      : [];
+    const scratch = enforceNoScratchScripts(tool, args, { taskRoot, existingTests });
+    if (scratch) {
+      return {
+        allowed: scratch.allowed,
+        level: scratch.allowed ? "INFO" : "BLOCKED",
+        reason: scratch.reason,
+        directive: scratch.directive,
+      };
     }
   }
 

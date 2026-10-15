@@ -154,6 +154,77 @@ test("handleMessage: prompt vacío → no-op (no inyecta parts)", async () => {
   assert.equal(out.parts.length, 0);
 });
 
+test("handleMessage: gate.allDone → confirmCompletion token-savings summary inyectada en output", async () => {
+  // Pre-create a token-savings record so printTokenSavingsSummary has something to emit.
+  const metricsDir = path.join(ROOT, ".wam", "metrics");
+  fs.mkdirSync(metricsDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(metricsDir, "token-savings.json"),
+    JSON.stringify([{ taskId: "t-done", savingsPct: 42, savingsTokens: 1234 }]),
+    "utf-8",
+  );
+
+  const deps = baseDeps();
+  deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: true });
+  deps.waitAMinute.applyPhaseTransition = () => ({ phase: "DONE", nextAction: "Listo" });
+  deps.waitAMinute.buildPersistedState = (_taskId, analysis, _root) => {
+    const requirements = analysis.completionContract.requirements.map((title, i) => ({
+      id: `req-${i + 1}`,
+      title,
+      status: "VERIFIED",
+    }));
+    return {
+      contract: analysis.completionContract,
+      requirements,
+      evidence: requirements.map((r) => ({
+        requirementId: r.id,
+        type: "test",
+        strength: "L3_DIRECT",
+        supports: true,
+      })),
+      phase: "DONE",
+      lastAction: "",
+    };
+  };
+
+  const out = { message: {}, parts: [] };
+  await handleMessage(
+    {
+      sessionID: "s-done",
+      messageID: "m-done",
+      message: { parts: [{ type: "text", text: "implementa X" }] },
+    },
+    out,
+    deps,
+  );
+
+  const injected = out.parts.map((p) => p.text).join("\n");
+  assert.match(injected, /\[WAM Token Savings\] Task t-done saved 42% tokens/);
+});
+
+test("handleMessage: cqe file_context → actualiza cqeCalls y persiste estado", async () => {
+  const deps = baseDeps();
+  deps.selectContextWithCqe = async () => ({
+    file_context: [{ path: "src/x.js", snippet: "const x = 1;" }],
+  });
+  deps.detectFileSearchIntent = () => true;
+  deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: false });
+
+  const out = { message: {}, parts: [] };
+  await handleMessage(
+    {
+      sessionID: "s-cqe",
+      messageID: "m-cqe",
+      message: { parts: [{ type: "text", text: "search for parseConfig definitions" }] },
+    },
+    out,
+    deps,
+  );
+
+  const state = getTaskState(deps.sessionTasks.get("s-cqe") || "t-cqe", ROOT);
+  assert.equal(state.cqeCalls, 1);
+});
+
 test("handleMessage: bypassed=true → no-op", async () => {
   const deps = baseDeps();
   deps.bypassed = true;

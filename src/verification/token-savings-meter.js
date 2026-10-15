@@ -60,3 +60,24 @@ export function getTokenSavingsReport(projectRoot) {
     return [];
   }
 }
+
+export function getLatestTokenSavings(projectRoot) {
+  const records = getTokenSavingsReport(projectRoot);
+  if (!Array.isArray(records) || records.length === 0) return null;
+  return records[records.length - 1] || null;
+}
+
+export function printTokenSavingsSummary(projectRoot, logger = console) {
+  const latest = getLatestTokenSavings(projectRoot);
+  if (!latest) return false;
+  const taskId = latest.taskId || "unknown";
+  const pct = typeof latest.savingsPct === "number" ? latest.savingsPct : 0;
+  const savedTokens = typeof latest.savingsTokens === "number" ? latest.savingsTokens : 0;
+  const line = `[WAM Token Savings] Task ${taskId} saved ${pct}% tokens: ${savedTokens} tokens saved vs baseline`;
+  if (logger && typeof logger.log === "function") {
+    logger.log(line);
+  } else {
+    process.stdout.write(line + "\n");
+  }
+  return true;
+}

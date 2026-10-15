@@ -51,6 +51,7 @@ const GATES = [
     ? []
     : [{ name: "Bench Evidence Validation", cmd: "npm run bench:audit && npm run bench:validate", required: true }]),
   { name: "Performance Sanity", cmd: "node scripts/performance-sanity.mjs", required: false },
+  { name: "Strict DONE Verification (C1)", cmd: "node scripts/verify-done-strict.mjs", required: true },
   ...(process.env.WAM_RC1_EVIDENCE === "1"
     ? [{ name: "Real Benchmark (RC1 evidence)", cmd: "npm run benchmark:real", required: true }]
     : []),
