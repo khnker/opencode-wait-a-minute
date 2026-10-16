@@ -109,6 +109,18 @@
       ]
     },
     {
+      "id": "notice.welcome_or_disambiguate",
+      "path": "notices/welcome-or-disambiguate.md",
+      "status": "active",
+      "responsibility": "Owns the welcome prompt that greets the user and asks them to describe their intended task.",
+      "consumers": [
+        "src/integration/message-handler.js"
+      ],
+      "testRefs": [
+        "src/prompts/characterization.test.mjs"
+      ]
+    },
+    {
       "id": "notice.pending_task",
       "path": "notices/pending-task.md",
       "status": "active",

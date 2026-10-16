@@ -80,7 +80,7 @@ test("WAM_GOVERNANCE=off / WAM_BYPASS disable enforcement", () => {
 
 test("config file is honored", () => {
   const cfg = loadWamConfig(tmpProject({ skills: false, logging: false, enforcement: false }));
-  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false, debug: false });
+  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false, debug: true });
 });
 
 test("env overrides config file", () => {

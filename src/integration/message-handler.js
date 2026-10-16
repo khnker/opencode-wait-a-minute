@@ -281,19 +281,21 @@ export async function handleMessage(input, output, deps) {
     // Solo se emite una vez por sessionID (no en cada continuación).
     const shouldGreet =
       !input?.tool &&
-      (fallbackKind === "default" || fallbackKind === "session") &&
+      !isContinuationPrompt(promptText) &&
       input.sessionID &&
       !greetedSessions.has(input.sessionID);
     if (shouldGreet) {
-      greetedSessions.add(input.sessionID);
       const greeting = loadPrompt("notice.welcome_or_disambiguate", {
         kind: fallbackKind,
         namespace: taskId,
       });
-      emitTextPart(output, greeting, {
+      const result = emitTextPart(output, greeting, {
         sessionID: input.sessionID,
         messageID: output.message?.id || input.messageID,
       });
+      if (result && result.status === "inserted") {
+        greetedSessions.add(input.sessionID);
+      }
     }
 
     // Clarification Gate: in ASKING classify the message
