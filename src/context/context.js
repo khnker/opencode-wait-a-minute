@@ -464,14 +464,24 @@ export function selectContext(task, { budget = 8000, root, sessionId, log = true
 export async function selectContextWithCqe(task, opts = {}) {
   const pkg = selectContext(task, opts);
   if (!opts.disableCqe && detectFileSearchIntent(task)) {
+    const t0 = Date.now();
     try {
       const cqeRes = await retrieveWithCqe(task, { repoRoot: opts.root || process.cwd() });
       if (cqeRes && cqeRes.items && cqeRes.items.length > 0) {
         pkg.file_context = cqeRes.items;
         pkg.rationale.push(`CQE: retrieved ${cqeRes.items.length} file matches`);
       }
+      pkg.cqeMeta = {
+        elapsedMs: typeof cqeRes?.elapsedMs === "number" ? cqeRes.elapsedMs : Date.now() - t0,
+        source: cqeRes?.source || null,
+        fallbackUsed: cqeRes?.fallbackUsed ?? false,
+        fallbackReason: cqeRes?.metadata?.fallbackReason || cqeRes?.fallbackReason || null,
+        timedOut: cqeRes?.metadata?.timedOut ?? cqeRes?.timedOut ?? false,
+        cqeError: cqeRes?.metadata?.cqeError || cqeRes?.cqeError || null,
+      };
     } catch {
       // Non-fatal: CQE es augmentación best-effort; el contexto nativo prevalece.
+      pkg.cqeMeta = { elapsedMs: Date.now() - t0, source: null, fallbackUsed: true, fallbackReason: "exception", timedOut: false, cqeError: "exception" };
     }
   }
   return pkg;

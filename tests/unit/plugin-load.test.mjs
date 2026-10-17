@@ -103,7 +103,7 @@ test("chat.message 1.18.25: extrae prompt de message.parts e inyecta validación
       { sessionID: "s1", messageID: "m1", message: { parts: [{ type: "text", text: "refactoriza el scraper" }] }, taskId: "test-task" },
       output
     );
-    const p = path.join(dir, ".wam", "tasks", "test-task", "state.yaml");
+    const p = path.join(dir, ".wam", "tasks", "test-task", "task.json");
     return { p, ok: fs.existsSync(p), output };
   };
 
@@ -310,7 +310,7 @@ test("cavemanify + /wam compress: resumen terse y headroom reportado", async () 
   await hooks["command.execute.before"]({ command: "wam", arguments: `compress ${taskId}` }, out);
   const text = out.parts[0].text;
   assert.ok(text.includes(taskId), "resumen incluye taskId");
-  assert.ok(/headroom \d+\/32000/.test(text), "headroom reportado con presupuesto");
+  assert.ok(/headroom \d+\/64000/.test(text), "headroom reportado con presupuesto");
   assert.ok(!text.includes(" the "), "estilo caveman: sin artículos");
 
   const file = path.join(process.cwd(), ".wam", "tasks", taskId, "caveman-summary.md");
@@ -366,9 +366,10 @@ test("Hard Block: claim de DONE con requisitos pendientes inyecta directiva de b
     { sessionID: "s3", message: { parts: [{ type: "text", text: "terminé la tarea, está done" }] }, taskId },
     output
   );
-  const gatePart = output.parts.find((p) => p.type === "text" && typeof p.text === "string" && p.text.startsWith("⛔"));
+  const gatePart = output.parts.find((p) => p.type === "text" && typeof p.text === "string" && p.text.includes("⛔"));
   assert.ok(gatePart, "el gate debe inyectarse como part visible en output.parts");
-  assert.ok(gatePart.text.startsWith("⛔"), "el claim debe reescribirse a directiva de bloqueo");
+  assert.ok(gatePart.text.startsWith("[wam]"), "toda parte sintética WAM lleva prefijo [wam]");
+  assert.ok(gatePart.text.includes("⛔"), "el claim debe reescribirse a directiva de bloqueo");
   assert.ok(gatePart.text.includes("COMPLETION GATE"), "directiva menciona el gate");
   assert.ok(gatePart.text.includes("No declare DONE"), "directiva prohíbe DONE");
 
@@ -490,7 +491,7 @@ test("session root real: client.session.get resuelve el directorio de la sesión
     out
   );
   assert.ok(
-    fs.existsSync(path.join(realDir, ".wam", "tasks", taskId, "state.yaml")),
+    fs.existsSync(path.join(realDir, ".wam", "tasks", taskId, "task.json")),
     ".wam creado en el directorio real de la sesión (initMemory al iniciar sesión)"
   );
   assert.ok(
@@ -507,7 +508,7 @@ test("client.session.get ausente → fallback al directory del plugin (compat)",
   const hooks = await pluginDefault({ directory: tmp, client: {}, project: {}, $: {} });
   const taskId = `fb-${Date.now()}`;
   await hooks["chat.message"]({ parts: [{ type: "text", text: "tarea de compat" }], taskId }, { parts: [], system: [] });
-  assert.ok(fs.existsSync(path.join(tmp, ".wam", "tasks", taskId, "state.yaml")), "fallback usa pluginInput.directory");
+  assert.ok(fs.existsSync(path.join(tmp, ".wam", "tasks", taskId, "task.json")), "fallback usa pluginInput.directory");
   try {
     fs.rmSync(tmp, { recursive: true, force: true });
   } catch {}
@@ -592,8 +593,8 @@ test("multi-sesión: 2 sesiones sobre la MISMA carpeta tienen tareas aisladas (n
   await hooks["chat.message"]({ sessionID: "sesA-aaaaaaaaaa", parts: [{ type: "text", text: "refactoriza el scraper con tests" }] }, { parts: [], system: [] });
   // sesión B (misma carpeta, taskId genérico → task-<slug> descriptivo, aislado por slug)
   await hooks["chat.message"]({ sessionID: "sesB-bbbbbbbbbb", parts: [{ type: "text", text: "arregla el bug del frontend" }] }, { parts: [], system: [] });
-  const taskA = getTaskState("task-refactoriza-el-scraper-con-tests", tmp);
-  const taskB = getTaskState("task-arregla-el-bug-del-frontend", tmp);
+  const taskA = getTaskState("task-refactoriza-el-scraper-con-tests-sess-aaaaaaaa", tmp);
+  const taskB = getTaskState("task-arregla-el-bug-del-frontend-sess-bbbbbbbb", tmp);
   assert.ok(taskA, "sesión A con su propia tarea");
   assert.ok(taskB, "sesión B con su propia tarea");
   assert.notEqual(taskA.taskId ?? JSON.stringify(taskA.contract?.requirements), JSON.stringify(taskB.contract?.requirements), "contratos distintos");
@@ -601,8 +602,8 @@ test("multi-sesión: 2 sesiones sobre la MISMA carpeta tienen tareas aisladas (n
   assert.ok(taskB.contract?.requirements?.some((r) => /front/i.test(r)), "B conserva su dominio (frontend)");
 
   // live context aislado por task (slug descriptivo)
-  const liveA = fs.existsSync(path.join(tmp, ".wam", "tasks", "task-refactoriza-el-scraper-con-tests", "context.md"));
-  const liveB = fs.existsSync(path.join(tmp, ".wam", "tasks", "task-arregla-el-bug-del-frontend", "context.md"));
+  const liveA = fs.existsSync(path.join(tmp, ".wam", "tasks", "task-refactoriza-el-scraper-con-tests-sess-aaaaaaaa", "context.md"));
+  const liveB = fs.existsSync(path.join(tmp, ".wam", "tasks", "task-arregla-el-bug-del-frontend-sess-bbbbbbbb", "context.md"));
   assert.ok(liveA, "live context aislado para sesión A");
   assert.ok(liveB, "live context aislado para sesión B");
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}

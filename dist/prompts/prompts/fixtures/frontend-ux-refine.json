@@ -1,0 +1,12 @@
+{
+  "id": "frontend-ux-refine",
+  "vars": {
+    "context": "Apply the smallest edit that restores focus visibility."
+  },
+  "mustContain": [
+    "observed",
+    "hypothesis",
+    "smallest"
+  ],
+  "mustNotContain": []
+}

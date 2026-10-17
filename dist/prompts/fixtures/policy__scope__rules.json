@@ -1,0 +1,10 @@
+{
+  "id": "policy.scope.rules",
+  "vars": {},
+  "mustContain": [
+    "Entregar únicamente lo pedido",
+    "No agregar features no solicitadas",
+    "Cambiar la mínima superficie posible"
+  ],
+  "mustNotContain": []
+}

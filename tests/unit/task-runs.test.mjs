@@ -69,7 +69,7 @@ describe("startRun", () => {
     const runFile = path.join(TMP, ".wam", "tasks", taskId, "runs", `${run.id}.json`);
     assert.ok(fs.existsSync(runFile), "Run file should exist");
 
-    const state = JSON.parse(fs.readFileSync(path.join(TMP, ".wam", "tasks", taskId, "state.yaml"), "utf-8"));
+    const state = JSON.parse(fs.readFileSync(path.join(TMP, ".wam", "tasks", taskId, "task.json"), "utf-8"));
     assert.equal(state.currentRunId, run.id, "Task state should reference current run");
   });
 
@@ -94,7 +94,7 @@ describe("closeRun", () => {
     assert.equal(closed.status, "completed");
     assert.equal(closed.outcome, "All done");
 
-    const state = JSON.parse(fs.readFileSync(path.join(TMP, ".wam", "tasks", taskId, "state.yaml"), "utf-8"));
+    const state = JSON.parse(fs.readFileSync(path.join(TMP, ".wam", "tasks", taskId, "task.json"), "utf-8"));
     assert.equal(state.currentRunId, null);
   });
 });
@@ -291,7 +291,7 @@ describe("task persistence", () => {
 
     const taskDir = path.join(TMP, ".wam", "tasks", taskId);
     assert.ok(fs.existsSync(taskDir), "Task directory should still exist");
-    assert.ok(fs.existsSync(path.join(taskDir, "state.yaml")), "state.yaml should exist");
+    assert.ok(fs.existsSync(path.join(taskDir, "task.json")), "task.json should exist");
     assert.ok(fs.existsSync(path.join(taskDir, "runs", `${run.id}.json`)), "Run file should exist");
   });
 

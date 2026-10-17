@@ -3,7 +3,7 @@
  *
  * Implements the retention policy for `.wam/tasks/<id>/`:
  *  - Identifies tasks whose status is `completed` AND whose last update /
- *    completion timestamp is older than `WAM_RETENTION_TTL_DAYS` (7 days).
+ *    completion timestamp is older than `WAM_RETENTION_TTL_DAYS` (15 days).
  *  - Centralizes a compact evidence/summary into `.wam/archive/tasks/<id>-<isoDate>/`
  *    so important context is preserved outside the bulky per-task directory.
  *  - Removes the bulky per-task directory and re-reconciles `.wam/task-state.json`
@@ -26,7 +26,7 @@ import { listTasks, loadTask } from "../state/task-store.js";
 import { reconcileFromDisk } from "../state/task-state-file.js";
 import { TASK_STATUS } from "../state/task-status.js";
 
-export const WAM_RETENTION_TTL_DAYS = 7;
+export const WAM_RETENTION_TTL_DAYS = 15;
 export const WAM_ARCHIVE_DIRNAME = "archive";
 
 /**

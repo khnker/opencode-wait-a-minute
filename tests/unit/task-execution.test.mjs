@@ -305,10 +305,10 @@ describe("cross-session persistence", () => {
     assert.equal(executions[0].observations[0], "First session");
     assert.equal(executions[0].status, "completed");
 
-    // Legacy state.yaml is single source of truth for task state only:
+    // task.json is single source of truth for task state only:
     // it must not carry executions[]
     const state = JSON.parse(
-      fs.readFileSync(path.join(TMP, ".wam", "tasks", taskId, "state.yaml"), "utf-8")
+      fs.readFileSync(path.join(TMP, ".wam", "tasks", taskId, "task.json"), "utf-8")
     );
     assert.equal(state.executions, undefined);
   });
@@ -331,7 +331,7 @@ describe("cross-session persistence", () => {
     // Current state should keep the task's own fields untouched and must
     // not promote historical executions/observations into the live state
     const current = JSON.parse(
-      fs.readFileSync(path.join(TMP, ".wam", "tasks", taskId, "state.yaml"), "utf-8")
+      fs.readFileSync(path.join(TMP, ".wam", "tasks", taskId, "task.json"), "utf-8")
     );
     assert.equal(current.lastAction, "Test task");
     assert.equal(current.requirements.length, 2);

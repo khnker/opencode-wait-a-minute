@@ -1,0 +1,10 @@
+{
+  "id": "nudge.discovery.default",
+  "vars": {},
+  "mustContain": [
+    "dedicated tools",
+    "context-query-engine",
+    "raw bash discovery"
+  ],
+  "mustNotContain": []
+}

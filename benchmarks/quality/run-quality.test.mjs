@@ -63,13 +63,13 @@ function makeStubProvider(cfg) {
  * the corresponding baseline prompt length. The WAM prompt is shorter than
  * the baseline prompt for any non-trivial context.
  */
-function makeArmDetector(scenario) {
+async function makeArmDetector(scenario) {
   const firstTurn = scenario.turns?.[0];
   if (!firstTurn) {
     return () => "baseline";
   }
   const baseLen = buildBaselineRequest(firstTurn).messages[0].content.length;
-  const wamLen = buildWamRequest(scenario, firstTurn).messages[0].content.length;
+  const wamLen = (await buildWamRequest(scenario, firstTurn)).messages[0].content.length;
   // Use a small tolerance since compression may leave lengths close.
   const mid = (baseLen + wamLen) / 2;
   return (prompt) => (prompt.length >= mid ? "baseline" : "wam");
@@ -82,7 +82,7 @@ async function runScenarioForTest(scenario, provider) {
   const out = [];
   for (const [turnIndex, turn] of turns.entries()) {
     const baseline = await provider.complete(buildBaselineRequest(turn));
-    const wam = await provider.complete(buildWamRequest(scenario, turn));
+    const wam = await provider.complete(await buildWamRequest(scenario, turn));
     const baseCov = factCoverage(baseline?.text ?? "", scenario.rubric.requiredFacts);
     const wamCov = factCoverage(wam?.text ?? "", scenario.rubric.requiredFacts);
     out.push({ turnIndex, baselineCov: baseCov, wamCov: wamCov });
@@ -98,7 +98,7 @@ async function runScenarioForTest(scenario, provider) {
 test("Case A — stub echoes all required facts: factDelta === 0, no losses", async () => {
   const scenario = getQualityScenario("Q1-exact-req-token");
   assert.ok(scenario, "scenario Q1-exact-req-token must exist");
-  const armDetect = makeArmDetector(scenario);
+  const armDetect = await makeArmDetector(scenario);
   // Echo every fact on both arms: returns the literal fact token.
   const provider = makeStubProvider({
     factList: ["q1:-requirement[3]"],
@@ -120,7 +120,7 @@ test("Case B — stub omits a fact on WAM-only: wamFactScore < baselineFactScore
   // detects a partial quality delta deterministically.
   const scenario = getQualityScenario("Q5-artifact-and-constraint-tokens");
   assert.ok(scenario, "scenario Q5 must exist");
-  const armDetect = makeArmDetector(scenario);
+  const armDetect = await makeArmDetector(scenario);
   // factList[0] is the "suppressed" fact that the WAM arm omits. Baseline
   // echoes both -> score 1.0. WAM only echoes factList[1] -> score 0.5.
   const provider = makeStubProvider({
@@ -131,7 +131,7 @@ test("Case B — stub omits a fact on WAM-only: wamFactScore < baselineFactScore
   // Sanity check on the detector itself: the baseline prompt should be detected
   // as baseline, and the WAM prompt as wam.
   const baselinePrompt = buildBaselineRequest(scenario.turns[0]).messages[0].content;
-  const wamPrompt = buildWamRequest(scenario, scenario.turns[0]).messages[0].content;
+  const wamPrompt = (await buildWamRequest(scenario, scenario.turns[0])).messages[0].content;
   assert.equal(armDetect(baselinePrompt), "baseline", "detector should classify baseline prompt as baseline");
   assert.equal(armDetect(wamPrompt), "wam", "detector should classify WAM prompt as wam");
 
@@ -155,7 +155,7 @@ test("Run-quality report shape — offline via stub", async () => {
   // Sanity test: just confirm the runner-shaped logic counts empty responses
   // and computes the summary numbers correctly when response text is empty.
   const scenario = getQualityScenario("Q1-exact-req-token");
-  const armDetect = makeArmDetector(scenario);
+  const armDetect = await makeArmDetector(scenario);
   const provider = makeStubProvider({
     factList: ["q1:-requirement[3]"],
     armDetect,

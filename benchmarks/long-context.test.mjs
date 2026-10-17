@@ -23,16 +23,16 @@ import { CONTINUATION_SIZES } from "./scenarios/continuation.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-test("long-context: runner emits one row per size in CONTINUATION_SIZES", () => {
-  const results = runLongContextScaling();
+test("long-context: runner emits one row per size in CONTINUATION_SIZES", async () => {
+  const results = await runLongContextScaling();
   assert.equal(results.length, CONTINUATION_SIZES.length);
   for (let i = 0; i < results.length; i++) {
     assert.equal(results[i].N, CONTINUATION_SIZES[i]);
   }
 });
 
-test("long-context: state grows monotonically with N", () => {
-  const results = runLongContextScaling();
+test("long-context: state grows monotonically with N", async () => {
+  const results = await runLongContextScaling();
   for (let i = 1; i < results.length; i++) {
     assert.ok(
       results[i].stateBytes > results[i - 1].stateBytes,
@@ -45,8 +45,8 @@ test("long-context: state grows monotonically with N", () => {
   }
 });
 
-test("long-context: wamInputTokens stays bounded (max/min ratio < 2)", () => {
-  const results = runLongContextScaling();
+test("long-context: wamInputTokens stays bounded (max/min ratio < 2)", async () => {
+  const results = await runLongContextScaling();
   const wam = results.map((r) => r.wamInputTokens).filter((n) => n > 0);
   assert.ok(wam.length >= 2, "need at least 2 sizes with non-zero wam tokens");
   const min = Math.min(...wam);
@@ -58,8 +58,8 @@ test("long-context: wamInputTokens stays bounded (max/min ratio < 2)", () => {
   );
 });
 
-test("long-context: baselineInputTokens grows super-linearly with N", () => {
-  const results = runLongContextScaling();
+test("long-context: baselineInputTokens grows super-linearly with N", async () => {
+  const results = await runLongContextScaling();
   // Super-linear check: ratio baseline[N_i] / baseline[N_{i-1}] must be
   // greater than N_i / N_{i-1} for at least one i, OR baseline[N_last]
   // must exceed a linear extrapolation by a margin.
@@ -79,8 +79,8 @@ test("long-context: baselineInputTokens grows super-linearly with N", () => {
   );
 });
 
-test("long-context: contextReductionPct is non-negative (WAM <= baseline)", () => {
-  const results = runLongContextScaling();
+test("long-context: contextReductionPct is non-negative (WAM <= baseline)", async () => {
+  const results = await runLongContextScaling();
   for (const r of results) {
     assert.ok(
       r.contextReductionPct >= 0,
@@ -93,14 +93,14 @@ test("long-context: contextReductionPct is non-negative (WAM <= baseline)", () =
   }
 });
 
-test("long-context: main() writes a JSON artifact under benchmarks/results/", () => {
+test("long-context: main() writes a JSON artifact under benchmarks/results/", async () => {
   // We exercise the main() pipeline but redirect by inspecting its
   // stdout. The artifact is written to `benchmarks/results/`, which
   // must exist (we list it here for the contract).
   const resultsDir = join(__dirname, "results");
   assert.ok(existsSync(resultsDir), `results dir must exist: ${resultsDir}`);
   // Run a single size to keep the test fast and self-contained.
-  const single = runLongContextScaling({ sizes: [CONTINUATION_SIZES[0]] });
+  const single = await runLongContextScaling({ sizes: [CONTINUATION_SIZES[0]] });
   assert.equal(single.length, 1);
   assert.ok(single[0].N > 0);
   assert.ok(single[0].baselineInputTokens > 0);

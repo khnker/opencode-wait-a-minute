@@ -1,0 +1,10 @@
+[
+  {
+    "taskId": "stdout-fallback",
+    "actualTokens": 10,
+    "baselineTokens": 1000,
+    "savingsPct": 99,
+    "savingsTokens": 990,
+    "timestamp": 1
+  }
+]

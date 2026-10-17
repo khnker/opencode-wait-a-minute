@@ -17,7 +17,7 @@ function setupTask(taskId, root) {
     nextAction: null,
   };
   fs.writeFileSync(
-    path.join(root, ".wam", "tasks", taskId, "state.yaml"),
+    path.join(root, ".wam", "tasks", taskId, "task.json"),
     JSON.stringify(state, null, 2)
   );
 }
@@ -32,7 +32,7 @@ test("Strategy Continuity: approveContract persists approvedStrategy", () => {
     assert.equal(r.ok, true);
 
     const stateRaw = fs.readFileSync(
-      path.join(root, ".wam", "tasks", taskId, "state.yaml"),
+      path.join(root, ".wam", "tasks", taskId, "task.json"),
       "utf-8"
     );
     assert.ok(stateRaw.includes("approvedStrategy"), "approvedStrategy persisted");

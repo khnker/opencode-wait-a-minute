@@ -4,14 +4,64 @@
  * Schema: meta / files (manifest) / symbols / deps / lex (FTS5).
  * Sin deps nuevas. Persistencia en <repo>/.cqe/catalog.db (override: CQE_CATALOG_DB).
  */
-import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
+
+// node:sqlite no existe en todos los runtimes (p.ej. el Bun embebido de
+// opencode no lo resuelve). El import estático mataba la cadena completa del
+// vendor e inhabilitaba CQE por entero, aunque las rutas de búsqueda por
+// archivos (fallbackFileSearch) no necesitan sqlite. Carga perezosa: el error
+// queda localizado en openStore y los callers con try/catch degradan a fallback.
+let _DatabaseSync = null;
+let _sqliteFailed = false;
+function getDatabaseSync() {
+  if (_DatabaseSync) return _DatabaseSync;
+  if (_sqliteFailed) throw new Error('CQE_SQLITE_UNAVAILABLE: ni node:sqlite ni bun:sqlite disponibles en este runtime');
+  const req = createRequire(import.meta.url);
+  try {
+    _DatabaseSync = req('node:sqlite').DatabaseSync;
+    return _DatabaseSync;
+  } catch {}
+  try {
+    _DatabaseSync = bunAdapter(req('bun:sqlite').Database);
+    return _DatabaseSync;
+  } catch (err) {
+    _sqliteFailed = true;
+    throw new Error(`CQE_SQLITE_UNAVAILABLE: ${(err && err.message) || err}`);
+  }
+}
+
+// Adapta bun:sqlite (db.query + .get/.all/.run) a la superficie
+// node:sqlite (db.prepare + .get/.all/.run) que usa este módulo.
+function bunAdapter(BunDatabase) {
+  if (!BunDatabase) throw new Error('bun:sqlite sin export Database');
+  return class BunDatabaseCompat {
+    constructor(dbPath) {
+      this._db = new BunDatabase(dbPath);
+    }
+    exec(sql) {
+      return this._db.exec(sql);
+    }
+    prepare(sql) {
+      const stmt = this._db.query(sql);
+      return {
+        get: (...args) => stmt.get(...args) ?? undefined,
+        all: (...args) => stmt.all(...args),
+        run: (...args) => stmt.run(...args),
+      };
+    }
+    close() {
+      return this._db.close();
+    }
+  };
+}
 
 const SCHEMA_VERSION = 1;
 const LOCK_RETRY = { attempts: 12, delayMs: 250 };
 
 export function openStore(dbPath) {
+  const DatabaseSync = getDatabaseSync();
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const db = new DatabaseSync(dbPath);
   withLockRetry(() => {

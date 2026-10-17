@@ -1,0 +1,10 @@
+{
+  "id": "question.escalation",
+  "vars": {
+    "statement": "migramos a NestJS"
+  },
+  "mustContain": [
+    "¿migramos a NestJS?"
+  ],
+  "mustNotContain": []
+}

@@ -29,7 +29,7 @@ const analysis = await analyze({ prompt: PROMPT, projectPath: REPO });
 const selected = (analysis.skills && analysis.skills.selected) || [];
 const registry = analysis.skillRegistryMap || {};
 
-const pack = assembleContext({
+const pack = await assembleContext({
   prompt: PROMPT,
   taskId: "multilayer-bench",
   classification: analysis.intent?.classification,

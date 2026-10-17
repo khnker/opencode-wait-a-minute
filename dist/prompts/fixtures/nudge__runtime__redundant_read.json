@@ -1,0 +1,11 @@
+{
+  "id": "nudge.runtime.redundant_read",
+  "vars": {
+    "path": "src/index.js"
+  },
+  "mustContain": [
+    "redundant read: src/index.js",
+    "unchanged since last read"
+  ],
+  "mustNotContain": []
+}

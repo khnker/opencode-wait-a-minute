@@ -54,7 +54,7 @@ function buildBaselineFullPrompt(scenario, turnIndex) {
  * had to rebuild the pack from scratch instead of diffing against the
  * snapshot.
  */
-function runOneTurn(scenario, turnIndex, accumulated) {
+async function runOneTurn(scenario, turnIndex, accumulated) {
   const turn = scenario.turns[turnIndex];
 
   // --- Baseline arm: full raw history re-fed as a single prompt ----
@@ -85,7 +85,7 @@ function runOneTurn(scenario, turnIndex, accumulated) {
     obs.push({ id: `obs-${i}`, content: `Observation ${i + 1}: state stable after turn ${i + 1}` });
   }
 
-  const assembly = assembleContext({
+  const assembly = await assembleContext({
     prompt: turn.prompt,
     taskId: scenario.id,
     classification: "normal",
@@ -156,7 +156,7 @@ function runOneTurn(scenario, turnIndex, accumulated) {
  *     contextReductionPct, reconstructionFrequency
  *   }
  */
-export function runLongContextScaling({ sizes = CONTINUATION_SIZES } = {}) {
+export async function runLongContextScaling({ sizes = CONTINUATION_SIZES } = {}) {
   const scenarios = buildContinuationScenarios(sizes);
   const results = [];
   for (let s = 0; s < scenarios.length; s++) {
@@ -164,7 +164,7 @@ export function runLongContextScaling({ sizes = CONTINUATION_SIZES } = {}) {
     const N = scenario.turns.length;
     const turnResults = [];
     for (let i = 0; i < N; i++) {
-      turnResults.push(runOneTurn(scenario, i, turnResults));
+      turnResults.push(await runOneTurn(scenario, i, turnResults));
     }
     // Aggregate per-N: take the LAST turn (worst case for baseline).
     const last = turnResults[turnResults.length - 1];
@@ -189,7 +189,7 @@ export function runLongContextScaling({ sizes = CONTINUATION_SIZES } = {}) {
 
 // CLI entry
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const results = runLongContextScaling();
+  const results = await runLongContextScaling();
   console.log(JSON.stringify({ sizes: CONTINUATION_SIZES, results }, null, 2));
 }
 

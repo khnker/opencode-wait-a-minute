@@ -5,7 +5,7 @@ import { handleMessage } from "./src/integration/message-handler.js";
 import { injectWamParts } from "./src/integration/part-provenance.js";
 import { loadWamConfig } from "./src/config/wam-config.js";
 import { configureLogger } from "./src/integration/logger.js";
-import { setLoggingEnabled, setDebugEnabled, registerLogicGate, wamDebug, wamLog, wamError } from "./src/shared/wam-log.js";
+import { setLoggingEnabled, setDebugEnabled, registerLogicGate, wamDebug, wamLog, wamWarn, wamError } from "./src/shared/wam-log.js";
 import { evaluateCompletionGate, applyPhaseTransition } from "./src/integration/orchestration.js";
 import { loadPrompt } from "./src/prompts/loader.js";
 
@@ -18,6 +18,7 @@ import { ContextDecisionTracer } from "./src/context/context-decision-audit.js";
 import { guardAction } from "./src/execution/runtime-guards.js";
 import { WamPolicyBlock, evaluateAction } from "./src/policy/risk-engine.js";
 import { enforceGovernance, enforceReadDelegation } from "./src/policy/governance-enforcement.js";
+import { evaluateDiscovery } from "./src/policy/discovery-classifier.js";
 import { classifyByCapabilities, buildCandidate } from "./src/policy/strategy-capabilities.js";
 import { getStatusReport } from "./src/execution/execution-state.js";
 import { createSnapshot, checkContinuation, rebuildScope } from "./src/context/context-snapshot.js";
@@ -148,8 +149,8 @@ const DEFAULT_CONFIG = {
   tierCaps: { fast: 8, medium: 5, heavy: 3 },
   activePreset: "omni",
   silent: false,
-  budgetTokens: 32000,
-  contextBudget: 16000,
+  budgetTokens: 64000,
+  contextBudget: 32000,
   tierPrompts: {},
 };
 
@@ -165,7 +166,7 @@ function genPartId() {
 // Inyecta texto visible al frente del mensaje de usuario; fallback a .system (API vieja).
 function emitTextPart(output, text, meta = {}) {
   if (!output) return { status: "error", reason: "no-output" };
-  let prefixedText = `[wam] WAM toma control de ejecución. ${text}`;
+  let prefixedText = `[wam] ${text}`;
   if (meta.phase) {
     prefixedText += ` Etapa actual: ${meta.phase}.`;
   }
@@ -176,7 +177,17 @@ function emitTextPart(output, text, meta = {}) {
     ...(meta.sessionID ? { sessionID: meta.sessionID } : {}),
     ...(meta.messageID ? { messageID: meta.messageID } : {}),
   };
-  const sink = Array.isArray(output.parts) ? output.parts : (Array.isArray(output.system) ? output.system : null);
+  // Support both shapes: output.parts/system or output.message.parts/system
+  let sink = null;
+  if (Array.isArray(output?.parts)) {
+    sink = output.parts;
+  } else if (Array.isArray(output?.system)) {
+    sink = output.system;
+  } else if (Array.isArray(output?.message?.parts)) {
+    sink = output.message.parts;
+  } else if (Array.isArray(output?.message?.system)) {
+    sink = output.message.system;
+  }
   if (!sink) {
     wamWarn(`[WAM] emitTextPart: no valid sink (parts/system) for injection`);
     return { status: "unsupported-output-shape", reason: "missing-parts-or-system" };
@@ -358,6 +369,13 @@ const GENERIC_SLUGS = new Set([
 function readActiveTaskIdFresh(root, options = {}) {
   const rec = readActiveTaskRecord(root);
   if (!rec) return null;
+  // Session-owned binding: the record belongs to THIS session, so it never
+  // goes stale — 1 sesión = 1 task, sobrevive restarts. Solo se abandona por
+  // apertura explícita (/wam task switch), cambio de contexto o sesión nueva.
+  if (options.sessionId && rec.sessionId && rec.sessionId === options.sessionId) {
+    if (options.projectRoot && rec.projectRoot && rec.projectRoot !== root) return null;
+    return rec.id;
+  }
   const ttlMs = options.ttlMs || 60000;
   if (!rec.ts) return null;
   if (Date.now() - rec.ts > ttlMs) return null;
@@ -370,11 +388,12 @@ function readActiveTaskIdFresh(root, options = {}) {
 }
 
 /**
- * taskId efectivo de WAM para un mensaje:
+ * taskId efectivo de WAM para un mensaje (regla: 1 sesión = 1 task):
  * - input.taskId explícito y específico (conversación de opencode) → se usa tal cual
  * - taskId conocido en sessionTasks (cache de chat.message) → ese
- * - active-task reciente (<=60s, escrito por /wam task switch o /wam resume) →
- *   ese (intención explícita reciente del usuario)
+ * - active-task propio de la sesión (sin TTL cuando el sessionId coincide;
+ *   sobrevive restarts) → ese. Solo se abandona por apertura explícita
+ *   (/wam task switch), cambio de contexto detectado o sesión nueva.
  * - prompt NO continuación y con sustantivo descriptivo → `task-<slug>` derivado
  * - con sessionID conocida → namespace por sesión: ses-<sessionID>
  * - sin sessionID y prompt vacío/genérico → "default-task" (último recurso)
@@ -382,10 +401,9 @@ function readActiveTaskIdFresh(root, options = {}) {
  * Devuelve `{ taskId, fallbackKind }` para que el caller pueda decidir si
  * saluda al usuario cuando el resultado cayó en `default-task` o `session`.
  *
- * active-task global NO se usa como fallback automático: solo /wam task switch
- * o /wam resume lo consultan vía readActiveTaskIdFresh() con TTL de 60s. Esto
- * evita que sesiones nuevas adopten estado de tareas previas en la misma
- * carpeta; tras 60s sin actividad el active-task se considera obsoleto.
+ * El active-task global con sessionId de OTRA sesión nunca se adopta
+ * (rechazo por ownership). Los registros legacy sin sessionId mantienen el
+ * TTL de 60s para no adoptar tareas obsoletas de sesiones previas.
  */
 function effectiveTaskId(input, sessionTasks, wamRoot, promptText) {
   // Priority 1: Explicit taskId (must not be generic)
@@ -397,10 +415,10 @@ function effectiveTaskId(input, sessionTasks, wamRoot, promptText) {
   const cached = sessionTasks?.get?.(input?.sessionID);
   if (cached) return { taskId: cached, fallbackKind: "cached" };
   
-  // Priority 3: Fresh active task with strict session/project ownership.
-  // readActiveTaskIdFresh enforces the 60s TTL and rejects records whose
-  // sessionId/projectRoot don't match the caller — this is what stops a
-  // session from silently adopting another session's active task.
+  // Priority 3: Session-owned active task (durable binding, no TTL when the
+  // sessionId matches — 1 sesión = 1 task, sobrevive restarts). Rejects
+  // records from other sessions — this is what stops a session from silently
+  // adopting another session's active task.
   const fresh = readActiveTaskIdFresh(wamRoot, {
     sessionId: input?.sessionID,
     projectRoot: wamRoot,
@@ -414,9 +432,16 @@ function effectiveTaskId(input, sessionTasks, wamRoot, promptText) {
   if (promptText && !isContinuationPrompt(promptText)) {
     const slug = slugifyTaskPrompt(promptText);
     if (slug) {
-      // For slug-based tasks, bind to session to prevent cross-session sharing
-      const sessionSlugTaskId = `task-${slug}-sess-${input.sessionID?.slice(-8) || "nosess"}`;
-      return { taskId: sessionSlugTaskId, fallbackKind: "slug-session-bound" };
+      // For slug-based tasks, bind to session to prevent cross-session sharing.
+      // Never silently fall back to "nosess" — that produces a task that no
+      // later session can re-bind to and breaks the persistence/approve path.
+      if (!input?.sessionID) {
+        // Keep the in-memory result stable but signal the caller that this
+        // is a degraded fallback. message-handler logs a warning when it
+        // sees slug-session-bound without sessionID.
+        return { taskId: `task-${slug}-sess-nosess`, fallbackKind: "slug-session-bound-nosession" };
+      }
+      return { taskId: `task-${slug}-sess-${input.sessionID.slice(-8)}`, fallbackKind: "slug-session-bound" };
     }
   }
   
@@ -761,7 +786,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
     const root = await wamRootFor(sessionID, promptText);
     try {
       initMemory(root);
-      purgeTasks(path.join(root, 'tasks')).catch(e => wamError(`Retention purge failed: ${e}`));
+      try { purgeTasks(path.join(root, '.wam', 'tasks')); } catch (e) { wamError(`Retention purge failed: ${e}`); }
     } catch {}
     if (sessionID) sessionWamRoots.set(sessionID, root);
     return root;
@@ -844,6 +869,7 @@ async function postToolExecution(input, output) {
         wamRootFor,
         ensureWamMemory,
         effectiveTaskId,
+        isContinuationPrompt,
         genPartId,
         emitTextPart,
         processedMessages,
@@ -879,24 +905,42 @@ async function postToolExecution(input, output) {
         addRecentChange,
         closeSession,
         getSessionId,
+        listCapsules,
+        getCapsule,
+        promoteCapsule,
+        selectContext,
+        selectContextWithCqe,
+        detectFileSearchIntent,
+        retrieveContext,
+        closeSession,
+        resolveWamRoot,
+        migrateLegacyCapsules,
+        assembleContext,
+        evaluateRequirement: evaluateRequirementChecks,
+        verifyRequirement,
+        ContextDecisionTracer,
+        guardAction,
+        WamPolicyBlock,
+        wamLog,
+        wamWarn,
+        wamError,
+        wamDebug,
+        closeSession,
+        getSessionId,
         classifyAskingMessage,
       }),
 
     // Handle /wam CLI (opencode 1.18.25: commands arrive via command.execute.before)
     "command.execute.before": async (input, output) => {
       if (input.command !== "wam") return;
-      output.parts = output.parts || [];
       const sid = input.sessionID;
       const root = await resolveSessionBase(sid);
       const taskKey = sessionTasks.get(sid) || readActiveTaskIdFresh(root, { sessionId: sid, projectRoot: root }) || (sid ? `ses-${sid.slice(-10)}` : "default-task");
       const argsArr = Array.isArray(input.arguments)
         ? input.arguments
         : (typeof input.arguments === "string" ? input.arguments.split(/\s+/) : []);
-      output.parts.push({
-        id: genPartId(),
-        type: "text",
-        text: await wamCli(argsArr, cfg, root, taskKey),
-      });
+      const wamText = await wamCli(argsArr, cfg, root, taskKey);
+      emitTextPart(output, wamText, { sessionID: sid, messageID: output.message?.id || input.messageID });
     },
 
     // Enforce Clarification Gate (spec change 4): en ASKING se bloquean las
@@ -1052,6 +1096,30 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
               });
             }
          }
+
+          // CQE-first discovery: bash usado para buscar archivos/patrones/
+          // estructuras va a CQE (más rápido que shell). Nativo y habilitado
+          // por defecto en modo aviso (warn); WAM_READ_DELEGATION=off lo
+          // silencia, =enforce lo bloquea. Soft nunca interrumpe la herramienta.
+          if (tool === "bash" || tool === "sh") {
+            try {
+              const disc = evaluateDiscovery(tool, input?.args || input?.parameters || output?.args || {});
+              if (disc && disc.nudge) {
+                const mode = process.env.WAM_READ_DELEGATION || "warn";
+                if (mode === "enforce") {
+                  throw new WamPolicyBlock(disc.nudge, {
+                    tool, reason: "cqe-first-discovery", level: "BLOCKED", source: "discovery-classifier",
+                  });
+                } else if (mode === "warn") {
+                  input.output = disc.nudge;
+                  wamLog(`[wait-a-minute] CQE-FIRST NUDGE (${tool}): ${disc.nudge}`);
+                }
+              }
+            } catch (err) {
+              if (err?.wamPolicyBlock) throw err;
+              // Fail open: clasificación rota nunca bloquea la herramienta.
+            }
+          }
 
         if (st?.phase !== "ASKING") return;
         // git read-only (status/diff/log) es investigación: permitido aun en ASKING.
@@ -1958,29 +2026,25 @@ const waitAMinute = {
       "/wam contract approve → aprobar | /wam compress → resumen terse",
     ];
 
-    if (ctx) {
+if (ctx) {
       const text = validationLines.filter((l) => l !== false).join("\n") + "\n";
-      if (Array.isArray(ctx.parts)) {
-        ctx.parts.unshift({
-          id: genPartId(),
-          type: "text",
-          text,
-          synthetic: true,
-          ...(meta.sessionID ? { sessionID: meta.sessionID } : {}),
-          ...(meta.messageID ? { messageID: meta.messageID } : {}),
-        });
-        
-        // Agregar directiva clara de ejecución
-        ctx.parts.push({
-          id: genPartId(),
-          type: "text",
-          text: `\n[wam: fase ${analysis.phase || "IMPLEMENTING"} → ${analysis.nextAction || "continuar"}]`,
-          synthetic: true,
-          ...(meta.sessionID ? { sessionID: meta.sessionID } : {}),
-          ...(meta.messageID ? { messageID: meta.messageID } : {}),
-        });
-      } else if (ctx.system) {
-        ctx.system.unshift({ id: genPartId(), type: "text", text, synthetic: true });
+      const emitMeta = {
+        ...(meta.sessionID ? { sessionID: meta.sessionID } : {}),
+        ...(meta.messageID ? { messageID: meta.messageID } : {}),
+        ...(analysis.phase ? { phase: analysis.phase } : {}),
+      };
+
+      // Inyectar contrato/directiva vía emitTextPart para garantizar prefijo [wam] y metadata.wam=true
+      if (Array.isArray(ctx.parts) || Array.isArray(ctx.system) ||
+          Array.isArray(ctx?.message?.parts) || Array.isArray(ctx?.message?.system)) {
+        emitTextPart(ctx, text, emitMeta);
+        emitTextPart(
+          ctx,
+          `\nfase ${analysis.phase || "IMPLEMENTING"} → ${analysis.nextAction || "continuar"}`,
+          emitMeta
+        );
+      } else {
+        wamWarn(`[WAM] injectValidationContext: no valid sink (parts/system) for injection`);
       }
     }
 

@@ -200,9 +200,9 @@ describe("WAM vs no-WAM offline A/B (mock provider)", () => {
     );
   });
 
-  it("T2: baseline dumps the full graph with [Type:] markers; WAM is shorter; both end with the task", () => {
+  it("T2: baseline dumps the full graph with [Type:] markers; WAM is shorter; both end with the task", async () => {
     const baseText = buildBaselineRequest(turn).messages[0].content;
-    const wamText = buildWamRequest(scenario, turn).messages[0].content;
+    const wamText = (await buildWamRequest(scenario, turn)).messages[0].content;
 
     assert.ok(baseText.length > wamText.length, "baseline prompt must be longer than WAM prompt");
     assert.ok(

@@ -26,10 +26,16 @@ test("extractPrompt ignores synthetic WAM parts", () => {
   assert.equal(extractPrompt(input, {}), "real user text");
 });
 
-test("extractPrompt never reads output.parts", () => {
+test("extractPrompt never reads SYNTHETIC output.parts (no autoconsumo)", () => {
+  const input = { message: { parts: [] } };
+  const output = { parts: [tagWamPart({ type: "text", text: "synthetic" }, { messageID: "m1" })] };
+  assert.equal(extractPrompt(input, output), "");
+});
+
+test("extractPrompt reads non-synthetic output.parts (forma 1.19)", () => {
   const input = { message: { parts: [] } };
   const output = { parts: [{ type: "text", text: "from output" }] };
-  assert.equal(extractPrompt(input, output), "");
+  assert.equal(extractPrompt(input, output), "from output");
 });
 
 test("extractPrompt falls back to input.text", () => {

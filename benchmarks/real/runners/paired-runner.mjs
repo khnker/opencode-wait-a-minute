@@ -31,8 +31,8 @@ export function buildBaselineRequest(turn) {
 }
 
 /** Build the WAM request: optimized minimal context assembled via WAM engine + user prompt. */
-export function buildWamRequest(scenario, turn) {
-  const assembly = assembleContext({
+export async function buildWamRequest(scenario, turn) {
+  const assembly = await assembleContext({
     prompt: turn.prompt,
     taskId: scenario.id,
     ...turn.input,
@@ -70,7 +70,7 @@ export async function runPairedScenario({ scenario, provider }) {
     // Rule 1 + 2: the request is rebuilt from scenario state for BOTH arms.
     // Nothing produced by the baseline arm is ever reachable from here.
     const baseline = await provider.complete(buildBaselineRequest(turn));
-    const wam = await provider.complete(buildWamRequest(scenario, turn));
+    const wam = await provider.complete(await buildWamRequest(scenario, turn));
 
     const match = outcomeMatches(baseline?.text, wam?.text);
     results.push({ turnIndex, baseline, wam, outcomeMatch: match });

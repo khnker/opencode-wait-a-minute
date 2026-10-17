@@ -187,15 +187,25 @@ export function persistTaskState(taskId, state, root) {
 
   const dir = path.join(root || process.cwd(), ".wam", "tasks", taskId);
   if (!fileExists(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, "state.yaml"), JSON.stringify(state, null, 2));
+  fs.writeFileSync(path.join(dir, "task.json"), JSON.stringify(state, null, 2));
 }
 
 /**
  * Recupera estado de tarea
  */
 export function getTaskState(taskId, root) {
-  const file = path.join(root || process.cwd(), ".wam", "tasks", taskId, "state.yaml");
-  if (!fileExists(file)) return null;
+  // Try task.json first (new format), then fall back to state.yaml (legacy)
+  const taskJsonFile = path.join(root || process.cwd(), ".wam", "tasks", taskId, "task.json");
+  const stateYamlFile = path.join(root || process.cwd(), ".wam", "tasks", taskId, "state.yaml");
+  
+  let file = null;
+  if (fileExists(taskJsonFile)) {
+    file = taskJsonFile;
+  } else if (fileExists(stateYamlFile)) {
+    file = stateYamlFile;
+  }
+  
+  if (!file) return null;
   try {
     return JSON.parse(readFileSafely(file));
   } catch {

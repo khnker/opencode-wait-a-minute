@@ -26,7 +26,7 @@ test("Collector basic functionality", () => {
   assert.strictEqual(col.snapshot().Mandatory_items, 0);
 });
 
-test("assembleContext additive property", () => {
+test("assembleContext additive property", async () => {
   const params = {
     prompt: "test prompt",
     taskId: "t-1",
@@ -34,9 +34,9 @@ test("assembleContext additive property", () => {
     budget: 1000
   };
 
-  const resNoCol = assembleContext(params);
+  const resNoCol = await assembleContext(params);
   const col = createCollector();
-  const resCol = assembleContext({ ...params, collector: col });
+  const resCol = await assembleContext({ ...params, collector: col });
 
   // Behavior must be identical
   assert.deepStrictEqual(resNoCol, resCol, "assembleContext output must be identical with/without collector");

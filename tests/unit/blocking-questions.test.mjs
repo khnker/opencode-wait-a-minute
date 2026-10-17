@@ -11,7 +11,7 @@ import fs from "node:fs";
 import pluginDefault from "../../index.js";
 
 function stateFile(taskId) {
-  return path.join(process.cwd(), ".wam", "tasks", taskId, "state.yaml");
+  return path.join(process.cwd(), ".wam", "tasks", taskId, "task.json");
 }
 function readState(taskId) {
   return JSON.parse(fs.readFileSync(stateFile(taskId), "utf-8"));
@@ -63,7 +63,7 @@ test("R5: /wam answer resuelve → PROPOSED → approve → IMPLEMENTING", async
   await hooks["command.execute.before"]({ command: "wam", arguments: `task switch ${taskId}` }, { parts: [] });
   const out = { parts: [] };
   await hooks["command.execute.before"]({ command: "wam", arguments: "answer U1 migrar" }, out);
-  const res = JSON.parse(out.parts[0].text);
+  const res = JSON.parse(out.parts[0].text.replace(/^\[wam\] /, ""));
   assert.equal(res.ok, true, "respuesta registrada");
   const st = readState(taskId);
   assert.equal(st.phase, "PROPOSED", "vuelve a PROPOSED tras responder");

@@ -1,0 +1,2073 @@
+import { analyze, getTaskState, persistTaskState, routeSkillsV2, loadSkillOnDemand, cavemanify, estimateTokens, buildAssumptions, escalateAssumptions, formatBacklog, findDuplicateTask } from "./src/skills/engine.js";
+import { startExperiment, noteSuccess, noteFailure } from "./src/execution/execution-engine.js";
+import { migrateLegacyCognition } from "./src/cognition/cognition-store.js";
+import { handleMessage } from "./src/integration/message-handler.js";
+import { injectWamParts } from "./src/integration/part-provenance.js";
+import { loadWamConfig } from "./src/config/wam-config.js";
+import { configureLogger } from "./src/integration/logger.js";
+import { setLoggingEnabled, setDebugEnabled, registerLogicGate, wamDebug, wamLog, wamWarn, wamError } from "./src/shared/wam-log.js";
+import { evaluateCompletionGate, applyPhaseTransition } from "./src/integration/orchestration.js";
+import { loadPrompt } from "./src/prompts/loader.js";
+
+import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
+import { purgeTasks } from "./src/persistence/retention-manager.js";
+import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, selectContextWithCqe, detectFileSearchIntent, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules } from "./src/context/context.js";
+import { assembleContext } from "./src/context/assembly.js";
+import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./src/verification/verification.js";
+import { ContextDecisionTracer } from "./src/context/context-decision-audit.js";
+import { guardAction } from "./src/execution/runtime-guards.js";
+import { WamPolicyBlock, evaluateAction } from "./src/policy/risk-engine.js";
+import { enforceGovernance, enforceReadDelegation } from "./src/policy/governance-enforcement.js";
+import { evaluateDiscovery } from "./src/policy/discovery-classifier.js";
+import { classifyByCapabilities, buildCandidate } from "./src/policy/strategy-capabilities.js";
+import { getStatusReport } from "./src/execution/execution-state.js";
+import { createSnapshot, checkContinuation, rebuildScope } from "./src/context/context-snapshot.js";
+import fs from "node:fs";
+import path from "node:path";
+
+const sessionExecutions = new Map();
+
+const SAFE_READ_TOOLS = new Set(["read", "read_file", "list_directory", "list_files", "get_file"]);
+
+function isSafeReadTool(tool) {
+  const normalized = String(tool || "").toLowerCase();
+  if (SAFE_READ_TOOLS instanceof Set) return SAFE_READ_TOOLS.has(normalized);
+  if (SAFE_READ_TOOLS?.length) return SAFE_READ_TOOLS.some((t) => t?.toLowerCase() === normalized);
+  return ["read", "read_file", "list_directory", "list_files", "get_file"].includes(normalized);
+}
+
+function inferExpectedObservation(tool, args, requirement) {
+  const operation = String(tool || "").toLowerCase();
+  const outcomeType = inferOutcomeType(operation, args);
+
+  if (requirement) {
+    return {
+      requirementId: requirement.id,
+      outcomeType,
+      expected: {
+        status: "success",
+        exitCode: 0,
+      },
+    };
+  }
+
+  if (operation.includes("read") || operation.includes("list") || operation.includes("inspect")) {
+    return { outcomeType, expected: null };
+  }
+
+  if (operation.includes("write") || operation.includes("edit") || operation.includes("apply") || operation.includes("run") || operation.includes("test")) {
+    return {
+      outcomeType,
+      expected: {
+        status: "success",
+        exitCode: 0,
+      },
+    };
+  }
+
+  return { outcomeType, expected: null };
+}
+
+function inferOutcomeType(operation, args) {
+  if (operation.includes("run") || operation.includes("exec") || operation.includes("bash")) return "command_execution";
+  if (operation.includes("test")) return "test_execution";
+  if (operation.includes("write") || operation.includes("edit") || operation.includes("apply")) return "file_modification";
+  if (operation.includes("read") || operation.includes("list") || operation.includes("inspect")) return "file_inspection";
+  if (operation.includes("search") || operation.includes("grep")) return "search";
+  return "unknown";
+}
+
+async function bridgeExecution({ taskId, taskRoot, state, tool, args, callID, sessionID }) {
+  if (!callID) {
+    callID = `${sessionID || getSessionId()}__exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+  const resolvedTaskRoot = taskRoot;
+  const resolvedTaskId = taskId;
+  const resolvedTool = tool;
+  const resolvedArgs = args || {};
+  const resolvedState = state || {};
+  const requirements = Array.isArray(resolvedState.requirements) ? resolvedState.requirements : [];
+  const requirement = requirements.find((item) => item?.status !== "done" && item?.status !== "verified") || requirements[0] || null;
+  const contractApproved = resolvedState.contract?.status === "APPROVED";
+  const phase = resolvedState.phase;
+
+  if (!taskId || !taskRoot || !tool || (!contractApproved && !["IMPLEMENTING", "VERIFYING"].includes(phase)) || isSafeReadTool(tool)) {
+    return;
+  }
+
+  const requirementText = requirement?.title || requirement?.description || requirement?.text || null;
+  const hypothesisStatement = requirementText ? `${requirement.id || "req"}: ${requirementText}` : `${tool} ${JSON.stringify(args)}`;
+  try {
+    const result = await startExperiment(taskRoot, taskId, {
+      statement: hypothesisStatement,
+      tool,
+      args,
+      expectedObservation: inferExpectedObservation(tool, args, requirement),
+      confidence: 0.5,
+    });
+
+    if (!result?.ok || !result.hypothesis || !result.experiment) {
+      wamLog(`[wait-a-minute] No se pudo iniciar el experimento para ${tool}: ${result?.guard?.reason || "sin resultado"}`);
+      return;
+    }
+
+    const key = callID || `${sessionID}:${tool}`;
+    const mapping = {
+      hypothesisId: result.hypothesis.id,
+      experimentId: result.experiment.id,
+      requirementId: requirement?.id || null,
+    };
+    sessionExecutions.set(key, mapping);
+    return {
+      ok: true,
+      callID: key,
+      hypothesisId: result.hypothesis.id,
+      experimentId: result.experiment.id,
+      requirementId: requirement?.id || null,
+    };
+  } catch (error) {
+    wamLog(`[wait-a-minute] Falló el puente de ejecución para ${tool}: ${error.message}`);
+  }
+}
+
+/**
+ * Wait a Minute plugin for OpenCode.
+ *
+ * Adds deterministic control, task-state management, context enrichment, and
+ * token optimization to OpenCode agents by correlating tasks, skills, context,
+ * evidence, and verified state to determine what should happen next.
+ *
+ * Intercepts the prompt via chat.message hook before skill resolution and
+ * agent execution. Classifies the request, inspects the project, detects
+ * assumptions, and selects relevant skills.
+ *
+ * The analysis results are stored in the session and can be accessed by the
+ * main agent before proceeding with implementation.
+ */
+
+const DEFAULT_CONFIG = {
+  tierCaps: { fast: 8, medium: 5, heavy: 3 },
+  activePreset: "omni",
+  silent: false,
+  budgetTokens: 64000,
+  contextBudget: 32000,
+  tierPrompts: {},
+};
+
+// opencode 1.18.25: chat.message output = { message, parts } (sin .system).
+// Cada part debe incluir un id único (formato prt_...) o el mensaje falla al guardar
+// (SchemaError: Missing key at ["part"]["id"]), bloqueando la sesión.
+function genPartId() {
+  let s = "prt_";
+  while (s.length < 16) s += Math.floor(Math.random() * 16).toString(16);
+  return s;
+}
+
+// Inyecta texto visible al frente del mensaje de usuario; fallback a .system (API vieja).
+function emitTextPart(output, text, meta = {}) {
+  if (!output) return { status: "error", reason: "no-output" };
+  let prefixedText = `[wam] ${text}`;
+  if (meta.phase) {
+    prefixedText += ` Etapa actual: ${meta.phase}.`;
+  }
+  const part = {
+    id: genPartId(),
+    type: "text",
+    text: prefixedText,
+    ...(meta.sessionID ? { sessionID: meta.sessionID } : {}),
+    ...(meta.messageID ? { messageID: meta.messageID } : {}),
+  };
+  // Support both shapes: output.parts/system or output.message.parts/system
+  let sink = null;
+  if (Array.isArray(output?.parts)) {
+    sink = output.parts;
+  } else if (Array.isArray(output?.system)) {
+    sink = output.system;
+  } else if (Array.isArray(output?.message?.parts)) {
+    sink = output.message.parts;
+  } else if (Array.isArray(output?.message?.system)) {
+    sink = output.message.system;
+  }
+  if (!sink) {
+    wamWarn(`[WAM] emitTextPart: no valid sink (parts/system) for injection`);
+    return { status: "unsupported-output-shape", reason: "missing-parts-or-system" };
+  }
+  injectWamParts(output, [part], { messageID: meta.messageID, phase: "emit", idFactory: genPartId, position: "prepend" });
+  return { status: "inserted" };
+}
+
+// -- v1-enforcement: estado durable, contrato y progreso --------
+
+function truncate(text, max = 80) {
+  if (!text || text.length <= max) return text || "";
+  return text.slice(0, max - 3) + "...";
+}
+
+function nextActionFrom(state) {
+  const pending = (state?.requirements || []).find((r) => !["done", "verified"].includes(r.status));
+  if (pending) return `Implementar ${truncate(pending.title)} (${pending.id} ${pending.status})`;
+  const unverified = (state?.requirements || []).find((r) => r.status === "done");
+  if (unverified) return `Verificar ${truncate(unverified.title)} — /wam progress ${unverified.id} verified <evidencia>`;
+  if (state?.requirements?.length) return "Verificar requisitos completos antes de DONE";
+  return "Continuar tarea";
+}
+
+const BLOCKED_TOOLS = new Set(["write", "edit", "bash", "task", "todowrite", "pty_spawn", "pty_write", "pty_kill"]);
+
+// git de solo lectura (status/diff/log/...) es investigación read-only:
+// nunca requiere run-loop ni delegación — permitido aun en ASKING.
+const READONLY_GIT_RE = /^\s*git\s+(status|diff|log|show|ls-files|branch|stash\s+list|remote\s+-v|rev-parse|ls-remote)\b/;
+
+function bashCommandOf(input) {
+  const c = input?.args?.command ?? input?.params?.command ?? input?.input?.command ?? "";
+  if (typeof c === "string" && c.trim()) return c;
+  try {
+    for (const v of Object.values(input?.args ?? {})) {
+      if (typeof v === "string" && /^\s*git\s+/m.test(v)) return v;
+    }
+  } catch {}
+  return "";
+}
+
+/**
+ * Archivos objetivo declarados por un tool de escritura (write/edit/apply_patch).
+ * Fallback de `declaredFiles` para que el escape "trivial" del governance gate
+ * sea alcanzable cuando el contrato todavia no declara archivos.
+ */
+function targetFilesOf(input) {
+  const args = input?.args || input?.parameters || {};
+  const p = args?.filePath || args?.path || args?.file || args?.file_path || args?.target;
+  return p ? [String(p)] : [];
+}
+
+const ACTIVE_FILE = (root) => path.join(root || process.cwd(), ".wam", "active-task");
+
+function readActiveTaskId(root) {
+  try {
+    const v = fs.readFileSync(ACTIVE_FILE(root), "utf-8").trim();
+    if (!v) return null;
+    try {
+      const j = JSON.parse(v);
+      if (j && typeof j === "object" && j.id) return j.id;
+    } catch {}
+    return v;
+  } catch {
+    return null;
+  }
+}
+
+function readActiveTaskRecord(root) {
+  try {
+    const raw = fs.readFileSync(ACTIVE_FILE(root), "utf-8").trim();
+    if (!raw) return null;
+    try {
+      const j = JSON.parse(raw);
+      if (j && j.id && typeof j.ts === "number") return j;
+    } catch {}
+    return { id: raw, ts: 0 };
+  } catch {
+    return null;
+  }
+}
+
+
+
+function writeActiveTaskId(id, root, options = {}) {
+  // Ownership: include sessionId + projectRoot + ts for session isolation.
+  // Legacy format {id,ts} remains readable; new format adds ownership fields.
+  const payload = {
+    id,
+    ts: Date.now(),
+    sessionId: options.sessionId || null,
+    projectRoot: options.projectRoot || root || process.cwd(),
+  };
+  try {
+    fs.mkdirSync(path.dirname(ACTIVE_FILE(root)), { recursive: true });
+    fs.writeFileSync(ACTIVE_FILE(root), JSON.stringify(payload));
+  } catch (err) {
+    // Critical write: surface error to caller for handling — never silent
+    wamError(`[WAM] writeActiveTaskId failed for ${id} at ${root}:`, err.message);
+    throw err;
+  }
+}
+
+function listTaskIds(root) {
+  const dir = path.join(root || process.cwd(), ".wam", "tasks");
+  try {
+    return fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+  } catch {
+    return [];
+  }
+}
+
+// -- Persistencia por sesión: N sesiones pueden trabajar la MISMA carpeta sin
+// colisionar en default-task / task-context.md / active-task. ----------------
+const GENERIC_TASK = /^(default-task|task|general|)$/;
+// Longitud máxima del slug derivado del prompt (task-<slug> => 5 + N)
+const MAX_SLUG_LEN = 48;
+// Prompts de continuación/cortos: "sigue", "continua", vacíos, genéricos o
+// mensajes de ejecución de herramientas. NUNCA deben derivar un nuevo task id
+// descriptivo; reutilizan la tarea cacheada de la sessión o la activa fresca,
+// y solo si nada existe recurren al namespace de sessión (fallback graceful).
+const CONTINUATION_RE = /^(sigue|sigues|sigamos|siguiente|continua|continuas|continuemos|continuar|continuará|retoma|retomas|retomar|seguir|continue|continues|continuing|proceed|go on|next|ok|okay|yes|ya|listo|dale|vamos|finish|finished|done|wait|wam)\b/i;
+
+/**
+ * Convierte el texto del prompt del usuario en un slug descriptivo para el
+ * task id automático: `task-<slug>`. Evita que la tarea caiga en el namespace
+ * monolítico `ses-<sessionID>` o `default-task`, que mezcla state entre
+ * conversaciones distintas del mismo proyecto.
+ *
+ * Reglas:
+ *   - minúsculas, sin acentos, solo [a-z0-9-], longitud acotada (<=48)
+ *   - si el texto es vacío/generic → null (el caller decide fallback)
+ *   - si el slug resultante es genérico (una palabra común) → null
+ *
+ * @param {string} text - texto del prompt del usuario
+ * @returns {string|null} slug sin prefijo `task-`, o null si no es usable
+ */
+function slugifyTaskPrompt(text) {
+  if (typeof text !== "string") return null;
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.length < 4) return null;
+  // Heurística: si el texto es solo comandos/ops sin sustantivo → no slugificar
+  if (/^(\/[\w-]+(\s+|$))/.test(trimmed)) {
+    // un solo comando sin argumentos descriptivos → no usable
+    if (trimmed.split(/\s+/).length < 3) return null;
+  }
+  const slug = trimmed
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // quita diacríticos
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  if (!slug || slug.length < 4) return null;
+  if (slug.length > MAX_SLUG_LEN) {
+    // Cortar en límite de palabra para no dejar media palabra al final
+    const cut = slug.slice(0, MAX_SLUG_LEN);
+    const lastHyphen = cut.lastIndexOf("-");
+    return (lastHyphen > 0 ? cut.slice(0, lastHyphen) : cut).replace(/-$/, "");
+  }
+  // Rechazar slugs genéricos de una palabra común
+  if (GENERIC_SLUGS.has(slug)) return null;
+  return slug;
+}
+
+// Palabras que, solas, no describen una tarea
+const GENERIC_SLUGS = new Set([
+  "hola", "hello", "hi", "hey", "ok", "okay", "yes", "no", "test",
+  "run", "go", "start", "stop", "help", "what", "how", "why", "the",
+  "and", "for", "with", "from", "this", "that", "fix", "make", "do",
+  "add", "use", "get", "set", "see", "try", "can", "will", "should",
+]);
+
+function readActiveTaskIdFresh(root, options = {}) {
+  const rec = readActiveTaskRecord(root);
+  if (!rec) return null;
+  // Session-owned binding: the record belongs to THIS session, so it never
+  // goes stale — 1 sesión = 1 task, sobrevive restarts. Solo se abandona por
+  // apertura explícita (/wam task switch), cambio de contexto o sesión nueva.
+  if (options.sessionId && rec.sessionId && rec.sessionId === options.sessionId) {
+    if (options.projectRoot && rec.projectRoot && rec.projectRoot !== root) return null;
+    return rec.id;
+  }
+  const ttlMs = options.ttlMs || 60000;
+  if (!rec.ts) return null;
+  if (Date.now() - rec.ts > ttlMs) return null;
+  // Validate ownership: if record has sessionId, it must match caller session;
+  // if record has projectRoot, it must match caller's root. This prevents
+  // session A from silently adopting session B's active-task.
+  if (options.sessionId && rec.sessionId && rec.sessionId !== options.sessionId) return null;
+  if (options.projectRoot && rec.projectRoot && rec.projectRoot !== root) return null;
+  return rec.id;
+}
+
+/**
+ * taskId efectivo de WAM para un mensaje (regla: 1 sesión = 1 task):
+ * - input.taskId explícito y específico (conversación de opencode) → se usa tal cual
+ * - taskId conocido en sessionTasks (cache de chat.message) → ese
+ * - active-task propio de la sesión (sin TTL cuando el sessionId coincide;
+ *   sobrevive restarts) → ese. Solo se abandona por apertura explícita
+ *   (/wam task switch), cambio de contexto detectado o sesión nueva.
+ * - prompt NO continuación y con sustantivo descriptivo → `task-<slug>` derivado
+ * - con sessionID conocida → namespace por sesión: ses-<sessionID>
+ * - sin sessionID y prompt vacío/genérico → "default-task" (último recurso)
+ *
+ * Devuelve `{ taskId, fallbackKind }` para que el caller pueda decidir si
+ * saluda al usuario cuando el resultado cayó en `default-task` o `session`.
+ *
+ * El active-task global con sessionId de OTRA sesión nunca se adopta
+ * (rechazo por ownership). Los registros legacy sin sessionId mantienen el
+ * TTL de 60s para no adoptar tareas obsoletas de sesiones previas.
+ */
+function effectiveTaskId(input, sessionTasks, wamRoot, promptText) {
+  // Priority 1: Explicit taskId (must not be generic)
+  if (input?.taskId && !GENERIC_TASK.test(input.taskId)) {
+    return { taskId: input.taskId, fallbackKind: "explicit" };
+  }
+  
+  // Priority 2: Session-specific cached task (strict session binding)
+  const cached = sessionTasks?.get?.(input?.sessionID);
+  if (cached) return { taskId: cached, fallbackKind: "cached" };
+  
+  // Priority 3: Session-owned active task (durable binding, no TTL when the
+  // sessionId matches — 1 sesión = 1 task, sobrevive restarts). Rejects
+  // records from other sessions — this is what stops a session from silently
+  // adopting another session's active task.
+  const fresh = readActiveTaskIdFresh(wamRoot, {
+    sessionId: input?.sessionID,
+    projectRoot: wamRoot,
+  });
+  if (fresh) return { taskId: fresh, fallbackKind: "active" };
+  
+  // Priority 4: Derive slug ONLY for new task creation (not continuation)
+  // Prompts NO continuación y con sustantivo descriptivo → derivar slug.
+  // Esto evita caer en default-task o ses-<id> cuando el usuario describió
+  // claramente una tarea específica (ej: "Implementar X en módulo Z").
+  if (promptText && !isContinuationPrompt(promptText)) {
+    const slug = slugifyTaskPrompt(promptText);
+    if (slug) {
+      // For slug-based tasks, bind to session to prevent cross-session sharing.
+      // Never silently fall back to "nosess" — that produces a task that no
+      // later session can re-bind to and breaks the persistence/approve path.
+      if (!input?.sessionID) {
+        // Keep the in-memory result stable but signal the caller that this
+        // is a degraded fallback. message-handler logs a warning when it
+        // sees slug-session-bound without sessionID.
+        return { taskId: `task-${slug}-sess-nosess`, fallbackKind: "slug-session-bound-nosession" };
+      }
+      return { taskId: `task-${slug}-sess-${input.sessionID.slice(-8)}`, fallbackKind: "slug-session-bound" };
+    }
+  }
+  
+  // Priority 5: Session-namespaced fallback (explicit session binding)
+  if (input?.sessionID) {
+    return { taskId: `ses-${input.sessionID}`, fallbackKind: "session" };
+  }
+  
+  // Último recurso: default-task. El caller debería saludar al usuario y
+  // pedirle que describa la tarea para sacarlo de este namespace genérico.
+  return { taskId: "default-task", fallbackKind: "default" };
+}
+/**
+ * Predicado puro: true cuando el prompt es de continuación, vacío, genérico
+ * o un mensaje de ejecución de herramienta. Estos no deben spawnear un nuevo
+ * task-<slug> descriptivo; reutilizan la tarea cacheada de la sessión o la
+ * activa fresca, y solo si nada existe recurren al namespace de sessión.
+ *
+ * @param {string} text - texto del prompt del usuario
+ * @returns {boolean}
+ */
+function isContinuationPrompt(text) {
+  if (typeof text !== "string") return true;
+  const trimmed = text.trim();
+  if (!trimmed) return true;
+  if (trimmed.length < 4) return true;
+  if (CONTINUATION_RE.test(trimmed)) return true;
+  // Mensajes de ejecución de herramienta (tool.execute.before): solo nombre
+  // de herramienta o salida técnica → no es una nueva tarea.
+  if (/^(tool|bash|read|write|edit|grep|glob|ls|node|npm|python|git)\b/i.test(trimmed)) return true;
+  if (/^\[tool\b/i.test(trimmed)) return true;
+  return false;
+}
+
+function taskDir(root, taskId) {
+  return path.join(root || process.cwd(), ".wam", "tasks", taskId);
+}
+
+function liveFileFor(root, taskId) {
+  return path.join(taskDir(root, taskId), "context.md");
+}
+
+function readLiveContext(root, taskId) {
+  const perSession = liveFileFor(root, taskId);
+  try {
+    if (fs.existsSync(perSession)) return fs.readFileSync(perSession, "utf-8").trim();
+  } catch {}
+  return "";
+}
+
+/**
+ * Live context por sesión: live snapshot en .wam/tasks/<taskId>/context.md.
+ * Aislado por task — dos sesiones sobre la misma carpeta NO se pisan el N2.
+ */
+function persistLiveContext(taskId, state, root) {
+  updateLiveContext(taskId, state, root);
+}
+
+// -- operational memory (memory.js): contexto inicial acelerador (spec §13) --
+
+function projectState(analysis) {
+  return {
+    contract: {
+      status: "PROPOSED",
+      rigor: analysis.completionContract?.rigor || "NORMAL",
+      requirements: analysis.completionContract?.requirements || [],
+      verification: analysis.completionContract?.verification || [],
+      constraints: analysis.completionContract?.constraints || [],
+      unknowns: analysis.completionContract?.unknowns || [],
+      assumptions: Array.isArray(analysis.assumptions)
+        ? analysis.assumptions
+        : buildAssumptions(analysis.assumed || []),
+    },
+    questions: [],
+    requirements: (analysis.completionContract?.requirements || []).map((title, i) => ({
+      id: `req-${i + 1}`,
+      title,
+      status: "pending",
+      evidence: [],
+    })),
+    persistentPolicies: (analysis.persistentPolicies || []).map((p) => p.policy),
+    activeGates: (analysis.persistentPolicies || []).flatMap((p) => p.gates || []),
+  };
+}
+
+
+function applyCompletionGate(state, promptText, taskId, waitAMinute, persistTaskState, nextActionFrom, root) {
+  const gate = waitAMinute.evaluateCompletionGate(state, promptText);
+  if (gate.blocked) {
+    state.phase = gate.verifying ? "VERIFYING" : "IMPLEMENTING";
+    state.nextAction = nextActionFrom(state);
+    persistTaskState(taskId, state, root);
+  } else if (gate.allDone) {
+    state.phase = "DONE";
+    state.nextAction = "Tarea completa — contrato verificado";
+    persistTaskState(taskId, state, root);
+  }
+  return gate;
+}
+
+/**
+ * Compresión automática de tarea (caveman-summary.md). Se genera en DONE
+ * (memoria comprimida para continuidad) y manualmente via /wam compress.
+ */
+function writeCavemanSummary(taskId, state, root, extra = "") {
+  const reqs = state?.requirements || [];
+  const pend = reqs.filter((r) => r.status !== "done" && r.status !== "verified").length;
+  const base = [
+    `task ${taskId} — ${state?.phase || "?"} / ${state?.contract?.status || "?"}`,
+    `req: ${pend}/${reqs.length} pend | next: ${state?.nextAction || "—"}`,
+  ];
+  const cav = cavemanify([...base, extra].filter(Boolean).join("\n"));
+  try {
+    const dir = path.join(root || process.cwd(), ".wam", "tasks", taskId);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "caveman-summary.md"), cav + "\n");
+  } catch {}
+  return cav;
+}
+
+
+function domainHint(text = "") {
+  const t = text.toLowerCase();
+  const hints = [];
+  if (/\bfrontend\b|\bfe\b|front-?end|\bui\b|button|componente|vista|pantalla|react|web\b/.test(t)) hints.push("frontend");
+  if (/backend|back-?end|\bapi\b|server|endpoint|base de datos|\bdb\b|database|nest|express|postgres|mongo/.test(t)) hints.push("backend");
+  if (/scrap|crawl|parser|puppeteer|playwright/.test(t)) hints.push("scraper");
+  if (/test|e2e|spec|coverage|unitario/.test(t)) hints.push("tests");
+  if (/security|seguridad|auth|token|jwt|credencial/.test(t)) hints.push("security");
+  return hints.length ? hints.join("+") : "";
+}
+
+/**
+ * Directiva de delegación para reqs pendientes de un contrato APPROVED:
+ * cada req → Task en paralelo con agente libre (el que el entorno tenga).
+ */
+function delegationLines(state) {
+  const reqs = (state?.requirements || []).filter((r) => r.status !== "done" && r.status !== "verified");
+  if (!reqs.length || state?.contract?.status !== "APPROVED") return [];
+  const lines = [
+    loadPrompt("injection.delegation"),
+  ];
+  const visible = reqs.slice(0, MAX_VISIBLE_REQS);
+  const overflow = reqs.length - MAX_VISIBLE_REQS;
+  for (const r of visible) {
+    const hint = domainHint(r.title);
+    lines.push(loadPrompt("injection.delegation_item", { id: r.id, title: truncate(r.title, 120), hint: hint ? ` [contexto: ${hint}]` : "" }));
+  }
+  if (overflow > 0) {
+    lines.push(loadPrompt("injection.delegation_overflow", { count: overflow }));
+  }
+  return lines;
+}
+
+const MAX_VISIBLE_REQS = 8;
+
+/**
+ * Strategy Continuity: classify whether an action is covered by an active
+ * approved strategy. Used by tool.execute.before to avoid asking for
+ * per-step approval for actions that are ordinary execution of an
+ * already-approved strategy.
+ *
+ * Returns:
+ *   { covered: true,  reason }       → action proceeds without re-approval
+ *   { covered: false, reason }       → action requires explicit user decision
+ *   { covered: null,  reason }       → no active strategy, fall through to default logic
+ */
+function classifyActionAgainstStrategy(action, tool, args, approvedStrategy) {
+  if (!approvedStrategy || approvedStrategy.status !== "ACTIVE") return { covered: null, reason: "No active approved strategy" }; // Self-contained capability matching (extracted by autonomy-behavior-suite.test.mjs via `new Function(...)`, so this body must not reference external symbols and must avoid inner `\n}` that would prematurely terminate the regex match).
+  const actionStr = String(action || "").trim();
+  const toolStr = String(tool || "").trim();
+  const argv = (args && Array.isArray(args.argv)) ? args.argv : (args && typeof args.command === "string" ? args.command.split(/\s+/) : []);
+  const executable = toolStr === "bash" ? String(args && args.command || "").split(/\s+/)[0] : toolStr;
+  const candidate = { action: actionStr, tool: toolStr, executable: args };
+  const toCapability = (s) => { const str = String(s || "").trim(); const parts = str.split(/\s+/).filter(Boolean); if (parts.length === 0) return null; if (parts.length === 1) return { capability: "action.execute", action: parts[0] }; return { capability: "command.execute", executable: parts[0], argsPattern: parts.slice(1) }; };
+  const allowedCaps = (approvedStrategy.allowedActions || []).map(toCapability).filter(Boolean);
+  const prohibitedCaps = (approvedStrategy.prohibitedActions || []).map(toCapability).filter(Boolean);
+  // Canonical structured classifier (./src/policy/strategy-capabilities.js). In normal
+  // module scope these are imported; when this function is extracted via `new Function`
+  // (autonomy-behavior-suite.test.mjs) they are absent, so the `typeof` guards fall
+  // through to the equivalent inline matcher below (kept self-contained on purpose).
+  if (typeof classifyByCapabilities === "function" && typeof buildCandidate === "function") {
+    const builtCandidate = buildCandidate({ action: actionStr, tool: toolStr, args: args || {} });
+    const verdict = classifyByCapabilities(builtCandidate, { allowed: allowedCaps, prohibited: prohibitedCaps });
+    if (verdict && verdict.allowed === true) return { covered: true, reason: "Acción cubierta por strategy activa" };
+    if (allowedCaps.length === 0) return { covered: false, reason: "Acción no cubierta por capabilities estructuradas de la strategy" };
+    return { covered: false, reason: (verdict && verdict.reason) || "Acción no cubierta por strategy activa" };
+  }
+  const matchCapability = (cap, cand) => { if (!cap) return false; if (cap.capability === "action.execute") return cap.action === cand.action || cap.action === cand.tool; if (cap.capability === "command.execute") { if (cap.executable && cap.executable !== cand.executable) return false; if (Array.isArray(cap.argsPattern)) { for (let i = 0; i < cap.argsPattern.length; i++) { if (cap.argsPattern[i] !== cand.args[i]) return false; } } return true; } return false; };
+  const isProhibited = prohibitedCaps.some((cap) => matchCapability(cap, candidate));
+  const isAllowed = allowedCaps.some((cap) => matchCapability(cap, candidate));
+  if (isProhibited) return { covered: false, reason: "Acción prohibida explícitamente en strategy" };
+  if (allowedCaps.length === 0) return { covered: false, reason: "Acción no cubierta por capabilities estructuradas de la strategy" };
+  if (isAllowed) return { covered: true, reason: "Acción cubierta por strategy activa" };
+  return { covered: false, reason: "Acción no cubierta por strategy activa" };
+}
+
+// (Legacy substring-matching path removed. Strategy continuity is now evaluated
+//  against structured capabilities in ./src/policy/strategy-capabilities.js so that
+//  "npm test" cannot accidentally cover "npm publish" or "npm install <pkg>".)
+
+/**
+ * Evidence-Guided Recovery: classify a failure so the agent must diagnose
+ * before proposing a strategic change.
+ *
+ * Returns a category hint. Provisional, MUST NOT be treated as fact.
+ */
+function classifyFailure(result, expected, observed) {
+  const obs = String(observed || "").toLowerCase();
+  const res = String(result || "").toLowerCase();
+
+  if (/timeout|timed out/.test(obs)) return { category: "TIMING", priority: 2 };
+  if (/403|401|307|blocked|captcha|perimeterx|big-ip/.test(obs)) return { category: "ANTI_BOT", priority: 8 };
+  if (/enotfound|econnrefused|network/.test(obs)) return { category: "NETWORK", priority: 1 };
+  if (/0 products|empty|no results|not found/.test(obs)) return { category: "ZERO_RESULT", priority: 3 };
+  if (/selector|element not found|null/.test(obs)) return { category: "SELECTOR", priority: 4 };
+  if (/chromium|browser|executable/.test(obs)) return { category: "BROWSER_RUNTIME", priority: 5 };
+  if (/dependency|module not found|cannot find/.test(obs)) return { category: "DEPENDENCY", priority: 1 };
+  if (/permission denied|eacces/.test(obs)) return { category: "ENVIRONMENT", priority: 2 };
+  if (/parse|json|syntax/.test(obs)) return { category: "PARSER", priority: 4 };
+
+  return { category: "UNKNOWN", priority: 10 };
+}
+
+/**
+ * Reference Evidence Priority: load known-good references for the current
+ * task domain. Used in context assembly to anchor the agent to proven
+ * implementations instead of letting it invent alternatives.
+ */
+function loadReferenceEvidence(taskRoot, intent) {
+  const refsFile = path.join(taskRoot || "", ".wam", "references.json");
+  if (!fs.existsSync(refsFile)) return [];
+  try {
+    const refs = JSON.parse(fs.readFileSync(refsFile, "utf-8"));
+    const goal = String(intent?.goal || intent?.classification || "").toLowerCase();
+    return (refs.references || []).filter((r) => {
+      const targets = (r.targets || []).map((t) => t.toLowerCase());
+      return targets.some((t) => goal.includes(t)) || goal.length === 0;
+    });
+  } catch {
+    return [];
+  }
+}
+
+function prepareSystemInject(analysis, state, cfg, projectDirectory, waitAMinute, taskId) {
+  // WAM injects objective + remaining requirements as advisory state.
+  // The agent implements EXACTLY what the user asked — no strategy deviation,
+  // no "decide your own approach". Only ambiguity triggers clarification.
+  const inject = [];
+  const reqs = state.requirements || [];
+  const pend = reqs.filter((r) => r.status !== "done");
+  const objective = state.contract?.objective || analysis.intent?.goal || null;
+
+  // Silence for trivial/fast: no inject noise.
+  if (analysis.intent?.classification === "trivial" || analysis.strategy === "FAST") {
+    return inject;
+  }
+
+  // Once: contract display, then contractDisplayed flips. After that the agent
+  // already has the objective in working memory — no need to repeat.
+  if (state.phase === "PROPOSED" && !state.contractDisplayed) {
+    const visible = reqs.slice(0, MAX_VISIBLE_REQS);
+    const overflow = reqs.length - MAX_VISIBLE_REQS;
+    inject.push(
+      `Objective: ${objective || "pending"}`,
+      `Remaining (${pend.length}/${reqs.length}):`,
+      ...visible.map((r) => `  - ${truncate(r.title, 120)}`),
+      ...(overflow > 0 ? [`  ...(+${overflow} more)`] : [])
+    );
+    state.contractDisplayed = true;
+  }
+
+  return inject;
+}
+
+/**
+ * Plugin factory — loaded by OpenCode when registered in opencode.jsonc.
+ * Autocontained: no external deps beyond ./engine.js.
+ */
+const WaitAMinutePlugin = async (pluginInput) => {
+  let cfg = { ...DEFAULT_CONFIG };
+
+  // Per-plugin-instance session store
+  const sessionStore = new Map();
+
+  // Project directory (opencode 1.18.25: plugin input, not ctx)
+  const projectDirectory = pluginInput?.directory || process.cwd();
+
+  // Runtime configuration (.wam/config.json + WAM_* env). Source of truth:
+  // src/config/wam-config.js. Gates skill injection, logging and governance.
+  const wamConfig = loadWamConfig(projectDirectory);
+  configureLogger({ enabled: wamConfig.logging });
+  setLoggingEnabled(wamConfig.logging);
+  setDebugEnabled(wamConfig.debug);
+  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement, debug: wamConfig.debug };
+  // Audit which WAM logic gates are loaded so WAM_DEBUG=1 output is self-describing.
+  registerLogicGate("skills", { loaded: wamConfig.skills, source: "wam-config", note: "skill discovery/routing/injection" });
+  registerLogicGate("logging", { loaded: wamConfig.logging, source: "wam-config", note: "file + console log emission" });
+  registerLogicGate("enforcement", { loaded: wamConfig.enforcement, source: "wam-config", note: "governance/mutating-tool blocking" });
+  registerLogicGate("debug", { loaded: wamConfig.debug, source: "wam-config", note: "structured WAM-DEBUG traces" });
+
+  // Track if plugin is bypassed
+  let bypassed = false;
+
+  // Multi-repo: root real de cada sesión. La factory del plugin V1 es GLOBAL
+  // al server (pluginInput.directory = cwd donde se lanzó opencode), pero cada
+  // sesión tiene su propio directorio de trabajo (location.directory) — lo
+  // consultamos vía client.session.get para no depender del cwd del proceso.
+  const sessionRoots = new Map();
+  const sessionWamRoots = new Map(); // sessionID -> wamRoot resuelto en chat.message (unifica read/write del gate)
+  const sessionParents = new Map(); // sessionID → parentID (subagentes Task tienen parent)
+  const sessionResolved = new Set(); // sessionIDs cuyo parentID se resolvió (distingue main de subagente)
+  const processedMessages = new Map(); // messageID+kind → processed (chat.message idempotency)
+  const sessionTasks = new Map(); // sessionID → taskId activo visto en chat.message
+  const client = pluginInput?.client;
+
+  async function resolveSessionBase(sessionID) {
+    if (sessionRoots.has(sessionID)) return sessionRoots.get(sessionID);
+    let base = projectDirectory;
+    try {
+      const info = client?.session?.get && sessionID ? await client.session.get({ sessionID }) : null;
+      if (info?.location?.directory) base = info.location.directory;
+      const parent = info?.parentID || info?.parent_id || info?.parent?.id;
+      if (parent) sessionParents.set(sessionID, parent);
+      if (info) sessionResolved.add(sessionID);
+    } catch {
+      // fallback: cwd del server (sesión no resuelta → fail-open, no se gatea)
+    }
+    sessionRoots.set(sessionID, base);
+    return base;
+  }
+
+  // .wam root para esta sesión+mensaje: repo git objetivo de la sesión real.
+  const wamRootFor = async (sessionID, promptText) => {
+    const base = await resolveSessionBase(sessionID);
+    return resolveWamRoot(promptText, base);
+  };
+
+  // Al iniciar/retomar cualquier sesión la memoria .wam debe existir.
+  // initMemory es idempotente: crea .wam/context si falta, no fabrica nada.
+  const ensureWamMemory = async (sessionID, promptText) => {
+    const root = await wamRootFor(sessionID, promptText);
+    try {
+      initMemory(root);
+      try { purgeTasks(path.join(root, '.wam', 'tasks')); } catch (e) { wamError(`Retention purge failed: ${e}`); }
+    } catch {}
+    if (sessionID) sessionWamRoots.set(sessionID, root);
+    return root;
+  };
+
+/**
+ * Runs after tool.execute.before — persists success/failure to the
+ * cognition store via noteSuccess/noteFailure, reading experiment IDs
+ * from the sessionExecutions map (or input._wam* overrides) instead of
+ * input.hypothesisId which is never set by tool.execute.before.
+ */
+async function postToolExecution(input, output) {
+  const toolName = input?.tool || "";
+  try {
+    if (bypassed) return;
+    const sid = input?.sessionID;
+    const taskRoot = await resolveSessionBase(sid);
+    const taskId = sessionTasks.get(sid) || readActiveTaskIdFresh(taskRoot, { sessionId: sid, projectRoot: taskRoot }) || "default-task";
+    const wamRoot = taskRoot;
+    const key = input._wamCallID || input?.callID || `${sid}:${toolName}`;
+    const mapping = sessionExecutions.get(key) || {};
+
+    if (input?.tool && output?.error) {
+      try {
+        await noteFailure(wamRoot, taskId, {
+          hypothesisId: input._wamHypothesisId || mapping.hypothesisId || input.hypothesisId,
+          experimentId: input._wamExperimentId || mapping.experimentId || input.experimentId,
+          requirementId: input._wamRequirementId || mapping.requirementId || input.requirementId,
+          reason: output.error || "tool execution failed",
+          actual: output.actual,
+          unexpected: output.unexpected,
+          provenance: `agent-tool-${toolName}-failure`,
+        });
+      } catch (e) {
+        wamLog(`[wait-a-minute] postToolExecution noteFailure error:`, e.message);
+      }
+    } else if (input?.tool) {
+      try {
+        await noteSuccess(wamRoot, taskId, {
+          hypothesisId: input._wamHypothesisId || mapping.hypothesisId || input.hypothesisId,
+          experimentId: input._wamExperimentId || mapping.experimentId || input.experimentId,
+          requirementId: input._wamRequirementId || mapping.requirementId || input.requirementId,
+          result: output.result,
+          actual: output.actual,
+          unexpected: output.unexpected,
+          provenance: `agent-tool-${toolName}-success`,
+        });
+      } catch (e) {
+        wamLog(`[wait-a-minute] postToolExecution noteSuccess error:`, e.message);
+      }
+    }
+  } catch (err) {
+    wamError("[wait-a-minute] postToolExecution error:", err);
+  } finally {
+    const cleanupKey = input._wamCallID || input?.callID || `${input?.sessionID}:${toolName}`;
+    if (cleanupKey && cleanupKey !== `${input?.sessionID}:${toolName}`) {
+      sessionExecutions.delete(cleanupKey);
+    }
+  }
+}
+
+
+  // -------------------------------------------------------------------------
+  // opencode 1.18.25 plugin API: factory RETURNS the hooks object
+  // -------------------------------------------------------------------------
+  return {
+    // /wam commands are registered via opencode.jsonc "command" entries on startup,
+    // NOT via a plugin config hook (removed: plugin config hook mutated config and
+    // is incompatible with opencode 1.18.26+, causing `N.config` TypeError).
+
+    // Chat message hook — Persistence & Progress Gate.
+    // Slim adapter: delegates message processing to src/integration/message-handler.js.
+    "chat.message": (input, output) =>
+      handleMessage(input, output, {
+        bypassed,
+        sessionTasks,
+        sessionStore,
+        cfg,
+        resolveSessionBase,
+        wamRootFor,
+        ensureWamMemory,
+        effectiveTaskId,
+        isContinuationPrompt,
+        genPartId,
+        emitTextPart,
+        processedMessages,
+        readActiveTaskIdFresh,
+        writeActiveTaskId,
+        waitAMinute,
+        migrateLegacyCognition,
+        noteSuccess,
+        noteFailure,
+        getTaskState,
+        persistTaskState,
+        findDuplicateTask,
+        escalateAssumptions,
+        buildAssumptions,
+        initMemory,
+        updateProjectMemo,
+        updateLiveContext,
+        readLiveContext,
+        persistLiveContext,
+        assembleContext,
+        selectContextWithCqe,
+        detectFileSearchIntent,
+        createSnapshot,
+        checkContinuation,
+        rebuildScope,
+        getDecision,
+        recordDecision,
+        compactDecisions,
+        writeCavemanSummary,
+        truncate,
+        delegationLines,
+        updateTaskMemory,
+        addRecentChange,
+        closeSession,
+        getSessionId,
+        listCapsules,
+        getCapsule,
+        promoteCapsule,
+        selectContext,
+        selectContextWithCqe,
+        detectFileSearchIntent,
+        retrieveContext,
+        closeSession,
+        resolveWamRoot,
+        migrateLegacyCapsules,
+        assembleContext,
+        evaluateRequirement: evaluateRequirementChecks,
+        verifyRequirement,
+        ContextDecisionTracer,
+        guardAction,
+        WamPolicyBlock,
+        wamLog,
+        wamWarn,
+        wamError,
+        wamDebug,
+        closeSession,
+        getSessionId,
+        classifyAskingMessage,
+      }),
+
+    // Handle /wam CLI (opencode 1.18.25: commands arrive via command.execute.before)
+    "command.execute.before": async (input, output) => {
+      if (input.command !== "wam") return;
+      const sid = input.sessionID;
+      const root = await resolveSessionBase(sid);
+      const taskKey = sessionTasks.get(sid) || readActiveTaskIdFresh(root, { sessionId: sid, projectRoot: root }) || (sid ? `ses-${sid.slice(-10)}` : "default-task");
+      const argsArr = Array.isArray(input.arguments)
+        ? input.arguments
+        : (typeof input.arguments === "string" ? input.arguments.split(/\s+/) : []);
+      const wamText = await wamCli(argsArr, cfg, root, taskKey);
+      emitTextPart(output, wamText, { sessionID: sid, messageID: output.message?.id || input.messageID });
+    },
+
+    // Enforce Clarification Gate (spec change 4): en ASKING se bloquean las
+    // herramientas mutantes — la investigación read-only sigue permitida.
+    // Además captura el root real de la sesión desde los args de los tools
+    // (openmode web multi-proyecto: el cwd de la sesión llega por aquí, no
+    // por pluginInput.directory que es el cwd del proceso server).
+    "tool.execute.before": async (input, output) => {
+      let sid;
+      let taskRoot;
+      let taskId;
+      let st;
+      try {
+        if (bypassed) return;
+        sid = input?.sessionID;
+        // Mismo root que chat.message (wamRootFor/ensureWamMemory): si el gate
+        // leyera resolveSessionBase() y chat.message escribiera en otro root,
+        // el estado leido no coincidiria con el escrito (misfire o bypass).
+        taskRoot = sessionWamRoots.get(sid) || await resolveSessionBase(sid);
+        taskId = sessionTasks.get(sid) || readActiveTaskIdFresh(taskRoot, { sessionId: sid, projectRoot: taskRoot }) || (sid ? `ses-${sid.slice(-10)}` : "default-task");
+        st = getTaskState(taskId, taskRoot);
+        // Fallback: try the active task from disk if first lookup failed
+        if (!st && !sid) {
+          const activeId = readActiveTaskIdFresh(taskRoot, { projectRoot: taskRoot });
+          if (activeId && activeId !== taskId) {
+            taskId = activeId;
+            st = getTaskState(taskId, taskRoot);
+          }
+        }
+        const tool = input?.tool || "";
+        if (process.env.WAM_DEBUG_TE) {
+          wamLog(`[WAM-DEBUG-TE] sid=${sid} taskId=${taskId} phase=${st?.phase} tool=${tool}`);
+        }
+        if (process.env.WAM_DEBUG_TE) {
+          wamLog(`[WAM-DEBUG-TE-CHECK] phase=${st?.phase} tool=${tool} inBlocked=${BLOCKED_TOOLS.has(tool)} riskCheckWillPass`);
+        }
+
+
+        // Strategy Continuity: si hay estrategia aprobada, verificar si la acción
+        // está cubierta antes de proceder con la lógica de ASKING.
+        if (st?.approvedStrategy && st.approvedStrategy.status === "ACTIVE") {
+          const stratCheck = classifyActionAgainstStrategy(
+            input?.description || tool,
+            tool,
+            output?.args || input?.args || input?.parameters || {},
+            st.approvedStrategy
+          );
+          if (stratCheck.covered === true) {
+            // La acción está explícitamente cubierta por la estrategia aprobada.
+            // Loggear para observabilidad pero NO bloquear.
+            try {
+              sessionStore.set(`wam-strategy-hit-${tool}`, { reason: stratCheck.reason, at: Date.now() });
+            } catch {}
+            } else if (stratCheck.covered === false) {
+            // Acción prohibida explícitamente por la estrategia → bloquear.
+            const directive = `[wait-a-minute] STRATEGY VIOLATION: ${stratCheck.reason}. La estrategia aprobada "${st.approvedStrategy.strategy}" no autoriza esta acción.`;
+            input.output = directive;
+            // Soft mode: log warning and allow execution to continue unless strict mode
+            if (process.env.WAM_STRICT_BLOCK === "1") {
+              throw new WamPolicyBlock(directive, {
+                tool,
+                reason: stratCheck.reason,
+                level: "BLOCKED",
+                source: "approved-strategy-continuity",
+              });
+            } else {
+              // Log warning/directive and set input.output (soft warning mode)
+              wamLog(`[wait-a-minute] SOFT STRATEGY BLOCK (${tool}): ${directive}`);
+              // Note: input.output already set above, execution can continue
+            }
+          }
+          // covered === null → no decidir aquí; fall through to risk/asking logic
+        }
+
+        // Action Risk Envelope: evaluar riesgo de la herramienta antes de cualquier
+        // otra lógica. Bloquea BLOCKED con WamPolicyBlock (no genérico Error) para
+        // evitar que catch genérico lo trague.
+const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot);
+          wamDebug("risk-envelope", `evaluateAction(${tool}) -> level=${risk.level}`, { reason: risk.reason, tool, enforcement: cfg.enforcement });
+          if (risk.level === "BLOCKED") {
+          const directive = `[wait-a-minute] RISK BLOCK (${tool}): ${risk.reason || "acción fuera del envelope de riesgo"}. Requiere autorización explícita del usuario.`;
+          input.output = directive;
+          // Soft mode: log warning and allow execution to continue unless strict mode
+          if (process.env.WAM_STRICT_BLOCK === "1") {
+            throw new WamPolicyBlock(directive, { tool, reason: risk.reason, level: risk.level });
+          } else {
+            // Log warning/directive and set input.output (soft warning mode)
+            wamLog(`[wait-a-minute] SOFT BLOCK (${tool}): ${directive}`);
+            // Note: input.output already set above, execution can continue
+          }
+        }
+
+        // Governance Enforcement: block mutating tools when contract is not APPROVED.
+        // This prevents user-explicit-execute bypass without proper contract approval.
+        // Defer to the Clarification Gate (ENFORCED BLOCK) when in ASKING so the
+        // user is directed to answer the blocking unknown, not approve a contract.
+        // Sub-sessions (delegated workers, identified by parentID) are NEVER blocked
+        // here: they execute the main session's approved plan via Task delegation,
+        // not their own contracts. Blocking them breaks flujo sin fricción.
+        // Governance Enforcement centralizado (src/policy/governance-enforcement.js).
+        // Exento: subagentes (parentID), sesiones no resueltas (fail-open),
+        // override explícito (WAM_GOVERNANCE=off), fase terminal, ASKING, y
+        // cambios triviales declarados. Solo se gatea la sesión main con un
+        // contrato tracked y no aprobado.
+        const isSubagent = sessionParents.has(sid);
+        try {
+          const contractFiles = st?.contract?.files || st?.contract?.declaredFiles || [];
+          const declaredFiles = contractFiles.length ? contractFiles : targetFilesOf(input);
+          // Subagent detection: a session is a subagent ONLY when its parentID
+          // was explicitly resolved to a non-null parent. The previous
+          // `!sessionResolved.has(sid)` clause was a fail-open placeholder
+          // that incorrectly classified every pre-resolution main session as
+          // a subagent, silently disabling governance for legitimate main
+          // flows (including the very first write that proposes the contract).
+          // An unresolved session is a "main session in progress" — not a
+          // subagent — and should be governed normally. Real subagents carry
+          // a non-null parentID in sessionParents.
+          try {
+            enforceGovernance(tool, st, {
+              isSubagent,
+              declaredFiles,
+              enforcementEnabled: cfg.enforcement !== false,
+            });
+            wamDebug("governance", `enforceGovernance(${tool}) -> ALLOWED`, { isSubagent, phase: st?.phase, enforcement: cfg.enforcement });
+          } catch (err) {
+            wamDebug("governance", `enforceGovernance(${tool}) -> BLOCKED`, { isSubagent, phase: st?.phase, reason: err?.message });
+            if (err?.wamPolicyBlock) {
+              input.output = err.message;
+              // Soft mode: log warning and allow execution to continue unless strict mode
+              if (process.env.WAM_STRICT_BLOCK !== "1") {
+                wamLog(`[wait-a-minute] SOFT GOVERNANCE BLOCK (${tool}): ${err.message}`);
+                // Execution continues, governance warning logged
+                return;
+              }
+            }
+            throw err;
+          }
+         } catch (err) {
+           if (err?.wamPolicyBlock) input.output = err.message;
+           throw err;
+         }
+
+         // Read Delegation Gate: force main session to delegate read-only exploration to @fast
+         const readDel = enforceReadDelegation(tool, { isSubagent, enforcementEnabled: cfg.enforcement !== false });
+         if (!readDel.allowed) {
+           const mode = process.env.WAM_READ_DELEGATION || "off";
+           if (mode === "warn") {
+             input.output = readDel.directive;
+             wamLog(`[wait-a-minute] SOFT READ DELEGATION (${tool}): ${readDel.directive}`);
+            } else if (mode === "enforce") {
+              throw new WamPolicyBlock(readDel.directive, {
+                tool, reason: readDel.reason, level: "BLOCKED", source: "read-delegation",
+              });
+            }
+         }
+
+          // CQE-first discovery: bash usado para buscar archivos/patrones/
+          // estructuras va a CQE (más rápido que shell). Nativo y habilitado
+          // por defecto en modo aviso (warn); WAM_READ_DELEGATION=off lo
+          // silencia, =enforce lo bloquea. Soft nunca interrumpe la herramienta.
+          if (tool === "bash" || tool === "sh") {
+            try {
+              const disc = evaluateDiscovery(tool, input?.args || input?.parameters || output?.args || {});
+              if (disc && disc.nudge) {
+                const mode = process.env.WAM_READ_DELEGATION || "warn";
+                if (mode === "enforce") {
+                  throw new WamPolicyBlock(disc.nudge, {
+                    tool, reason: "cqe-first-discovery", level: "BLOCKED", source: "discovery-classifier",
+                  });
+                } else if (mode === "warn") {
+                  input.output = disc.nudge;
+                  wamLog(`[wait-a-minute] CQE-FIRST NUDGE (${tool}): ${disc.nudge}`);
+                }
+              }
+            } catch (err) {
+              if (err?.wamPolicyBlock) throw err;
+              // Fail open: clasificación rota nunca bloquea la herramienta.
+            }
+          }
+
+        if (st?.phase !== "ASKING") return;
+        // git read-only (status/diff/log) es investigación: permitido aun en ASKING.
+        // git mutante (commit/push) sigue bloqueado hasta responder la pregunta.
+        if (tool === "bash" && READONLY_GIT_RE.test(bashCommandOf(input))) return;
+        if (BLOCKED_TOOLS.has(tool)) {
+          if (process.env.WAM_DEBUG_TE) wamLog(`[WAM-DEBUG-TE] BLOCKING ${tool} in ASKING`);
+          const u = (st.contract?.unknowns || []).find((x) => x.status === "blocking");
+          const question = u ? `${u.id}: ${u.question}` : "pregunta bloqueante pendiente";
+          const directive = `[wait-a-minute] ENFORCED BLOCK — tarea en ASKING (${question}). Herramienta ${tool} bloqueada. Responder: /wam answer ${u?.id || "U1"} <respuesta>`;
+          input.output = directive;
+          throw new Error(directive);
+        }
+      } catch (err) {
+        // WamPolicyBlock MUST be re-thrown — never swallowed by generic catch.
+        if (err?.wamPolicyBlock === true) throw err;
+        if (typeof err?.message === "string" && err.message.includes("ENFORCED BLOCK")) throw err;
+      }
+
+      try {
+        const resolvedCallID = input?.callID || `${sid || getSessionId()}__exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const bridgeResult = await bridgeExecution({
+          taskId,
+          taskRoot,
+          state: st,
+          tool: input?.tool || "",
+          args: input?.args || input?.parameters || {},
+          callID: resolvedCallID,
+          sessionID: sid,
+        });
+        if (bridgeResult?.ok) {
+          input._wamCallID = bridgeResult.callID;
+          input._wamHypothesisId = bridgeResult.hypothesisId;
+          input._wamExperimentId = bridgeResult.experimentId;
+          input._wamRequirementId = bridgeResult.requirementId;
+        }
+      } catch (bridgeError) {
+        wamLog("[wait-a-minute] Bridge execution non-blocking error:", bridgeError.message);
+      }
+    },
+
+    "tool.execute.after": async (input, output) => {
+      try {
+        await postToolExecution(input, output);
+      } catch (e) {
+        wamLog(`[wait-a-minute] tool.execute.after non-blocking error:`, e.message);
+      }
+    },
+  };
+};
+
+/**
+ * Clasifica un mensaje recibido durante ASKING (spec clarification-gate):
+ * "answer" (respuesta natural), "implementation" (intento de implementar →
+ * interceptar, no consumir) o "new-intent" (cambio de tarea → nuevo pre-flight).
+ */
+function classifyAskingMessage(text = "") {
+  const lower = (text || "").toLowerCase().trim();
+  const doneClaims =
+    /(^|\s)(done|finish|finished|complete|completed|terminate|terminated|listo|termin[eé]|complet[ao]|finalizad[oa])\b|(task|tarea)\s+(complete|complet(a|ada|o)|terminad(a|o))|declare.*done/i;
+  if (doneClaims.test(lower)) return "blocked-message";
+  if (/\b(olvida|olvídate|no quiero|mejor no|en realidad|nada que ver|cambia.*idea|descartar)\b/.test(lower)) return "new-intent";
+  if (/\b(implementa|implementar|agrega|agregar|haz|hacer|refactoriza|refactorizar|migra|migrar|crea|crear|elimina|eliminar|arregla|arreglar|fix|configura|configurar|escribe|instala|instalar|construye|build)\b/.test(lower)) return "blocked-message";
+  return "answer";
+}
+
+/**
+ * /wam CLI — opencode 1.18.25 entrega comandos vía command.execute.before,
+ * no vía ctx.command. Lógica extraída del handler antiguo.
+ */
+async function wamCli(args, cfg = {}, root = process.cwd(), taskId = readActiveTaskId(root) || "default-task") {
+  const [sub, action, ...rest] = args || [];
+
+  if (sub === "config") {
+    if (action === "path") return path.join(root, ".wam", "config.json");
+    if (action === "get" || action === undefined) {
+      return [
+        "WAM config (precedencia: env WAM_* > .wam/config.json > defaults)",
+        "  skills:      " + (cfg.skills !== false),
+        "  logging:     " + (cfg.logging !== false),
+        "  enforcement: " + (cfg.enforcement !== false),
+        "",
+        "Editar en .wam/config.json o vía env:",
+        "  WAM_SKILLS=false  WAM_SILENT=1  WAM_GOVERNANCE=off",
+      ].join("\n");
+    }
+    return "Uso: /wam config [get|path]";
+  }
+
+  // taskId de la sesión del comando (namespaced ses-<id> si genérico)
+
+  if (sub === "skills") {
+    const skills = waitAMinute.getRegistry();
+    const list = Object.values(skills);
+    if (action === "list") {
+      return list.map(s => `${s.id} [${s.status}]`).join("\n");
+    }
+    if (action === "search") {
+      const q = rest.join(" ").toLowerCase();
+      return list
+        .filter(s => (s.name || "").toLowerCase().includes(q) || (s.description || "").toLowerCase().includes(q))
+        .slice(0, 20)
+        .map(s => s.id)
+        .join("\n");
+    }
+    if (action === "inspect") {
+      const id = rest.join(" ");
+      const s = skills[id];
+      if (!s) return `Skill ${id} no encontrada`;
+      return [
+        `${s.id} [${s.status}]`,
+        `name: ${s.name}`,
+        `description: ${s.description}`,
+        `risk: ${s.risk}`,
+        `source: ${s.source?.repository || s.source?.kind || "local"} (${s.source?.path || "—"})`,
+        `--- content (max 1500 chars) ---`,
+        `${(s.content || "(sin contenido)").slice(0, 1500)}`,
+      ].join("\n");
+    }
+    if (action === "explain") {
+      const prompt = rest.join(" ");
+      if (!prompt) return "Uso: /wam skills explain <prompt>";
+const sel = routeSkillsV2(prompt, {}, waitAMinute.getRegistry(), "STANDARD");
+          wamDebug("skills", `routeSkillsV2(prompt="${prompt.slice(0,80)}") -> ${sel.selected.length} skills`, { selected: sel.selected.map(s => s.name), registry: waitAMinute.getRegistry().length });
+          return sel.selected.length
+        ? sel.selected.map(s => `${s.name}: ${s.reason}`).join("\n")
+        : "Ninguna skill seleccionada para ese prompt";
+    }
+    return "Uso: /wam skills <list|search|inspect|explain> [args]";
+  }
+
+  if (sub === "contract") {
+    if (action === "approve") return JSON.stringify(waitAMinute.approveContract(taskId, root));
+    if (action === "reject") return JSON.stringify(waitAMinute.rejectContract(taskId, root));
+    if (action === "edit") {
+      try {
+        return JSON.stringify(waitAMinute.editContract(taskId, JSON.parse(rest.join(" ")), root));
+      } catch {
+        return "Error: JSON inválido para /wam contract edit";
+      }
+    }
+    return "Uso: /wam contract <approve|reject|edit <json>>";
+  }
+
+  if (sub === "resume") {
+    return JSON.stringify(waitAMinute.resumeTask(action || taskId, root));
+  }
+
+  if (sub === "strategy") {
+    if (action === "set") {
+      const scope = rest.join(" ").trim();
+      if (!scope) return "Uso: /wam strategy set <scope...>";
+      const st = getTaskState(taskId, root);
+      if (!st) return "Sin tarea activa";
+      if (st.contract?.status !== "APPROVED") {
+        return `Contrato no aprobado (status=${st.contract?.status || "?"})`;
+      }
+      if (!st.approvedStrategy || st.approvedStrategy.status !== "ACTIVE") {
+        return "Sin estrategia aprobada activa";
+      }
+      st.approvedStrategy = {
+        ...st.approvedStrategy,
+        strategy: scope.slice(0, 100),
+        scope: scope.slice(0, 100),
+      };
+      persistTaskState(taskId, st, root);
+      return `Estrategia actualizada: "${st.approvedStrategy.strategy}"`;
+    }
+    return "Uso: /wam strategy set <scope...>";
+  }
+
+  if (sub === "progress") {
+    const [reqId, op, ...evidence] = [action, ...rest];
+    if (!reqId) {
+      const st = getTaskState(taskId, root);
+      if (!st) return "Sin estado de tarea (persiste tras el primer mensaje)";
+      return st.requirements
+        .map(r => `${r.id} [${r.status}] ${r.title}${r.evidence?.length ? " | evidence: " + r.evidence.join("; ") : ""}`)
+        .join("\n");
+    }
+    if (op === "done") return JSON.stringify(await waitAMinute.markRequirement(taskId, reqId, "done", evidence.join(" "), root));
+    if (op === "verified") return JSON.stringify(await waitAMinute.markRequirement(taskId, reqId, "verified", evidence.join(" "), root));
+    if (op === "pending") return JSON.stringify(await waitAMinute.markRequirement(taskId, reqId, "pending", "", root));
+    return "Uso: /wam progress | /wam progress <id> done <evidencia> | /wam progress <id> verified <evidencia> | /wam progress <id> pending";
+  }
+
+  if (sub === "answer") {
+    const qid = action;
+    const answer = rest.join(" ").trim();
+    if (!qid || !answer) return "Uso: /wam answer <questionId> <respuesta>";
+    return JSON.stringify(waitAMinute.answerQuestion(taskId, qid, answer, root));
+  }
+
+  if (sub === "assumptions") {
+    const st = getTaskState(taskId, root);
+    if (!st) return "Sin estado de tarea";
+    const list = st.contract?.assumptions || [];
+    if (!list.length) return "Sin asunciones registradas";
+    return list
+      .map((a) => `${a.id} [${a.classification}/${a.status}] ${a.statement}${a.resolvedBy ? ` (resuelta: ${a.resolvedBy})` : ""}`)
+      .join("\n");
+  }
+
+  if (sub === "resolve") {
+    const aid = action;
+    const evidence = rest.join(" ").trim();
+    if (!aid || !evidence) return "Uso: /wam resolve <assumptionId> <evidencia>";
+    return JSON.stringify(waitAMinute.resolveAssumption(taskId, aid, evidence, root));
+  }
+
+  if (sub === "status") {
+    const st = getTaskState(taskId, root);
+    if (!st) return "Sin estado de tarea";
+    const experiments = st.experiments || [];
+    const failures = experiments.filter(e => e.status === "failed");
+    const pendingUnknowns = (st.contract?.unknowns || []).filter(u => u.status === "blocking");
+    const pendingAuth = pendingUnknowns.length > 0 ? pendingUnknowns[0] : null;
+    const verifiedReqs = (st.requirements || []).filter(r => r.status === "verified");
+    const totalReqs = (st.requirements || []).length;
+    const verification = { status: `${verifiedReqs.length}/${totalReqs} verified` };
+    const completionEvidence = (st.requirements || [])
+      .filter(r => r.evidence && r.evidence.length > 0)
+      .map(r => ({ req: r.id, evidence: r.evidence.join("; ") }));
+    return getStatusReport(st, { experiments, failures, pendingAuth, verification, completionEvidence });
+  }
+
+  if (sub === "backlog") {
+    const st = getTaskState(taskId, root);
+    if (!st) return "Sin estado de tarea";
+    const formatted = formatBacklog(st);
+    if (!formatted) return "Sin requerimientos en backlog (todos están en el contract activo)";
+    return formatted;
+  }
+
+  if (sub === "compress") {
+    const id = rest.join(" ") || action || taskId;
+    const st = getTaskState(id, root);
+    if (!st) return "Sin estado de tarea";
+    const budget = cfg.budgetTokens || DEFAULT_CONFIG.budgetTokens;
+    const cav = writeCavemanSummary(id, st, root);
+    const tokens = estimateTokens(cav);
+    const headroom = Math.max(0, budget - tokens);
+    return `${cav}\n[tokens ${tokens} | headroom ${headroom}/${budget}]`;
+  }
+
+  if (sub === "task") {
+    if (action === "list") {
+      const ids = listTaskIds(root);
+      if (!ids.length) return "Sin tareas persistidas (.wam/tasks)";
+      const active = readActiveTaskId(root);
+      return ids
+        .map((id) => {
+          const st = getTaskState(id, root);
+          return `${id}${id === active ? " *activa" : ""} [${st?.phase || "?"}] ${st?.contract?.status || ""}`;
+        })
+        .join("\n");
+    }
+    if (action === "switch") {
+      const id = rest.join(" ");
+      if (!id) return "Uso: /wam task switch <taskId>";
+      writeActiveTaskId(id);
+      const st = getTaskState(id);
+      return st
+        ? `Tarea activa: ${id} [${st.phase}] — ${st.nextAction || ""}`
+        : `Tarea activa: ${id} (sin estado persistido — enviar primer mensaje)`;
+    }
+    return "Uso: /wam task <list|switch <id>>";
+  }
+
+  if (sub === "ctx") {
+    if (action === "list") {
+      const caps = listCapsules(root);
+      if (!caps.length) return "Sin cápsulas (usa /wam ctx add o extracción en DONE)";
+      return caps.map((c) => `${c.context_id} [${c.level} ${c.lifecycle}] ${c.provenance} ${(c.purpose || "").slice(0, 60)}`).join("\n");
+    }
+    if (action === "get") {
+      const q = rest.join(" ");
+      if (!q) return "Uso: /wam ctx get <query>";
+      const r = retrieveContext(q, { root });
+      if (!r.ok) return r.message;
+      return r.capsules.map((h) => `[${h.capsule.level}] ${h.capsule.context_id} (rel ${h.relevance.toFixed(2)}) ${(h.capsule.purpose || "").slice(0, 80)}`).join("\n");
+    }
+    if (action === "show") {
+      const id = rest.join(" ");
+      const c = getCapsule(id, root);
+      if (!c) return `Cápsula ${id} no existe`;
+      return [
+        `${c.context_id} [${c.level} ${c.lifecycle}]`,
+        `provenance: ${c.provenance} | importance: ${c.importance}/10 | confidence: ${c.confidence}`,
+        `purpose: ${c.purpose}`,
+        `scope: ${c.scope}`,
+        `deps: ${(c.dependencies || []).join(", ") || "—"} | supersedes: ${c.supersedes || "—"}`,
+        `--- content (max 600 chars) ---`,
+        `${(c.content || "(sin contenido)").slice(0, 600)}`,
+      ].join("\n");
+    }
+    if (action === "promote") {
+      const [id, target, approved] = rest;
+      if (!id || !target) return "Uso: /wam ctx promote <id> <L2|L1> [approved]";
+      const r = promoteCapsule(id, target, { approvedBy: approved === "approved" ? "user" : "", root });
+      if (!r.ok) return `Promoción rechazada: ${r.reason}`;
+      return `Promovida ${id} → ${target} [${r.capsule.provenance}]`;
+    }
+    if (action === "session") {
+      const sid = getSessionId(root);
+      const caps = listCapsules(process.cwd(), { sessionId: sid });
+      return `session: ${sid}\ncapsules de esta sesión: ${caps.length}\nL1 base: ${listCapsules(process.cwd(), { level: "L1", lifecycle: "active" }).length} cápsula(s)`;
+    }
+    if (action === "migrate") {
+      const dryRun = rest.includes("--dry-run");
+      const r = migrateLegacyCapsules(root, { dryRun });
+      if (!r.migrated.length) return "Sin cápsulas legacy (todas tienen session_id)";
+      const tag = r.dryRun ? "[DRY-RUN] " : "";
+      return `${tag}migradas ${r.migrated.length} cápsula(s) a session_id="legacy":\n${r.migrated.map((m) => `  ${m.context_id || m.file}`).join("\n")}`;
+    }
+    if (sub === "decision") {
+      const decisionPoint = action;
+      if (!decisionPoint) {
+        return "Error: decision point required. Usage: /wam decision <point> rationale=\"...\" alternatives=\"...\" evidence=\"...\"";
+      }
+
+      // Parse key-value pairs from rest
+      const params = {};
+      for (const item of rest) {
+        const match = item.match(/^([^=]+)=(.*)$/);
+        if (match) {
+          let key = match[1].trim();
+          let value = match[2].trim();
+          
+          // Remove surrounding quotes if present
+          if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
+            value = value.slice(1, -1);
+          } else if (value.startsWith("'") && value.endsWith("'") && value.length >= 2) {
+            value = value.slice(1, -1);
+          }
+          
+          params[key] = value;
+        }
+      }
+
+      const rationale = params.rationale;
+      const alternativesStr = params.alternatives;
+      const evidenceStr = params.evidence;
+
+      if (!rationale || !alternativesStr || !evidenceStr) {
+        return "Error: rationale, alternatives, and evidence are required. Usage: /wam decision <point> rationale=\"...\" alternatives=\"...\" evidence=\"...\"";
+      }
+
+      let alternatives, evidence;
+      try {
+        alternatives = JSON.parse(alternativesStr);
+        evidence = JSON.parse(evidenceStr);
+        
+        // Validate that they are arrays
+        if (!Array.isArray(alternatives) || !Array.isArray(evidence)) {
+          return "Error: alternatives and evidence must be JSON arrays.";
+        }
+      } catch (e) {
+        return `Error: Invalid JSON in alternatives or evidence: ${e.message}`;
+      }
+
+      // Create tracer and log the decision
+      const tracer = new ContextDecisionTracer(`decision-${Date.now()}`, root);
+      tracer.logTechnicalDecision(decisionPoint, rationale, alternatives, evidence);
+      
+      return `Decision "${decisionPoint}" logged successfully.`;
+    }
+    return "Uso: /wam ctx <list|get <q>|show <id>|promote <id> <L2|L1> [approved]|session|migrate [--dry-run]>";
+  }
+
+  return "Uso: /wam <skills|contract|progress|task|compress|ctx|answer|assumptions|resolve|decision>";
+}
+
+/**
+ * Wait a Minute — deterministic task-state management and context reconstruction API.
+ */
+const waitAMinute = {
+  name: "wait-a-minute",
+
+  /**
+   * Obtiene el registry actual.
+   */
+  getRegistry: function() {
+    return this.loadBundledRegistry();
+  },
+
+  /**
+   * Analiza el prompt del usuario y retorna el contexto de pre-flight.
+   *
+   * @param {Object} options
+   * @param {string} options.prompt - El prompt del usuario
+   * @param {string} [options.projectPath] - Ruta del proyecto (usa cwd por defecto)
+   * @param {Object} [options.config] - Configuración
+   * @param {Object} [options.tierCaps] - Caps por tier
+   * @returns {Object} - Resultado del análisis de pre-flight
+   */
+  analyze: async function({
+    prompt,
+    projectPath,
+    config,
+    tierCaps,
+    activePreset,
+    activeMode,
+  } = {}) {
+    if (!prompt || typeof prompt !== "string") {
+      return {
+        intent: { classification: "trivial", ambiguity: "low", confidence: 100 },
+        project: { detected_stack: "unknown", architecture: "unknown", relevant_files: [] },
+        known: [],
+        inferred: [],
+        assumed: [],
+        unknown: ["No hay prompt para analizar"],
+        skills: { candidates: [], selected: [], rejected: [] },
+        risk: "low",
+        complexity: "trivial",
+        ambiguity: "low",
+        strategy: "FAST",
+        ready: true,
+        advice: "Sin prompt - sin análisis necesario",
+      };
+    }
+
+    const trimmedPrompt = prompt.trim();
+    if (!trimmedPrompt) {
+      return {
+        intent: { classification: "trivial", ambiguity: "low", confidence: 100 },
+        project: { detected_stack: "unknown", architecture: "unknown", relevant_files: [] },
+        known: ["Prompt vacío o nulo"],
+        inferred: [],
+        assumed: [],
+        unknown: ["No hay prompt para analizar"],
+        skills: { candidates: [], selected: [], rejected: [] },
+        risk: "low",
+        complexity: "trivial",
+        ambiguity: "low",
+        strategy: "FAST",
+        ready: true,
+        advice: "Sin prompt - sin análisis necesario",
+      };
+    }
+
+    const result = await analyze({
+      prompt: trimmedPrompt,
+      projectPath: projectPath || process.cwd(),
+      config,
+      tierCaps: tierCaps || DEFAULT_CONFIG.tierCaps,
+      activePreset: activePreset || DEFAULT_CONFIG.activePreset,
+      activeMode: activeMode || DEFAULT_CONFIG.activeMode,
+    });
+
+    const summary = this.generateSummary(result);
+
+    return {
+      ...result,
+      _summary: summary,
+    };
+  },
+
+  /**
+   * Genera un resumen humano-readable del análisis de pre-flight.
+   */
+  generateSummary: function(result) {
+    const lines = [];
+
+    lines.push(
+      `Intención: ${result.intent.classification} (confianza: ${result.intent.confidence}%)`
+    );
+    lines.push(`Stack: ${result.project.detected_stack}`);
+    if (result.project.architecture !== "unknown") {
+      lines.push(`Arquitectura: ${result.project.architecture}`);
+    }
+
+    if (result.known.length > 0) {
+      lines.push(`\nConocido(s): ${result.known.slice(0, 5).join("; ")}`);
+    }
+    if (result.inferred.length > 0) {
+      lines.push(`Inferido(s): ${result.inferred.slice(0, 5).join("; ")}`);
+    }
+    if (result.assumed.length > 0) {
+      lines.push(`Asumido(s): ${result.assumed.slice(0, 3).join("; ")}`);
+    }
+    if (result.unknown.length > 0) {
+      lines.push(`Desconocido(s): ${result.unknown.slice(0, 3).join("; ")}`);
+    }
+
+    lines.push(
+      `\nSkills candidatas: ${result.skills.candidates
+        .slice(0, 5)
+        .map((c) => c.name)
+        .join(", ")}`
+    );
+    lines.push(`Skills seleccionadas: ${result.skills.selected.join(", ")}`);
+    if (result.skills.rejected.length > 0) {
+      lines.push(`Skills rechazadas: ${result.skills.rejected.join(", ")}`);
+    }
+
+    lines.push(`\nRiesgo: ${result.risk}`);
+    lines.push(`Complejidad: ${result.complexity}`);
+    lines.push(`Ambigüedad: ${result.ambiguity}`);
+    lines.push(`\nEstrategia: ${result.strategy}`);
+    lines.push(`\n¿Listo para proceder?: ${result.ready ? "SÍ" : "NO"}`);
+    lines.push(`\nConsejo: ${result.advice || ""}`);
+
+    return lines.join("\n");
+  },
+
+  /**
+   * Carga el catálogo embebido (skills/registry.json) del plugin.
+   * El corpus es distribuido con WAM — sin red en runtime.
+   */
+  loadBundledRegistry: function() {
+    try {
+      const registryPath = path.join(import.meta.dirname, "skills", "registry.json");
+      if (!fs.existsSync(registryPath)) return {};
+      const entries = JSON.parse(fs.readFileSync(registryPath, "utf-8"));
+      const reg = {};
+      for (const s of entries) reg[s.id] = s;
+      return reg;
+    } catch {
+      return {};
+    }
+  },
+
+  /**
+   * Estado durable de tarea: contrato + requisitos por evidencia.
+   * PROPOSED la primera vez; preserva contrato APPROVED y progreso existente.
+   */
+  buildPersistedState: function(taskId, analysis, root) {
+    const existing = getTaskState(taskId, root);
+    if (existing && existing.requirements && existing.requirements.length) {
+      // Preservar contrato/requisitos existentes (PROPOSED/APPROVED/REJECTED):
+      // el contrato se sintetiza UNA vez (primer mensaje); los mensajes
+      // siguientes no re-sintetizan del texto actual (claims incluidos).
+      const merged = {
+        ...existing,
+        lastAction: existing.lastAction,
+        nextAction: nextActionFrom(existing),
+      };
+      persistTaskState(taskId, merged, root);
+      return merged;
+    }
+    const fresh = {
+      ...projectState(analysis),
+      phase: "PROPOSED",
+      nextAction: "Revisar contrato — /wam contract approve o edit",
+      lastAction: "",
+      projectPath: root,
+    };
+    // Safety: consolidar si synthesizeContract generó demasiados requisitos
+    const MAX = 15;
+    if (fresh.requirements && fresh.requirements.length > MAX) {
+      const kept = fresh.requirements.slice(0, MAX);
+      const overflow = fresh.requirements.length - MAX;
+      kept.push({ id: `req-overflow`, title: `(+${overflow} requisitos consolidados de la especificación)`, status: "pending", evidence: [] });
+      fresh.requirements = kept;
+      if (fresh.contract) fresh.contract.requirements = kept.map((r) => r.title);
+    }
+    // No persistir un contrato PROPOSED sin requisitos: dejaría un contrato
+    // tracked con 0 pendientes y sin declared files, lo que bloquea write/edit
+    // (fail-closed) sin nada que aprobar. Untracked hasta tener >=1 requisito.
+    if (!fresh.requirements || fresh.requirements.length === 0) {
+      return fresh;
+    }
+    persistTaskState(taskId, fresh, root);
+    return fresh;
+  },
+   /**
+    * Completion Gate: detecta claims de fin de tarea y bloquea si hay requisitos pendientes.
+    * Delegado a la política única en src/integration/orchestration.js
+    * para evitar divergencia con la política de finalización.
+    */
+   evaluateCompletionGate: evaluateCompletionGate,
+
+  /** Transición de fase basada en el resultado del Completion Gate. */
+  applyPhaseTransition: function(state, gate) {
+    let phase;
+    if (gate?.allDone) {
+      phase = "DONE";
+    } else if (gate?.blocked && gate?.verifying) {
+      phase = "VERIFYING";
+    } else {
+      phase = state?.phase || "IMPLEMENTING";
+    }
+    let nextAction;
+    if (gate?.allDone) {
+      nextAction = "Tarea completa — contrato verificado";
+    } else if (gate?.blocked) {
+      nextAction = "Continuar con requisitos pendientes";
+    } else {
+      nextAction = state?.nextAction;
+    }
+    return { phase, nextAction };
+  },
+
+  /** Aprueba el contrato: PROPOSED → APPROVED, fase → IMPLEMENTING. */
+  resumeTask: function(taskId, root) {
+    const state = getTaskState(taskId, root);
+    if (!state) return { ok: false, reason: "Sin estado de tarea para: " + taskId };
+    if (state.phase === "DONE") return { ok: false, reason: "Tarea DONE — no se reabre automáticamente. Crea una nueva." };
+    if (!String(taskId).startsWith("ses-")) writeActiveTaskId(taskId, root);
+    try {
+      updateLiveContext(taskId, state, root);
+    } catch {}
+    return { ok: true, taskId, phase: state.phase, contract: state.contract?.status || "?" };
+  },
+
+  approveContract: function(taskId, root) {
+    const state = getTaskState(taskId, root);
+    if (!state) return { ok: false, reason: "Sin estado de tarea" };
+    const blocking = (state.contract?.unknowns || []).filter((u) => u.status === "blocking");
+    if (blocking.length > 0) {
+      return { ok: false, reason: `${blocking[0].id} DECISION_CRITICAL sin responder (bloquea aprobación): ${blocking[0].question}` };
+    }
+    const blockingAssumptions = (state.contract?.assumptions || []).filter(
+      (a) => a.classification === "DECISION_CRITICAL" && a.status !== "resolved"
+    );
+    if (blockingAssumptions.length > 0) {
+      return {
+        ok: false,
+        reason: `${blockingAssumptions[0].id} DECISION_CRITICAL sin resolver (bloquea aprobación): ${blockingAssumptions[0].statement} — /wam resolve ${blockingAssumptions[0].id} <evidencia>`,
+      };
+    }
+    state.contract = { ...(state.contract || {}), status: "APPROVED" };
+    if (state.phase !== "DONE") state.phase = "IMPLEMENTING";
+    state.nextAction = nextActionFrom(state);
+    // Strategy Continuity: persist approved strategy so tool.execute.before
+    // knows which actions are covered without requiring per-step approval.
+    // Approved scope = the strategy itself + all safe execution steps required
+    // to execute it (install deps, run tests, configure browser, retry).
+    const inferredStrategy = (
+      state.contract?.objective ||
+      state.intent?.goal ||
+      state.requirements?.[0]?.title ||
+      state.lastAction?.split("\n")[0] ||
+      "task execution"
+    ).slice(0, 100);
+    state.approvedStrategy = {
+      strategy: inferredStrategy,
+      approvedAt: Date.now(),
+      scope: inferredStrategy,
+      allowedActions: [
+        "read", "search", "inspect", "test", "lint", "typecheck",
+        "install dependency", "install browser binary", "run validation",
+        "modify source", "create fixture", "diagnose", "retry",
+        "write", "edit", "bash", "sh",
+        "task", "todowrite", "pty_spawn",
+        "openspec", "openspec new change", "openspec instructions",
+        "openspec validate", "openspec archive",
+        "git commit", "npm test", "pnpm test", "pnpm install",
+        "crear change OpenSpec", "ejecutar test suite",
+        "instalar dependencia", "delegar via Task",
+      ],
+      prohibitedActions: [
+        "delete production data", "drop database", "production deploy",
+        "credential modification", "scope expansion", "destructive operation",
+      ],
+      invalidationConditions: [
+        "environment cannot satisfy required runtime",
+        "required dependency unavailable and unfixable",
+        "explicit user retraction",
+        "verified evidence contradicts strategy at architectural level",
+      ],
+      status: "ACTIVE",
+    };
+    persistTaskState(taskId, state, root);
+    try {
+      updateLiveContext(taskId, state, root);
+    } catch {}
+    return { ok: true, status: "APPROVED", phase: state.phase };
+  },
+
+  /** Rechaza el contrato: REJECTED, fase WAITING. */
+  rejectContract: function(taskId, root) {
+    const state = getTaskState(taskId, root);
+    if (!state) return { ok: false, reason: "Sin estado de tarea" };
+    state.contract = { ...(state.contract || {}), status: "REJECTED" };
+    state.phase = "WAITING";
+    state.nextAction = "Revisar contrato con el usuario";
+    persistTaskState(taskId, state, root);
+    return { ok: true, status: "REJECTED", phase: state.phase };
+  },
+
+  /** Edita el contrato (JSON patch), vuelve a PROPOSED. */
+  editContract: function(taskId, patch, root) {
+    const state = getTaskState(taskId, root);
+    if (!state) return { ok: false, reason: "Sin estado de tarea" };
+    const contract = state.contract || { status: "PROPOSED", requirements: [], verification: [], constraints: [] };
+    if (Array.isArray(patch?.requirements)) {
+      contract.requirements = patch.requirements;
+      state.requirements = patch.requirements.map((title, i) => ({
+        id: `req-${i + 1}`,
+        title,
+        status: "pending",
+        evidence: [],
+      }));
+    }
+    if (Array.isArray(patch?.verification)) contract.verification = patch.verification;
+    if (Array.isArray(patch?.constraints)) contract.constraints = patch.constraints;
+    contract.status = "PROPOSED";
+    state.contract = contract;
+    state.phase = "PROPOSED";
+    state.nextAction = "Revisar contrato — /wam contract approve o edit";
+    persistTaskState(taskId, state, root);
+    return { ok: true, status: "PROPOSED", requirements: contract.requirements.length };
+  },
+
+  /** Marca requisito done/pending con evidencia. DONE exige evidencia (no "parece funcionar"). */
+  markRequirement: async function(taskId, reqId, status, evidence, root) {
+    const state = getTaskState(taskId, root);
+    if (!state) return { ok: false, reason: "Sin estado de tarea" };
+    const req = (state.requirements || []).find((r) => r.id === reqId);
+    if (!req) return { ok: false, reason: `Requisito ${reqId} no existe` };
+    if ((status === "done" || status === "verified") && !(evidence && evidence.trim())) {
+      return { ok: false, reason: `Requisito ${reqId}: evidencia requerida para marcar ${status}` };
+    }
+    if (status === "verified" && req.status !== "done") {
+      return { ok: false, reason: `Requisito ${reqId}: marcar done antes de verified` };
+    }
+    const checksForReq = (state.contract?.checks || []).filter((c) => c.reqId === reqId);
+    if (status === "verified" && checksForReq.length > 0) {
+      const verdictResult = await verifyRequirement(checksForReq, { timeout_ms: 60000 });
+      if (verdictResult.status !== "VERIFIED") {
+        const failedChecks = verdictResult.results?.filter(r => r.status !== "PASS").map(r => `${r.check_id}: ${r.status}`).join(", ") || "unknown";
+        return { ok: false, reason: `Requisito ${reqId}: verificación falló (${failedChecks}).` };
+      }
+      req.evidence.push(...verdictResult.evidence.map(e => `${e.check_type}:${e.check_id}`));
+    }
+    if (status === "done" && req.status === "verified" && checksForReq.length > 0) {
+      return { ok: false, reason: `Requisito ${reqId}: ya está verificado, no se puede retroceder a done.` };
+    }
+    req.status = status;
+    if (status === "done" || status === "verified") req.evidence.push(evidence.trim());
+    if (status === "pending") req.evidence = [];
+    state.nextAction = nextActionFrom(state);
+    persistTaskState(taskId, state, root);
+    return { ok: true, phase: state.phase, nextAction: state.nextAction };
+  },
+
+  /** Responde una pregunta bloqueante: unknown → answered, fase ASKING → ANSWERED → PROPOSED. */
+  answerQuestion: function(taskId, qid, answer, root) {
+    const state = getTaskState(taskId, root);
+    if (!state) return { ok: false, reason: "Sin estado de tarea" };
+    const u = (state.contract?.unknowns || []).find((x) => x.id === qid);
+    if (!u) return { ok: false, reason: `Pregunta ${qid} no existe` };
+    if (!(answer && answer.trim())) return { ok: false, reason: `Respuesta requerida para ${qid}` };
+    u.status = "answered";
+    u.answer = answer.trim();
+    if (u.assumptionId) {
+      const a = (state.contract?.assumptions || []).find((x) => x.id === u.assumptionId);
+      if (a) {
+        a.status = "resolved";
+        a.classification = "RESOLVED";
+        a.resolvedBy = "answer";
+      }
+    }
+    state.phase = "ANSWERED";
+    persistTaskState(taskId, state, root);
+    state.phase = "PROPOSED";
+    state.nextAction = "Revisar contrato — /wam contract approve";
+    persistTaskState(taskId, state, root);
+    return { ok: true, phase: "PROPOSED", unknown: u };
+  },
+
+  /** Reconocimiento de respuesta natural (spec enforce-clarification-gate): en ASKING,
+   *  un mensaje normal resuelve TODAS las preguntas bloqueantes con ese texto y
+   *  re-evalúa el estado (assumption asociada → resolved). */
+  answerFromMessage: function(taskId, text, root) {
+    const state = getTaskState(taskId, root);
+    if (!state) return { ok: false, reason: "Sin estado de tarea" };
+    const blocking = (state.contract?.unknowns || []).filter((u) => u.status === "blocking");
+    if (!blocking.length) return { ok: false, reason: "Sin preguntas bloqueantes" };
+    const answer = (text || "").trim();
+    if (!answer) return { ok: false, reason: "Respuesta vacía" };
+    let first = null;
+    for (const u of blocking) {
+      u.status = "answered";
+      u.answer = answer;
+      if (u.assumptionId) {
+        const a = (state.contract?.assumptions || []).find((x) => x.id === u.assumptionId);
+        if (a) {
+          a.status = "resolved";
+          a.classification = "RESOLVED";
+          a.resolvedBy = "answer";
+        }
+      }
+      first = first || u;
+    }
+    state.phase = "PROPOSED";
+    state.nextAction = "Revisar contrato — /wam contract approve";
+    persistTaskState(taskId, state, root);
+    return { ok: true, u: first, phase: state.phase, nextAction: state.nextAction };
+  },
+  /** Resuelve una asunción con evidencia del repo (spec change 3 R4): → RESOLVED sin preguntar al usuario. */
+  resolveAssumption: function(taskId, aid, evidence, root) {
+    const state = getTaskState(taskId, root);
+    if (!state) return { ok: false, reason: "Sin estado de tarea" };
+    const a = (state.contract?.assumptions || []).find((x) => x.id === aid);
+    if (!a) return { ok: false, reason: `Asunción ${aid} no existe` };
+    if (!(evidence && evidence.trim())) return { ok: false, reason: `Evidencia requerida para resolver ${aid}` };
+    a.status = "resolved";
+    a.classification = "RESOLVED";
+    a.resolvedBy = "evidence";
+    a.evidence = evidence.trim();
+    const u = (state.contract?.unknowns || []).find((x) => x.assumptionId === aid && x.status === "blocking");
+    if (u) {
+      u.status = "answered";
+      u.answer = evidence.trim();
+    }
+    const stillBlocking = (state.contract?.unknowns || []).some((x) => x.status === "blocking");
+    if (state.phase === "ASKING" && !stillBlocking) {
+      state.phase = "PROPOSED";
+      state.nextAction = "Revisar contrato — /wam contract approve";
+    }
+    persistTaskState(taskId, state, root);
+    return { ok: true, assumption: a };
+  },
+
+  /** Carga contenido real de una skill del catálogo bajo demanda. */
+  loadSkillOnDemand: function(skillId, registry, baseDir) {
+    return loadSkillOnDemand(skillId, registry, baseDir);
+  },
+
+  /**
+   * Verifica si el prompt puede ser procesado en modo FAST (trivial).
+   * Basado en el CONTENIDO del prompt, no en el origen (usuario/agente).
+   */
+  isTrivial: function(prompt) {
+    const lower = prompt.toLowerCase().trim();
+    const fastPatterns = [
+      /^\s*rename\s+/i,
+      /^\s*change\s+\w+/i,
+      /^\s*what(is|are)\s+/i,
+      /^\s*explain\s+/i,
+      /^\s*how\s+to\s+/i,
+      /^\s*list\s+/i,
+      /^\s*show\s+\w+/i,
+      /^\s*get\s+\w+/i,
+      /^\s*error\s+line/i,
+      /^\s*fix\s+this/i,
+    ];
+
+    for (const pattern of fastPatterns) {
+      if (pattern.test(lower)) return true;
+    }
+    return false;
+  },
+
+  /**
+   * Verifica si el prompt requiere modo STRICT (arquitectura, seguridad, etc.)
+   */
+  requiresStrict: function(prompt) {
+    const lower = prompt.toLowerCase();
+    const strictPatterns = [
+      /migra|migrate/i,
+      /seguridad|security/i,
+      /arquitectura|architecture/i,
+      /alto impacto|high impact/i,
+      /producción|production/i,
+      /destructivo|destructive/i,
+    ];
+
+    return strictPatterns.some((p) => p.test(lower));
+  },
+
+  /**
+   * Presentar validación de pre-flight al agente/usuario.
+   *
+   * Checkpoint estratégico: muestra el resumen y solicita confirmación
+   * sobre la estrategia a seguir. Se muestra para todo mensaje, incluido
+   * modo FAST — el análisis nunca se omite.
+   *
+   * @param {Object} opts
+   * @param {Object} opts.analysis - Resultado de analyze()
+   * @returns {Object} - { mode: 'continue'|'validation-pending', ... }
+   */
+  presentValidation: async function({ analysis, ctx, meta = {} } = {}) {
+    if (!analysis) {
+      return { mode: "continue", advice: "No hay análisis previo" };
+    }
+
+    const summary = this.generateSummary(analysis);
+    const mode = analysis.strategy || "NORMAL";
+
+    const contractStatus = analysis.contractStatus || analysis.completionContract?.status || "PROPOSED";
+
+    const skillsLine = analysis.skills?.selected?.length
+      ? analysis.skills.selected.map((s) => s.name).join(",")
+      : "ninguna";
+    const blockingUnknowns = (analysis.completionContract?.unknowns || []).filter((u) => u.status === "blocking");
+    const blockingAssumptions = (analysis.completionContract?.assumptions || []).filter(
+      (a) => a.classification === "DECISION_CRITICAL" && a.status !== "resolved"
+    );
+    const validationLines = [
+      `wait-a-minute: contrato ${contractStatus}${analysis.phase ? ` (fase ${analysis.phase})` : ""}`,
+      `req: ${(analysis.completionContract?.requirements || []).join("; ") || "—"}`,
+      ...(blockingUnknowns.length
+        ? [`blocking: ${blockingUnknowns.map((u) => `${u.id} ${u.question}`).join(" | ")}`]
+        : []),
+      ...(blockingAssumptions.length
+        ? [`assumptions blocking: ${blockingAssumptions.map((a) => `${a.id} ${a.statement}`).join(" | ")}`]
+        : []),
+      "",
+      "Ejecutar lo pedido. Si la instrucción es ambigua, preguntar.",
+      "/wam contract approve → aprobar | /wam compress → resumen terse",
+    ];
+
+if (ctx) {
+      const text = validationLines.filter((l) => l !== false).join("\n") + "\n";
+      const emitMeta = {
+        ...(meta.sessionID ? { sessionID: meta.sessionID } : {}),
+        ...(meta.messageID ? { messageID: meta.messageID } : {}),
+        ...(analysis.phase ? { phase: analysis.phase } : {}),
+      };
+
+      // Inyectar contrato/directiva vía emitTextPart para garantizar prefijo [wam] y metadata.wam=true
+      if (Array.isArray(ctx.parts) || Array.isArray(ctx.system) ||
+          Array.isArray(ctx?.message?.parts) || Array.isArray(ctx?.message?.system)) {
+        emitTextPart(ctx, text, emitMeta);
+        emitTextPart(
+          ctx,
+          `\nfase ${analysis.phase || "IMPLEMENTING"} → ${analysis.nextAction || "continuar"}`,
+          emitMeta
+        );
+      } else {
+        wamWarn(`[WAM] injectValidationContext: no valid sink (parts/system) for injection`);
+      }
+    }
+
+    return {
+      mode: mode === "FAST" ? "continue" : "validation-pending",
+      summary,
+      validationLines,
+      advice:
+        mode === "FAST"
+          ? "Tarea trivial - análisis mostrado, proceder directamente"
+          : "Proceder con la implementación",
+    };
+  },
+};
+
+Object.keys(waitAMinute).forEach((k) => {
+  if (k === "name") return;
+  WaitAMinutePlugin[k] = waitAMinute[k];
+});
+
+WaitAMinutePlugin.slugifyTaskPrompt = slugifyTaskPrompt;
+WaitAMinutePlugin.effectiveTaskId = effectiveTaskId;
+WaitAMinutePlugin.isContinuationPrompt = isContinuationPrompt;
+WaitAMinutePlugin.writeActiveTaskId = writeActiveTaskId;
+
+export default WaitAMinutePlugin;

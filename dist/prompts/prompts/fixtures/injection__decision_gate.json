@@ -1,0 +1,12 @@
+{
+  "id": "injection.decision_gate",
+  "vars": {
+    "label": "DB vs API"
+  },
+  "mustContain": [
+    "Bifurcación detectada (DB vs API)",
+    "logTechnicalDecision",
+    "antes de implementar"
+  ],
+  "mustNotContain": []
+}

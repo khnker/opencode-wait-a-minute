@@ -29,7 +29,7 @@ function setupTask(taskId, root) {
     nextAction: null,
   };
   fs.writeFileSync(
-    path.join(root, ".wam", "tasks", taskId, "state.yaml"),
+    path.join(root, ".wam", "tasks", taskId, "task.json"),
     JSON.stringify(state, null, 2)
   );
   return root;
@@ -43,7 +43,7 @@ function approveWithStrategy(taskId, root, strategy = "default strategy") {
 }
 
 function readState(taskId, root) {
-  const p = path.join(root, ".wam", "tasks", taskId, "state.yaml");
+  const p = path.join(root, ".wam", "tasks", taskId, "task.json");
   return JSON.parse(fs.readFileSync(p, "utf-8"));
 }
 
@@ -76,7 +76,7 @@ test("02 Tactical Recovery — failure does not invalidate strategy", () => {
 
     // Simulate a failure event (tactic-level) — strategy stays ACTIVE.
     st.approvedStrategy.lastTacticFailure = { at: Date.now(), note: "selector mismatch" };
-    fs.writeFileSync(path.join(root, ".wam", "tasks", taskId, "state.yaml"), JSON.stringify(st));
+    fs.writeFileSync(path.join(root, ".wam", "tasks", taskId, "task.json"), JSON.stringify(st));
 
     st = readState(taskId, root);
     assert.equal(st.approvedStrategy.status, "ACTIVE", "Tactical failure MUST NOT change strategy status");
@@ -203,7 +203,7 @@ test("08 Strategy Change — material replacement requires new approval", () => 
     // Simulate evidence that invalidates the strategy → CHALLENGED, NOT silently replaced.
     st.approvedStrategy.status = "CHALLENGED";
     st.approvedStrategy.challengeReason = "Architecture incompatibility evidence";
-    fs.writeFileSync(path.join(root, ".wam", "tasks", taskId, "state.yaml"), JSON.stringify(st));
+    fs.writeFileSync(path.join(root, ".wam", "tasks", taskId, "task.json"), JSON.stringify(st));
 
     st = readState(taskId, root);
     assert.equal(st.approvedStrategy.status, "CHALLENGED", "Strategy must be CHALLENGED, not silently replaced");

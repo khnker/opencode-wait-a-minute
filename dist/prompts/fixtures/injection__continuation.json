@@ -1,0 +1,11 @@
+{
+  "id": "injection.continuation",
+  "vars": {
+    "signals": "signals-summary"
+  },
+  "mustContain": [
+    "[wam continuation]",
+    "Contexto reconstruido (signals-summary)"
+  ],
+  "mustNotContain": []
+}

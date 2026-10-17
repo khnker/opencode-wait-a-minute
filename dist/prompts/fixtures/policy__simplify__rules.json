@@ -1,0 +1,10 @@
+{
+  "id": "policy.simplify.rules",
+  "vars": {},
+  "mustContain": [
+    "Identificar la responsabilidad de cada componente y el contrato que debe preservar",
+    "Reusar una abstracción cuando sus responsabilidades y condiciones de cambio encajen",
+    "No agregar abstracción especulativa"
+  ],
+  "mustNotContain": []
+}

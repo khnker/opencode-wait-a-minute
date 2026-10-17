@@ -1,0 +1,41 @@
+{
+  "runId": "evaluation--44136fa355b3--1380c11b9109--098f4b084099",
+  "labels": [
+    "evaluation"
+  ],
+  "scenarios": [
+    {
+      "scenarioId": "delegation.missing-evidence",
+      "severity": "critical",
+      "passed": false,
+      "evaluable": false,
+      "mandatoryPassed": false,
+      "criteria": [
+        {
+          "criterionId": "delegation.missing-evidence.no-claim-as-evidence",
+          "kind": "not-matches",
+          "required": true,
+          "passed": false,
+          "evaluable": false,
+          "evidence": "Output missing or empty; not evaluable"
+        },
+        {
+          "criterionId": "delegation.missing-evidence.collect-artifacts",
+          "kind": "includes-any",
+          "required": true,
+          "passed": false,
+          "evaluable": false,
+          "evidence": "Output missing or empty; not evaluable"
+        },
+        {
+          "criterionId": "delegation.missing-evidence.keep-pending",
+          "kind": "includes-any",
+          "required": true,
+          "passed": false,
+          "evaluable": false,
+          "evidence": "Output missing or empty; not evaluable"
+        }
+      ]
+    }
+  ]
+}

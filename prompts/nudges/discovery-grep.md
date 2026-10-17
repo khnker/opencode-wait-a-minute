@@ -1,8 +1,8 @@
 ---
 id: nudge.discovery.grep
 name: Discovery nudge: grep
-purpose: Steer agent away from raw bash search toward grep tool or CQE MCP.
-responsibility: Owns the nudge steering search toward the grep tool or CQE MCP.
+purpose: Steer agent away from raw bash search toward CQE first (/wam ctx get), grep tool as fallback.
+responsibility: Owns the nudge steering search toward CQE first, grep tool as fallback.
 consumer: src/policy/discovery-classifier.js#nudgeFor
 inputs: []
 output: single-line string
@@ -11,4 +11,4 @@ verification: src/prompts/characterization.test.mjs
 dependencies: []
 status: active
 ---
-Consider using the dedicated 'grep' tool or 'context-query-engine' MCP (search_files / context_query) instead of raw bash search.
+Prefer '/wam ctx get "<query>"' (CQE index, fastest) over raw bash search; fallback: dedicated 'grep' tool.

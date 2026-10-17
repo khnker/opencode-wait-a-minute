@@ -35,7 +35,8 @@ const send = async (hooks, text, taskId, sid = "ag") => {
 const wam = async (hooks, args) => {
   const out = { parts: [] };
   await hooks["command.execute.before"]({ command: "wam", arguments: args }, out);
-  return out.parts[0]?.text ?? "";
+  const text = out.parts[0]?.text ?? "";
+  return text.startsWith("[wam] ") ? text.slice(6) : text;
 };
 
 test("R1: asunción persistida en estado con {id, statement, classification, status}", async () => {

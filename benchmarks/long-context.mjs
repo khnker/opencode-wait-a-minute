@@ -28,9 +28,9 @@ function isoTimestamp() {
  * 1. Run the benchmark.
  * 2. Write the JSON artifact to `benchmarks/results/long-context-<iso>.json`.
  */
-function main() {
+async function main() {
   console.error("Running long-context scaling benchmark...");
-  const results = runLongContextScaling({ sizes: CONTINUATION_SIZES });
+  const results = await runLongContextScaling({ sizes: CONTINUATION_SIZES });
   const timestamp = isoTimestamp();
   const artifact = {
     benchmark: "long-context-scaling",
@@ -50,5 +50,5 @@ function main() {
 export { main, runLongContextScaling, isoTimestamp };
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
+  await main();
 }

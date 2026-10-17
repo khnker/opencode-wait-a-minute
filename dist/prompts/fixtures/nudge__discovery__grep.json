@@ -1,0 +1,10 @@
+{
+  "id": "nudge.discovery.grep",
+  "vars": {},
+  "mustContain": [
+    "'grep' tool",
+    "context-query-engine",
+    "instead of raw bash search"
+  ],
+  "mustNotContain": []
+}

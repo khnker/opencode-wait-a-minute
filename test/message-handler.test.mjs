@@ -10,6 +10,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { handleMessage, extractPrompt } from "../src/integration/message-handler.js";
+import { tagWamPart } from "../src/integration/part-provenance.js";
 import { initMemory } from "../src/persistence/memory.js";
 import { getTaskState, persistTaskState } from "../src/skills/engine.js";
 
@@ -74,7 +75,8 @@ const baseDeps = () => ({
   resolveSessionBase: async () => ROOT,
   wamRootFor: async () => ROOT,
   ensureWamMemory: async () => ROOT,
-  effectiveTaskId: (_input, _st, root) => `t-${Date.now()}`,
+  effectiveTaskId: (_input, _st, root) => ({ taskId: `t-${Date.now()}`, fallbackKind: "explicit" }),
+  isContinuationPrompt: () => false,
   genPartId: () => `prt_${Math.random().toString(16).slice(2, 18)}`,
   emitTextPart: (output, text, meta = {}) => {
     if (!output) return;
@@ -99,6 +101,8 @@ const baseDeps = () => ({
   readLiveContext: () => "",
   persistLiveContext: noop,
   assembleContext: () => ({ lines: [], budget_used: 0, budget: 4000, levels: {} }),
+  selectContextWithCqe: async () => ({}),
+  detectFileSearchIntent: () => false,
   createSnapshot: noop,
   checkContinuation: () => ({ status: "VALID" }),
   rebuildScope: () => ({ rebuildN1: false, rebuildN3: false }),
@@ -128,9 +132,15 @@ test("extractPrompt: lee prompt desde input.message.parts (formato 1.18.25)", ()
   assert.equal(extractPrompt(input, output), "hola mundo");
 });
 
-test("extractPrompt: ignora output.parts y usa input.message.parts", () => {
+test("extractPrompt: ignora parts sintéticas de output y prefiere texto de usuario en output.parts (1.19)", () => {
   const input = { message: { parts: [{ type: "text", text: "viejo" }] } };
   const output = { parts: [{ type: "text", text: "nuevo" }] };
+  assert.equal(extractPrompt(input, output), "nuevo");
+});
+
+test("extractPrompt: parte sintética WAM en output.parts no se autoconsume", () => {
+  const input = { message: { parts: [{ type: "text", text: "viejo" }] } };
+  const output = { parts: [tagWamPart({ type: "text", text: "[wam] inyección" }, { messageID: "m1" })] };
   assert.equal(extractPrompt(input, output), "viejo");
 });
 

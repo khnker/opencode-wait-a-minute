@@ -20,8 +20,21 @@ const STATE_PATH = path.join(ROOT, ".wam", "task-state.json");
 
 // Hermetic fixture: `.wam/` is gitignored, so a clean checkout (e.g. CI) has no
 // state file. Seed a minimal valid state and remove it on exit if we created it,
-// so these tests never depend on developer-local state.
-if (!fs.existsSync(STATE_PATH)) {
+// so these tests never depend on developer-local state. A state file that
+// exists but carries no tasks is equally unusable (saveState refuses it and
+// exits), so it is seeded too — the pre-existing content is restored on exit.
+function stateUsable() {
+  try {
+    const s = JSON.parse(fs.readFileSync(STATE_PATH, "utf8"));
+    return !!(s && s.tasks && Object.keys(s.tasks).length > 0);
+  } catch {
+    return false;
+  }
+}
+if (!stateUsable()) {
+  const hadFile = fs.existsSync(STATE_PATH);
+  const seedBackup = hadFile ? STATE_PATH + ".seedbak" : null;
+  if (hadFile) fs.copyFileSync(STATE_PATH, seedBackup);
   fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
   fs.writeFileSync(
     STATE_PATH,
@@ -40,6 +53,15 @@ if (!fs.existsSync(STATE_PATH)) {
     ),
   );
   process.on("exit", () => {
+    try {
+      if (seedBackup) {
+        fs.copyFileSync(seedBackup, STATE_PATH);
+        fs.unlinkSync(seedBackup);
+        return;
+      }
+    } catch {
+      // fall through to directory removal below
+    }
     const dir = path.dirname(STATE_PATH);
     try {
       if (fs.existsSync(dir)) fs.chmodSync(dir, 0o755);

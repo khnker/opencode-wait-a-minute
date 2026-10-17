@@ -59,8 +59,8 @@ function buildBaseline(turn) {
   const rawContext = nodes.map((n) => `[Type: ${n.type}]\n${n.content}\n---`).join("\n");
   return `${rawContext}\n\n[Task]\n${turn.prompt}`;
 }
-function buildWam(scenario, turn) {
-  const assembly = assembleContext({
+async function buildWam(scenario, turn) {
+  const assembly = await assembleContext({
     prompt: turn.prompt,
     taskId: scenario.id,
     ...turn.input,
@@ -75,10 +75,10 @@ function buildWam(scenario, turn) {
 // the broken upstream import.
 const normalize = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 
-test("REGRESSION: WAM prompt retains decision fact (Q2-decision-token shape)", () => {
+test("REGRESSION: WAM prompt retains decision fact (Q2-decision-token shape)", async () => {
   const input = makeInput({ taskId: "Q2", objective: "decision-token", reqs: 3, evs: 2, decs: 5 });
   const scenario = { id: "Q2-decision-token", budget: 4000, turns: [{ prompt: "decision summary token", input, budget: 4000 }] };
-  const content = buildWam(scenario, scenario.turns[0]);
+  const content = await buildWam(scenario, scenario.turns[0]);
   assert.ok(
     normalize(content).includes(normalize("q2:-decision[3]")),
     `WAM REGRESSION: Q2 WAM prompt must include "q2:-decision[3]". ` +
@@ -86,10 +86,10 @@ test("REGRESSION: WAM prompt retains decision fact (Q2-decision-token shape)", (
   );
 });
 
-test("REGRESSION: WAM prompt retains evidence fact (Q4-evidence-token shape)", () => {
+test("REGRESSION: WAM prompt retains evidence fact (Q4-evidence-token shape)", async () => {
   const input = makeInput({ taskId: "Q4", objective: "evidence-token", reqs: 2, evs: 9, decs: 2 });
   const scenario = { id: "Q4-evidence-token", budget: 4000, turns: [{ prompt: "evidence token", input, budget: 4000 }] };
-  const content = buildWam(scenario, scenario.turns[0]);
+  const content = await buildWam(scenario, scenario.turns[0]);
   assert.ok(
     normalize(content).includes(normalize("q4:-evidence[4]")),
     `WAM REGRESSION: Q4 WAM prompt must include "q4:-evidence[4]". ` +
@@ -97,13 +97,13 @@ test("REGRESSION: WAM prompt retains evidence fact (Q4-evidence-token shape)", (
   );
 });
 
-test("REGRESSION: WAM prompt retains requirement fact (Q1-exact-req-token shape)", () => {
+test("REGRESSION: WAM prompt retains requirement fact (Q1-exact-req-token shape)", async () => {
   // Requirement edge already worked before the fix (task → requires_completion → req
   // is traversed by getDependencies). This guard ensures the fix did not break
   // the requirement path.
   const input = makeInput({ taskId: "Q1", objective: "exact-req-token", reqs: 6, evs: 2, decs: 2 });
   const scenario = { id: "Q1-exact-req-token", budget: 4000, turns: [{ prompt: "requirement token", input, budget: 4000 }] };
-  const content = buildWam(scenario, scenario.turns[0]);
+  const content = await buildWam(scenario, scenario.turns[0]);
   assert.ok(
     normalize(content).includes(normalize("q1:-requirement[3]")),
     `WAM REGRESSION: Q1 WAM prompt must include "q1:-requirement[3]". ` +
@@ -111,7 +111,7 @@ test("REGRESSION: WAM prompt retains requirement fact (Q1-exact-req-token shape)
   );
 });
 
-test("REGRESSION: token savings not materially degraded by category inclusion", () => {
+test("REGRESSION: token savings not materially degraded by category inclusion", async () => {
   // Spot-check: for a typical scenario, baseline/WAM input ratio should still
   // be a meaningful reduction (>=5%). The fix adds CONDITIONAL category nodes
   // to the candidate set, but the existing budget cap in Phase 6b keeps
@@ -119,7 +119,7 @@ test("REGRESSION: token savings not materially degraded by category inclusion", 
   const input = makeInput({ taskId: "Q4", objective: "evidence-token", reqs: 2, evs: 9, decs: 2 });
   const scenario = { id: "Q4-evidence-token", budget: 4000, turns: [{ prompt: "evidence token", input, budget: 4000 }] };
   const base = buildBaseline(scenario.turns[0]);
-  const wam = buildWam(scenario, scenario.turns[0]);
+  const wam = await buildWam(scenario, scenario.turns[0]);
   const reductionPct = ((base.length - wam.length) / base.length) * 100;
   assert.ok(
     reductionPct >= 5,

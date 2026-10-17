@@ -1,0 +1,12 @@
+{
+  "id": "frontend-ux-design",
+  "vars": {
+    "context": "Observed focus loss on checkout; propose a grounded change."
+  },
+  "mustContain": [
+    "observed",
+    "hypothesis",
+    "Do NOT invent"
+  ],
+  "mustNotContain": []
+}

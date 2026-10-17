@@ -143,7 +143,7 @@ test("buildCandidate: empty command → empty argv", () => {
 // ---------- classifyActionAgainstStrategy via index.js ----------
 
 // Drive classifyActionAgainstStrategy indirectly: a PROPOSED task that we
-// approve, then read back the approvedStrategy from state.yaml and re-evaluate
+// approve, then read back the approvedStrategy from task.json and re-evaluate
 // using a focused test entry point. To avoid touching internals, we exercise
 // the public contract via policy/strategy-capabilities.js directly using the
 // same legacy-to-capability adapter logic. The classifyActionAgainstStrategy
@@ -238,7 +238,7 @@ test("approvedStrategy round-trip: a tight strategy covers 'npm test' but blocks
   const taskId = "task-cap-binding";
   fs.mkdirSync(path.join(root, ".wam", "tasks", taskId), { recursive: true });
   fs.writeFileSync(
-    path.join(root, ".wam", "tasks", taskId, "state.yaml"),
+    path.join(root, ".wam", "tasks", taskId, "task.json"),
     JSON.stringify({
       phase: "PROPOSED",
       contract: { status: "PROPOSED", objective: "Bind capabilities", rigor: "NORMAL" },
@@ -251,7 +251,7 @@ test("approvedStrategy round-trip: a tight strategy covers 'npm test' but blocks
     assert.equal(r.ok, true);
 
     const stateRaw = fs.readFileSync(
-      path.join(root, ".wam", "tasks", taskId, "state.yaml"),
+      path.join(root, ".wam", "tasks", taskId, "task.json"),
       "utf-8"
     );
     const state = JSON.parse(stateRaw);
@@ -270,7 +270,7 @@ test("approvedStrategy round-trip: a tight strategy covers 'npm test' but blocks
     };
     state.approvedStrategy = { ...strat, ...tight };
     fs.writeFileSync(
-      path.join(root, ".wam", "tasks", taskId, "state.yaml"),
+      path.join(root, ".wam", "tasks", taskId, "task.json"),
       JSON.stringify(state, null, 2)
     );
 

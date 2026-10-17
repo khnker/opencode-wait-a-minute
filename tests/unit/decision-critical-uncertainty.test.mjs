@@ -84,7 +84,7 @@ test("regresión: tarea sin incertidumbre mantiene flujo actual", async () => {
 });
 
 function stateFile(taskId) {
-  return path.join(process.cwd(), ".wam", "tasks", taskId, "state.yaml");
+  return path.join(process.cwd(), ".wam", "tasks", taskId, "task.json");
 }
 function requireState(taskId) {
   return fs.readFileSync(stateFile(taskId), "utf-8");

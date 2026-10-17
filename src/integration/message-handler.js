@@ -21,6 +21,8 @@ import { buildRoleDirective } from "../cognition/task-role-engine.js";
 import { detectCouplingIntent, traceCouplingForTask } from "../context/selection.js";
 import { loadPrompt } from "../prompts/loader.js";
 import { confirmCompletion } from "../verification/verification-policy.js";
+import { validateState } from "../state/task-state.js";
+import { pruneCompletedTasks } from "../persistence/retention-manager.js";
 
 // Idempotency guard: a chat.message invocation must be processed at most once
 // per message id + kind. The store is normally owned by the plugin instance
@@ -147,6 +149,7 @@ export async function handleMessage(input, output, deps) {
     wamRootFor,
     ensureWamMemory,
     effectiveTaskId,
+    isContinuationPrompt,
     genPartId,
     emitTextPart,
     readActiveTaskIdFresh,
@@ -273,7 +276,39 @@ export async function handleMessage(input, output, deps) {
       taskId = resolved.taskId;
       fallbackKind = resolved.fallbackKind;
     }
-    if (input.sessionID) sessionTasks.set(input.sessionID, taskId);
+    if (input.sessionID) {
+      sessionTasks.set(input.sessionID, taskId);
+      // Persist active-task pointer to disk so /wam contract approve (which
+      // runs in a different process after restart) resolves the SAME taskId
+      // instead of falling back to ses-<sid>/default-task and approving the
+      // wrong task. Se persiste en slug-session-bound (nueva task), cached y
+      // active (refresh: el binding 1 sesión = 1 task nunca debe expirar por
+      // falta de escritura). Namespaces genéricos (session/default) son
+      // deterministas y no necesitan persistencia.
+      if ((fallbackKind === "slug-session-bound" || fallbackKind === "cached" || fallbackKind === "active") && typeof writeActiveTaskId === "function") {
+        try {
+          writeActiveTaskId(taskId, wamRoot, { sessionId: input.sessionID, projectRoot: wamRoot });
+        } catch (err) {
+          // Non-fatal: keep in-memory cache so the session keeps working,
+          // but log so the persistence gap is visible.
+          if (typeof deps?.wamWarn === "function") deps.wamWarn(`[WAM] active-task persist failed: ${err.message}`);
+        }
+      }
+    } else if (fallbackKind === "slug-session-bound") {
+      // Slug fallback produced a nosess suffix because sessionID was missing.
+      // Log a warning so silent cross-session collision risks are visible.
+      if (typeof deps?.wamWarn === "function") deps.wamWarn(`[WAM] slug-session-bound task ${taskId} created without sessionID — re-binding on next message will fail`);
+    }
+
+    // Task-start gate: cada vez que parte una tarea se valida el task y se
+    // podan las carpetas con más de 15 días (soft-archive: el resumen queda
+    // en `.wam/archive/tasks/`, nunca se borra el archive). Best-effort:
+    // jamás bloquea el flujo del mensaje.
+    try {
+      const existing = getTaskState(taskId, wamRoot);
+      if (existing) validateState(existing);
+    } catch {}
+    try { pruneCompletedTasks(wamRoot).catch(() => {}); } catch {}
 
     // Welcome / disambiguation gate: cuando la primera inferencia cayó en
     // default-task o ses-<id> sin pista específica, saludamos al usuario y
@@ -313,6 +348,13 @@ export async function handleMessage(input, output, deps) {
         // Rewrite the original prompt so the implementation attempt is NOT
         // consumed downstream as an instruction (AC5).
         const rewrite = loadPrompt("notice.blocked_prefix", { directive });
+        // SDK 1.19: output.parts holds the user text — must rewrite there too.
+        if (Array.isArray(output?.parts) && output.parts.length > 0) {
+          const tp = output.parts.find(
+            (p) => p && p.type === "text" && typeof p.text === "string" && !isWamSynthetic(p),
+          );
+          if (tp) tp.text = rewrite;
+        }
         if (input?.message?.parts && input.message.parts.length > 0) {
           const tp = input.message.parts.find((p) => p.type === "text" && typeof p.text === "string");
           if (tp) tp.text = rewrite;
@@ -477,11 +519,27 @@ export async function handleMessage(input, output, deps) {
       intentConf < 60 ||
       openUnknowns.length > 0;
     const trimmed = promptText.trim();
-    const userConfirms =
-      !highUncertainty ||
-      /^(s[ií]|ok|okey|dale|hazlo|adelante|continuar|continua|aprobar|confirmo|correcto|perfecto|bueno|va|listo|sigue)\b/i.test(trimmed);
+    const explicitYes =
+      /^(s[ií]|ok|okey|dale|hazlo|adelante|continuar|continua|aprobar|apruebo|confirmo|correcto|perfecto|bueno|va|listo|sigue|yes)\b/i.test(trimmed);
+    const userConfirms = !highUncertainty || explicitYes;
+    const userRejects =
+      /^(no|nel|ni\b|rechazo|rechazar|cancela|cancelar|todav[ií]a no|espera|para)\b/i.test(trimmed);
 
-    if (state.contract?.status === "PROPOSED" && state.phase === "PROPOSED" && userConfirms) {
+    if (state.contract?.status === "PROPOSED" && state.phase === "PROPOSED" && userRejects) {
+      waitAMinute.rejectContract(taskId, wamRoot);
+      emitTextPart(output, "Contrato rechazado — dime cómo ajustarlo (edita requisitos o describe de nuevo la tarea).", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+      try {
+        const fresh = getTaskState(taskId, wamRoot);
+        if (fresh) {
+          state.contract = fresh.contract;
+          state.phase = fresh.phase;
+          state.nextAction = fresh.nextAction;
+        }
+      } catch {}
+    } else if (
+      (state.contract?.status === "PROPOSED" && state.phase === "PROPOSED" && userConfirms) ||
+      (state.contract?.status === "REJECTED" && explicitYes)
+    ) {
       waitAMinute.approveContract(taskId, wamRoot);
       try {
         recordDecision({
@@ -499,6 +557,10 @@ export async function handleMessage(input, output, deps) {
         state.phase = fresh.phase;
         state.nextAction = fresh.nextAction;
       }
+    } else if (state.contract?.status === "PROPOSED" && state.phase === "PROPOSED" && !state.contractPrompted) {
+      emitTextPart(output, "¿Apruebo este contrato? Responde sí para aprobar o no para rechazar. (o /wam contract approve)", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+      state.contractPrompted = true;
+      try { persistTaskState(taskId, state, wamRoot); } catch {}
     }
 
     const gate = waitAMinute.evaluateCompletionGate(state, promptText);
@@ -561,17 +623,33 @@ export async function handleMessage(input, output, deps) {
       }
 
       if (detectFileSearchIntent(promptText)) {
+        const cqeT0 = Date.now();
         const cqePack = await selectContextWithCqe(promptText, {
           root: wamRoot,
           disableCqe: cfg.disableCqe === true,
         });
-        if (cqePack.file_context && cqePack.file_context.length > 0) {
-          inject.push(`\n[wam cqe file_context]\n${JSON.stringify(cqePack.file_context, null, 2)}`);
+        const cqeMeta = cqePack.cqeMeta || {};
+        const cqeMs = typeof cqeMeta.elapsedMs === "number" ? cqeMeta.elapsedMs : Date.now() - cqeT0;
+        const cqeFiles = Array.isArray(cqePack.file_context) ? cqePack.file_context : [];
+        if (cqeFiles.length > 0) {
+          const shown = cqeFiles.slice(0, 8).map((f) => {
+            const score = f?.score ?? f?.relevance ?? "?";
+            const toks = f?.tokenEstimate ?? "?";
+            const snippet = String(f?.content || "").replace(/\n+/g, " ").slice(0, 120);
+            const loc = f?.startLine != null ? `:${f.startLine}` : "";
+            return `  - ${f?.path || "?"}${loc} (score ${score}, ~${toks} tok) ${snippet}`;
+          });
+          if (cqeFiles.length > 8) shown.push(`  ... (+${cqeFiles.length - 8} más)`);
+          inject.push(`\n[wam cqe file_context: ${cqeFiles.length} archivos en ${cqeMs}ms, fuente ${cqeMeta.source || "?"}]\n${shown.join("\n")}`);
+          emitTextPart(output, `cqe: ${cqeFiles.length} archivos en ${cqeMs}ms (fuente ${cqeMeta.source || "?"}) — top: ${(cqeFiles.slice(0, 3).map((f) => f?.path || "?")).join(", ")}`, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
           const cqeTarget = updatedState || state;
           if (cqeTarget) {
             cqeTarget.cqeCalls = (cqeTarget.cqeCalls || 0) + 1;
             try { persistTaskState(taskId, cqeTarget, wamRoot); } catch {}
           }
+        } else {
+          const reason = cqeMeta.fallbackReason || (cqeMeta.cqeError ? `error: ${cqeMeta.cqeError}` : "sin resultados");
+          emitTextPart(output, `cqe: sin resultados (${reason}) en ${cqeMs}ms — contexto nativo prevalece`, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
         }
       }
     } catch {}
@@ -617,8 +695,19 @@ const { lines } = buildTaskInferenceDirective({
         : "";
       const gateHold = loadPrompt("notice.completion_gate", { count: gate.pending.length, pendingList, nextAction: updatedState.nextAction });
       emitTextPart(output, gateHold, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+      // SDK 1.19: rewrite the non-synthetic text part on output.parts too.
+      if (Array.isArray(output?.parts) && output.parts.length > 0) {
+        const tp = output.parts.find(
+          (p) => p && p.type === "text" && typeof p.text === "string" && !isWamSynthetic(p),
+        );
+        if (tp) tp.text = gateHold;
+      }
       if (input?.parts && input.parts.length > 0) {
         const tp = input.parts.find((p) => p.type === "text" && typeof p.text === "string");
+        if (tp) tp.text = gateHold;
+      }
+      if (input?.message?.parts && input.message.parts.length > 0) {
+        const tp = input.message.parts.find((p) => p.type === "text" && typeof p.text === "string");
         if (tp) tp.text = gateHold;
       }
     } else if (gate.allDone) {
@@ -701,15 +790,29 @@ const { lines } = buildTaskInferenceDirective({
  * @returns {string}
  */
 export function extractPrompt(input, output) {
-  // Read ONLY from the user's own message. Never from `output.parts`:
-  // WAM writes synthetic injections there, so reading them back is the
-  // self-consumption bug that caused the re-entrancy loop.
+  // SDK 1.19: chat.message output carries the user message parts; input is
+  // minimal. We must read non-synthetic text parts from output.parts FIRST
+  // (this is where the user's text now lives), but only when the part is
+  // NOT a synthetic WAM injection — otherwise we re-consume our own output
+  // and create a re-entrancy loop.
+  //
+  // Order of preference:
+  //   1) output.parts — SDK 1.19 canonical location
+  //   2) input.message.parts — pre-1.19 / tests / direct callers
+  //   3) input.parts — legacy
+  //   4) input.text — last-resort scalar fallback
+  if (Array.isArray(output?.parts) && output.parts.length > 0) {
+    const textPart = output.parts.find(
+      (p) => p && p.type === "text" && typeof p.text === "string" && !isWamSynthetic(p),
+    );
+    if (textPart?.text) return textPart.text;
+  }
   const srcParts = input?.message?.parts || input?.parts || [];
   if (srcParts.length > 0) {
     const textPart = srcParts.find(
       (p) => p.type === "text" && typeof p.text === "string" && !isWamSynthetic(p),
     );
-    return textPart?.text || "";
+    if (textPart?.text) return textPart.text;
   }
   if (input?.text && typeof input.text === "string") return input.text;
   return "";

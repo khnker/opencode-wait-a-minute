@@ -1,0 +1,13 @@
+{
+  "id": "notice.pending_task",
+  "vars": {
+    "active": "task-42",
+    "phase": "RUNNING"
+  },
+  "mustContain": [
+    "tarea pendiente: task-42",
+    "fase RUNNING",
+    "no asumo intención"
+  ],
+  "mustNotContain": []
+}

@@ -179,7 +179,7 @@ test("CALIBRATION: recall scenarios have requiredFact(s) present verbatim in bas
   assert.ok(totalChecked > 0, "no recall requiredFacts checked");
 });
 
-test("FAIRNESS: every requiredFact also appears in the WAM arm prompt (best-effort)", () => {
+test("FAIRNESS: every requiredFact also appears in the WAM arm prompt (best-effort)", async () => {
   // The WAM arm may legitimately drop nodes to fit budget. We do NOT fail when
   // a fact is missing — we only emit a single diagnostic to document cases
   // where the WAM context was constrained. This protects future scenarios
@@ -191,7 +191,7 @@ test("FAIRNESS: every requiredFact also appears in the WAM arm prompt (best-effo
     for (let t = 0; t < turns.length; t += 1) {
       let built;
       try {
-        built = buildWamRequest(scenario, turns[t]);
+        built = await buildWamRequest(scenario, turns[t]);
       } catch (_e) {
         // Some scenarios (negative controls) intentionally may fail; skip.
         continue;

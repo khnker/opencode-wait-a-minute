@@ -12,6 +12,16 @@ import { buildIndex, queryIndex, catalogPathFor } from './index-layer/index.js';
 
 const built = new Map(); // cwd → true
 
+function safeQueryIndex(cwd, type, name, limit) {
+  try {
+    return queryIndex(cwd, type, name, limit);
+  } catch {
+    // Catálogo ausente/roto (p.ej. node:sqlite no disponible en este runtime)
+    // → [] para que el caller degrade a rg/filesystem en vez de reventar el plan.
+    return [];
+  }
+}
+
 export function ensureIndex(cwd, { forceBuild = false } = {}) {
   const key = path.resolve(cwd);
   if (built.has(key) && !forceBuild) return 2; // 2 = reuse
@@ -30,7 +40,7 @@ export function ensureIndex(cwd, { forceBuild = false } = {}) {
 }
 
 export function symbolLookup(cwd, name, limit = 10) {
-  const rows = queryIndex(cwd, 'symbol', name, limit);
+  const rows = safeQueryIndex(cwd, 'symbol', name, limit);
   return rows.map((r) => ({
     source: 'index-symbol', path: r.path, line_start: r.span?.start ?? 1, line_end: r.span?.end ?? 1,
     content: '', match_type: 'structural', score: 1, certainty: r.certainty,
@@ -39,7 +49,7 @@ export function symbolLookup(cwd, name, limit = 10) {
 }
 
 export function lexicalLookup(cwd, name, limit = 10) {
-  const rows = queryIndex(cwd, 'lexical', name, limit);
+  const rows = safeQueryIndex(cwd, 'lexical', name, limit);
   return rows.map((r) => ({
     source: 'index-lexical', path: r.path, line_start: 1, line_end: 1,
     content: '', match_type: 'exact', score: 0.9, certainty: r.certainty,
@@ -48,7 +58,7 @@ export function lexicalLookup(cwd, name, limit = 10) {
 }
 
 export function dependencyExpand(cwd, name, limit = 10) {
-  const rows = queryIndex(cwd, 'dependency', name, limit);
+  const rows = safeQueryIndex(cwd, 'dependency', name, limit);
   return rows.map((r) => ({
     source: 'index-dependency', path: r.path, line_start: 1, line_end: 1,
     content: '', match_type: 'reference', score: 0.9, certainty: r.certainty,

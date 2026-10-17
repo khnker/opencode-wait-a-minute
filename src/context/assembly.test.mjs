@@ -8,8 +8,8 @@ const REGISTRY = {
   "base-skill": { id: "base-skill", content: "BASE_BODY ".repeat(400) },
 };
 
-test("regression: injects skill bodies without ReferenceError (skill.base before loop)", () => {
-  const pack = assembleContext({
+test("regression: injects skill bodies without ReferenceError (skill.base before loop)", async () => {
+  const pack = await assembleContext({
     prompt: "do a normal task",
     taskId: "t-regression",
     classification: "normal",
@@ -22,8 +22,8 @@ test("regression: injects skill bodies without ReferenceError (skill.base before
   assert.ok(text.includes("[wam N3 skill] matched-skill"), "matched skill must be injected");
 });
 
-test("task-matched skills are prioritized over base skills under tight budget", () => {
-  const pack = assembleContext({
+test("task-matched skills are prioritized over base skills under tight budget", async () => {
+  const pack = await assembleContext({
     prompt: "do a normal task",
     taskId: "t-priority",
     classification: "normal",
@@ -39,8 +39,8 @@ test("task-matched skills are prioritized over base skills under tight budget", 
   assert.ok(text.includes("[wam N3 skill] matched-skill"), "matched skill must win the budget");
 });
 
-test("MANDATORY items are never truncated even when they exceed total budget", () => {
-    const pack = assembleContext({
+test("MANDATORY items are never truncated even when they exceed total budget", async () => {
+    const pack = await assembleContext({
       prompt: "do a task",
       budget: 10,
       taskState: { phase: "start" },
@@ -54,8 +54,8 @@ test("MANDATORY items are never truncated even when they exceed total budget", (
       "budget_violation flag must reflect the overrun");
   });
 
-test("dropByAdmission drops CONDITIONAL before OPTIONAL when budget is tight", () => {
-    const pack = assembleContext({
+test("dropByAdmission drops CONDITIONAL before OPTIONAL when budget is tight", async () => {
+    const pack = await assembleContext({
       prompt: "do a normal task",
       taskId: "t-drop",
       classification: "normal",

@@ -1,0 +1,10 @@
+{
+  "id": "injection.delegation",
+  "vars": {},
+  "mustContain": [
+    "[wam delegation]",
+    "delegar en PARALELO via Task",
+    "Mutación directa de archivos desde la sesión principal está BLOQUEADA"
+  ],
+  "mustNotContain": []
+}

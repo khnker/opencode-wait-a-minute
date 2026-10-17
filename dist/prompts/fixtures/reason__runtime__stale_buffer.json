@@ -1,0 +1,12 @@
+{
+  "id": "reason.runtime.stale_buffer",
+  "vars": {
+    "path": "src/app.js"
+  },
+  "mustContain": [
+    "stale buffer: src/app.js",
+    "changed since last read",
+    "re-read the file before editing"
+  ],
+  "mustNotContain": []
+}

@@ -1,0 +1,11 @@
+{
+  "id": "injection.n2_task",
+  "vars": {
+    "live": "live-token-abc"
+  },
+  "mustContain": [
+    "[wam N2 task]",
+    "live-token-abc"
+  ],
+  "mustNotContain": []
+}

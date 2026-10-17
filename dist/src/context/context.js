@@ -1,0 +1,665 @@
+/**
+ * Context Capsules — Context Selection Engine.
+ *
+ * OpenSpec changes: context-memory-model, context-selection-budget,
+ * session-context-continuity, refactor-context-engine.
+ *
+ * Rol: ciclo de vida de cápsula, identidad de sesión, selección determinística
+ * bajo presupuesto (N3) y retrieval por relevancia. NO decide N0/N1/N2 (esos
+ * niveles los emite assembly.js, Context Pack Builder).
+ *
+ * Unidades: Context Capsules (.wam/capsules/<id>.json), identidad de sesión
+ * (.wam/session.json), paquete de contexto por tarea. Sin vector DB ni
+ * embeddings; capa de alias determinística (closed set) para tokens sinónimos.
+ */
+
+import fs from "node:fs";
+import path from "node:path";
+import { generateContract, evaluateContract, mergeAssumptions } from "./sufficiency-contract.js";
+import { retrieveWithCqe } from "./cqe-adapter.js";
+
+export function detectFileSearchIntent(task) {
+  if (typeof task !== "string" || !task) return false;
+  // Normalize common Spanish diacritics so patterns like "dónde"/"donde" match uniformly.
+  const q = task.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+  // English + Spanish intent keywords (intent detection only — does not capture the query itself).
+  // `\b` boundaries keep us from matching substrings inside larger words (e.g. "archivo" inside "desarchivo").
+  return /\b(find|search|grep|locate|where\s+is|busca|buscar|encuentra|donde|revisa|revise|ver|archivo|archivos|codigo|file|files)\b/.test(q);
+}
+
+const LEVELS = ["L1", "L2", "L3", "L4"];
+const LIFECYCLE = ["candidate", "active", "superseded", "stale", "invalidated"];
+const PROVENANCE = ["user_decided", "observed", "inferred"];
+
+export const LEGACY_SESSION_ID = "legacy";
+
+const ALIASES = {
+  auth: "authentication",
+  authentication: "auth",
+  db: "database",
+  database: "db",
+  postgres: "postgresql",
+  postgresql: "postgres",
+  jwt: "token",
+  ts: "typescript",
+  typescript: "ts",
+  py: "python",
+  python: "py",
+  k8s: "kubernetes",
+  kubernetes: "k8s",
+  api: "interface",
+  ui: "frontend",
+};
+
+// --- CHANGE: session identity derived by root + OpenCode sessionID only ---
+
+function capsulesDir(root) {
+  return path.join(root || process.cwd(), ".wam", "capsules");
+}
+
+function sessionFile(root) {
+  return path.join(root || process.cwd(), ".wam", "session.json");
+}
+
+function genId(prefix) {
+  return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function fileExists(p) {
+  try {
+    return fs.existsSync(p);
+  } catch {
+    return false;
+  }
+}
+
+// -- Change 3: session identity derived per root --------------------------------
+// Session ID is scoped to (root, OpenCode sessionID), never global.
+// Different roots NEVER share session identity.
+
+export function getSessionId(root, sessionID) {
+  const file = sessionFile(root);
+  const key = `${root}:${sessionID || "default"}`;
+  // Per-(root,session) cache — never shared across roots
+  if (!getSessionId._cache) getSessionId._cache = new Map();
+  if (getSessionId._cache.has(key)) return getSessionId._cache.get(key);
+
+  try {
+    if (fileExists(file)) {
+      const s = JSON.parse(fs.readFileSync(file, "utf-8"));
+      if (s.session_id) {
+        getSessionId._cache.set(key, s.session_id);
+        return s.session_id;
+      }
+    }
+  } catch {}
+  const sid = genId("ses");
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ session_id: sid, created_at: nowIso() }, null, 2));
+  } catch {}
+  getSessionId._cache.set(key, sid);
+  return sid;
+}
+
+export function resetSessionCache() {
+  if (getSessionId._cache) getSessionId._cache.clear();
+}
+
+// -- Change 1: capsule CRUD ------------------------------------------------------
+
+function capsuleFile(root, contextId) {
+  return path.join(capsulesDir(root), `${contextId}.json`);
+}
+
+export function listCapsules(root, { level, lifecycle, sessionId } = {}) {
+  const dir = capsulesDir(root);
+  let ids = [];
+  try {
+    ids = fs.readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5));
+  } catch {
+    return [];
+  }
+  return ids
+    .map((id) => getCapsule(id, root))
+    .filter(Boolean)
+    .filter((c) => !level || c.level === level)
+    .filter((c) => !lifecycle || c.lifecycle === lifecycle)
+    .filter((c) => matchesSession(c, sessionId))
+    .sort((a, b) => (a.importance || 0) - (b.importance || 0));
+}
+
+function matchesSession(capsule, sessionId) {
+  if (sessionId === undefined) return true;
+  const csid = capsule.session_id;
+  if (csid == null) return sessionId === null || sessionId === LEGACY_SESSION_ID;
+  if (sessionId === null) return false;
+  return csid === sessionId;
+}
+
+export function migrateLegacyCapsules(root = process.cwd(), { dryRun = false } = {}) {
+  const dir = capsulesDir(root);
+  let ids = [];
+  try {
+    ids = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
+  } catch {
+    return { ok: true, migrated: [], dryRun };
+  }
+  const migrated = [];
+  for (const file of ids) {
+    const full = path.join(dir, file);
+    let capsule;
+    try {
+      capsule = JSON.parse(fs.readFileSync(full, "utf-8"));
+    } catch {
+      continue;
+    }
+    if (!Object.prototype.hasOwnProperty.call(capsule, "session_id")) {
+      migrated.push({ file, context_id: capsule.context_id });
+      if (!dryRun) {
+        capsule.session_id = LEGACY_SESSION_ID;
+        fs.writeFileSync(full, JSON.stringify(capsule, null, 2));
+      }
+    }
+  }
+  return { ok: true, migrated, dryRun };
+}
+
+export function getCapsule(contextId, root) {
+  try {
+    return JSON.parse(fs.readFileSync(capsuleFile(root, contextId), "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Crea una Context Capsule. `level` por defecto L3 Session (lo más conservador).
+ * Provenance inferred NO puede promoverse a L1 silenciosamente (ver promoteCapsule).
+ */
+export function createCapsule(entry, root) {
+  const contextId = entry.context_id || genId("cap");
+  const level = LEVELS.includes(entry.level) ? entry.level : "L3";
+  const provenance = PROVENANCE.includes(entry.provenance) ? entry.provenance : "inferred";
+  const capsule = {
+    context_id: contextId,
+    session_id: entry.session_id || getSessionId(root),
+    level,
+    lifecycle: LIFECYCLE.includes(entry.lifecycle) ? entry.lifecycle : "active",
+    purpose: entry.purpose || "",
+    scope: entry.scope || "",
+    importance: clampNum(entry.importance, 1, 10, 5),
+    confidence: clampNum(entry.confidence, 0, 1, 0.5),
+    provenance,
+    created_at: nowIso(),
+    updated_at: nowIso(),
+    mutation_rate: ["low", "medium", "high"].includes(entry.mutation_rate) ? entry.mutation_rate : "medium",
+    reuse_probability: ["low", "medium", "high"].includes(entry.reuse_probability)
+      ? entry.reuse_probability
+      : "medium",
+    dependencies: Array.isArray(entry.dependencies) ? entry.dependencies : [],
+    supersedes: entry.supersedes || null,
+    superseded_by: null,
+    retrieval_hints: Array.isArray(entry.retrieval_hints) ? entry.retrieval_hints : [],
+    content: entry.content || "",
+    evidence: entry.evidence || "",
+  };
+  persistCapsule(root, capsule);
+  // supersession: la anterior deja de ser current
+  if (capsule.supersedes) {
+    const prior = getCapsule(capsule.supersedes, root);
+    if (prior && prior.lifecycle !== "invalidated") {
+      prior.lifecycle = "superseded";
+      prior.superseded_by = contextId;
+      prior.updated_at = nowIso();
+      persistCapsule(root, prior);
+    }
+  }
+  return capsule;
+}
+
+export function updateCapsule(contextId, patch, root) {
+  const c = getCapsule(contextId, root);
+  if (!c) return { ok: false, reason: `Cápsula ${contextId} no existe` };
+  for (const [k, v] of Object.entries(patch)) {
+    if (k === "context_id" || k === "session_id") continue;
+    if (k === "level" && !LEVELS.includes(v)) continue;
+    if (k === "lifecycle" && !LIFECYCLE.includes(v)) continue;
+    if (k === "provenance" && !PROVENANCE.includes(v)) continue;
+    c[k] = v;
+  }
+  c.updated_at = nowIso();
+  persistCapsule(root, c);
+  return { ok: true, capsule: c };
+}
+
+export function markStale(contextId, root) {
+  return updateCapsule(contextId, { lifecycle: "stale" }, root);
+}
+
+export function invalidateCapsule(contextId, root) {
+  return updateCapsule(contextId, { lifecycle: "invalidated" }, root);
+}
+
+export function supersedeCapsule(oldId, newId, root) {
+  const c = getCapsule(oldId, root);
+  if (!c) return { ok: false, reason: `Cápsula ${oldId} no existe` };
+  c.lifecycle = "superseded";
+  c.superseded_by = newId;
+  c.updated_at = nowIso();
+  persistCapsule(root, c);
+  return { ok: true };
+}
+
+/**
+ * Promoción conservadora entre niveles.
+ * - inferred → L1 exige aprobación explícita (approvedBy) — nunca silenciosa.
+ * - L4 → descartable (no promovible).
+ */
+export function promoteCapsule(contextId, targetLevel, { approvedBy = "", evidence = "", root } = {}) {
+  const c = getCapsule(contextId, root);
+  if (!c) return { ok: false, reason: `Cápsula ${contextId} no existe` };
+  if (!LEVELS.includes(targetLevel)) return { ok: false, reason: `Nivel inválido ${targetLevel}` };
+  if (c.level === "L4") return { ok: false, reason: "L4 es descartable — no promovible" };
+  const cur = LEVELS.indexOf(c.level);
+  const tgt = LEVELS.indexOf(targetLevel);
+  if (tgt >= cur) {
+    return { ok: false, reason: `Promoción debe subir hacia L1 (${c.level} → ${targetLevel} es descenso o igual)` };
+  }
+  if (targetLevel === "L1" && c.provenance === "inferred" && !approvedBy) {
+    return { ok: false, reason: "inferred no puede promoverse a L1 silenciosamente — requiere aprobación" };
+  }
+  c.level = targetLevel;
+  c.lifecycle = "active";
+  if (evidence) c.evidence = evidence;
+  if (approvedBy) c.promotion = { approved_by: approvedBy, at: nowIso(), from: LEVELS[cur] };
+  c.updated_at = nowIso();
+  persistCapsule(root, c);
+  return { ok: true, capsule: c };
+}
+
+function persistCapsule(root, capsule) {
+  try {
+    const dir = capsulesDir(root);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(capsuleFile(root, capsule.context_id), JSON.stringify(capsule, null, 2));
+  } catch {}
+}
+
+function clampNum(v, min, max, dflt) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return dflt;
+  return Math.max(min, Math.min(max, n));
+}
+
+// -- Change 2: context selection bajo presupuesto --------------------------------
+
+function tokenize(text = "") {
+  const raw = (text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9áéíóúñü\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 2);
+  const out = new Set();
+  for (const w of raw) {
+    out.add(w);
+    const aliased = ALIASES[w];
+    if (aliased) out.add(aliased);
+  }
+  return out;
+}
+
+function overlapScore(aTokens, bTokens) {
+  if (!aTokens.size || !bTokens.size) return 0;
+  let hit = 0;
+  for (const t of bTokens) if (aTokens.has(t)) hit++;
+  return hit / Math.max(aTokens.size, 1);
+}
+
+function freshness(capsule, now = Date.now()) {
+  const days = Math.max(0, (now - new Date(capsule.updated_at).getTime()) / 86400000);
+  return Math.max(0.1, 1 - days / 30);
+}
+
+function capsuleTokens(c) {
+  return tokenize([c.purpose, c.scope, ...(c.retrieval_hints || []), c.content].join(" "));
+}
+
+function utility(capsule, taskTokens, now) {
+  const relevance = overlapScore(taskTokens, capsuleTokens(capsule));
+  const importance = (capsule.importance || 5) / 10;
+  const fresh = freshness(capsule, now);
+  const confidence = capsule.confidence || 0.5;
+  const tokenCost = Math.max(1, estimateCapsuleTokens(capsule));
+  return { relevance, importance, fresh, confidence, tokenCost, value: relevance * importance * fresh * confidence / tokenCost };
+}
+
+export function estimateCapsuleTokens(capsule) {
+  const text = [capsule.purpose, capsule.scope, ...(capsule.retrieval_hints || []), capsule.content].join(" ");
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * Construye el Context Package de la tarea bajo presupuesto.
+ * L1 activa = base siempre; L2/L3 por utility; dependencias resueltas;
+ * redundancia eliminada; observabilidad en selection-log.jsonl.
+ */
+export function selectContext(task, { budget = 8000, root, sessionId, log = true } = {}) {
+  const now = Date.now();
+  const taskTokens = tokenize(task);
+  const capsules = listCapsules(root, sessionId ? { sessionId } : {})
+    .filter((c) => c.lifecycle === "active" && c.level !== "L4");
+
+  const selected = [];
+  const rationale = [];
+  let used = 0;
+
+  // 1. L1 base (siempre)
+  const l1 = capsules
+    .filter((c) => c.level === "L1" && (c.content || "").trim().length > 0)
+    .sort((a, b) => (b.importance || 0) - (a.importance || 0));
+  for (const c of l1) {
+    const t = estimateCapsuleTokens(c);
+    if (used + t > budget) {
+      rationale.push(`${c.context_id}: L1 excede presupuesto restante (omitido)`);
+      continue;
+    }
+    selected.push(c);
+    used += t;
+    rationale.push(`${c.context_id}: L1 foundation (importance ${c.importance})`);
+  }
+
+  // 2. L2/L3 por utility (solo capsules con contenido real — sin contenido no hay conocimiento)
+  const candidates = capsules
+    .filter((c) => (c.level === "L2" || c.level === "L3") && (c.content || "").trim().length > 0)
+    .map((c) => ({ c, ...utility(c, taskTokens, now) }))
+    .filter((u) => u.relevance > 0)
+    .sort((a, b) => b.value - a.value);
+
+  const seenContent = new Set();
+  for (const u of candidates) {
+    const c = u.c;
+    if (c.superseded_by) {
+      rationale.push(`${c.context_id}: superseded por ${c.superseded_by} (omitido)`);
+      continue;
+    }
+    // redundancia: mismo contenido normalizado ya incluido (scope NO es
+    // identidad — dos capsules del mismo módulo son conocimiento distinto)
+    const contentKey = (c.content || c.purpose || "").toLowerCase().trim().slice(0, 120);
+    if (seenContent.has(contentKey)) {
+      rationale.push(`${c.context_id}: duplica contenido de capsule ya incluida (omitido)`);
+      continue;
+    }
+    const t = estimateCapsuleTokens(c);
+    if (used + t > budget) {
+      rationale.push(`${c.context_id}: excede presupuesto (utility ${u.value.toFixed(4)})`);
+      continue;
+    }
+    selected.push(c);
+    used += t;
+    seenContent.add(contentKey);
+    rationale.push(`${c.context_id}: utility ${u.value.toFixed(4)} (rel ${u.relevance.toFixed(2)} × imp ${u.importance.toFixed(2)} × fresh ${u.fresh.toFixed(2)} × conf ${u.confidence.toFixed(2)})`);
+  }
+
+  // 3. dependencias (transitivas, dedupe)
+  const byId = new Map(capsules.map((c) => [c.context_id, c]));
+  const seen = new Set(selected.map((c) => c.context_id));
+  const queue = selected.flatMap((c) => c.dependencies || []);
+  while (queue.length) {
+    const depId = queue.shift();
+    if (seen.has(depId)) continue;
+    const dep = byId.get(depId);
+    if (!dep || dep.lifecycle !== "active") continue;
+    const t = estimateCapsuleTokens(dep);
+    if (used + t > budget) {
+      rationale.push(`${depId}: dependencia excede presupuesto (omitida)`);
+      continue;
+    }
+    selected.push(dep);
+    seen.add(depId);
+    used += t;
+    rationale.push(`${depId}: dependencia requerida`);
+    queue.push(...(dep.dependencies || []));
+  }
+
+  // 4. sufficiency — contract-based instead of lexical
+  let contract = generateContract(task, "contract-1");
+  contract = evaluateContract(contract, selected);
+  contract = mergeAssumptions(contract, []);
+  const missing = contract.missing;
+  const sufficiency = contract.sufficient ? "ok" : "insufficient";
+
+  const pkg = {
+    task,
+    selected_ids: selected.map((c) => c.context_id),
+    capsules: selected,
+    rationale,
+    budget_used: used,
+    budget,
+    sufficiency,
+    missing,
+    contract,
+  };
+
+  if (log) {
+    try {
+       const logFile = path.join(root || process.cwd(), ".wam", "traces", "selection-log.jsonl");
+      fs.mkdirSync(path.dirname(logFile), { recursive: true });
+      fs.appendFileSync(logFile, JSON.stringify({ timestamp: nowIso(), task, selected_ids: pkg.selected_ids, budget_used: used, budget, sufficiency }) + "\n");
+    } catch {}
+  }
+  return pkg;
+}
+
+/**
+ * Variante async de selectContext que enriquece el paquete con file_context de
+ * CQE cuando la tarea es una intención de búsqueda de archivos. Se mantiene
+ * separada del selectContext sincrónico para no forzar `await` en callers que
+ * no pueden esperarlo (p.ej. assembleContext).
+ */
+export async function selectContextWithCqe(task, opts = {}) {
+  const pkg = selectContext(task, opts);
+  if (!opts.disableCqe && detectFileSearchIntent(task)) {
+    try {
+      const cqeRes = await retrieveWithCqe(task, { repoRoot: opts.root || process.cwd() });
+      if (cqeRes && cqeRes.items && cqeRes.items.length > 0) {
+        pkg.file_context = cqeRes.items;
+        pkg.rationale.push(`CQE: retrieved ${cqeRes.items.length} file matches`);
+      }
+    } catch {
+      // Non-fatal: CQE es augmentación best-effort; el contexto nativo prevalece.
+    }
+  }
+  return pkg;
+}
+
+/**
+ * Recuperación bajo demanda. Distingue "no cargado" de "no existe":
+ * retorna { ok, capsules, message } sin fabricar resultados.
+ */
+export function retrieveContext(query, { limit = 5, root } = {}) {
+  const qTokens = tokenize(query);
+  const hits = listCapsules(root)
+    .filter((c) => c.lifecycle === "active" || c.lifecycle === "candidate")
+    .map((c) => ({ c, rel: overlapScore(qTokens, capsuleTokens(c)) }))
+    .filter((h) => h.rel > 0)
+    .sort((a, b) => b.rel - a.rel)
+    .slice(0, limit)
+    .map((h) => ({ capsule: h.c, relevance: h.rel }));
+  if (!hits.length) {
+    return { ok: false, capsules: [], message: `Sin cápsulas para "${query}" — contexto no disponible (no se fabrica)` };
+  }
+  return { ok: true, capsules: hits, message: `${hits.length} cápsula(s) encontrada(s)` };
+}
+
+// -- Change 3: session continuity -------------------------------------------------
+
+/**
+ * Cierre de sesión: registra progreso + candidatos (sin auto-promoción).
+ * Retorna el log; L3 de la sesión permanece salvo promoción explícita.
+ */
+export function closeSession({ sessionId, taskId, summary = "", candidates = [] } = {}, root) {
+  const logFile = path.join(root || process.cwd(), ".wam", "context", "sessions.log.jsonl");
+  const entry = {
+    timestamp: nowIso(),
+    session_id: sessionId || getSessionId(root),
+    task_id: taskId || null,
+    summary: summary.slice(0, 2000),
+    candidates,
+    auto_promoted: [],
+  };
+  try {
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.appendFileSync(logFile, JSON.stringify(entry) + "\n");
+  } catch {}
+  return entry;
+}
+
+export function getSessionLog(root) {
+  const logFile = path.join(root || process.cwd(), ".wam", "context", "sessions.log.jsonl");
+  try {
+    return fs.readFileSync(logFile, "utf-8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  } catch {
+    return [];
+  }
+}
+
+// -- Change 4: multi-repo root resolution -----------------------------------
+// opencode se abre en un proyecto multi-repo (ej. comparador-precios con
+// scraper/api/frontend internos). El .wam debe vivir en el repo git objetivo
+// del mensaje, NO en el cwd del proceso ni en la raíz del proyecto.
+
+function findGitRepos(root, maxDepth = 2) {
+  // Si el root ya es repo git, NO hay repos hijos que buscar (caso común:
+  // opencode abierto DENTRO de un repo) — cero escaneo del filesystem.
+  try {
+    if (fs.existsSync(path.join(root, ".git"))) return [];
+  } catch {
+    return [];
+  }
+  const found = [];
+  const seen = new Set();
+  const walk = (dir, depth) => {
+    if (depth > maxDepth) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      if (e.name === "node_modules" || e.name === ".git" || e.name === ".wam" || e.name === "upstream" || e.name === ".cache" || e.name === "dist" || e.name === "build") continue;
+      const p = path.join(dir, e.name);
+      if (seen.has(p)) continue;
+      seen.add(p);
+      try {
+        if (fs.existsSync(path.join(p, ".git"))) found.push(p);
+        else walk(p, depth + 1);
+      } catch {}
+    }
+  };
+  walk(root, 0);
+  return found;
+}
+
+function readPkgName(repoRoot) {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf-8"));
+    return pkg.name || "";
+  } catch {
+    return "";
+  }
+}
+
+const PATH_RE = /(?:^|\s|["'(])((\/[a-zA-Z0-9_.-]+)+(?:\/[a-zA-Z0-9_.-]+)*\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|py|go|rs|java|css|html|yaml|yml|sh)(?::\d+)?)(?=\s|["')]|$)/g;
+
+export function extractPaths(prompt = "") {
+  const out = [];
+  for (const m of (prompt || "").matchAll(PATH_RE)) {
+    const p = m[1].replace(/:\d+$/, "");
+    if (!out.includes(p)) out.push(p);
+  }
+  return out;
+}
+
+const repoScanCache = new Map();
+
+/**
+ * Resuelve el root de .wam para un mensaje:
+ * 1. paths explícitos del prompt → repo git que los contiene
+ * 2. term-match del prompt contra nombre del repo + package.json name
+ * 3. fallback: sessionRoot
+ */
+export function resolveWamRoot(prompt = "", sessionRoot = process.cwd()) {
+  const repos = [sessionRoot];
+  if (repoScanCache.has(sessionRoot)) {
+    repos.push(...repoScanCache.get(sessionRoot));
+  } else {
+    const nested = findGitRepos(sessionRoot).filter((r) => r !== sessionRoot);
+    repoScanCache.set(sessionRoot, nested);
+    repos.push(...nested);
+  }
+  const repoSet = repos.filter((r) => fileExists(path.join(r, ".git")));
+  if (!repoSet.length) return sessionRoot;
+
+  for (const p of extractPaths(prompt)) {
+    const abs = path.resolve(sessionRoot, p);
+    for (const repo of repoSet) {
+      if (abs === repo || abs.startsWith(repo + path.sep)) return repo;
+    }
+  }
+
+  const promptTokens = tokenize(prompt);
+  let best = sessionRoot;
+  let bestScore = 0;
+  for (const repo of repoSet) {
+    const score = overlapScore(promptTokens, tokenize(`${path.basename(repo)} ${readPkgName(repo)}`));
+    if (score > bestScore) {
+      best = repo;
+      bestScore = score;
+    }
+  }
+  // Sin match y sessionRoot no es repo → continuidad: repo hijo con memoria
+  // .wam más reciente (el usuario sigue donde dejó el trabajo, no donde nació
+  // el proceso). Evita que mensajes sin señal de repo caigan a la raíz vacía.
+  // NOTA: mtime se usa como tiebreaker ÚNICAMENTE entre repos que tienen ya
+  // memoria .wam — NO es la señal primaria. La resolución primaria es siempre
+  // por señales explícitas (paths del prompt) o coincidencia de repo.
+  if (best === sessionRoot && !repoSet.includes(sessionRoot) && repoSet.length) {
+    const withMemory = repoSet
+      .map((r) => {
+        const wamRoot = path.join(r, ".wam", "tasks");
+        try {
+          const entries = fs.readdirSync(wamRoot, { withFileTypes: true });
+          let latest = 0;
+          for (const e of entries) {
+            if (!e.isDirectory()) continue;
+            const tf = path.join(wamRoot, e.name, "context.md");
+            try {
+              const m = fs.statSync(tf).mtimeMs;
+              if (m > latest) latest = m;
+            } catch {}
+          }
+          if (!latest) {
+            try { latest = fs.statSync(path.join(r, ".wam")).mtimeMs; } catch {}
+          }
+          return latest ? { r, mtime: latest } : null;
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.mtime - a.mtime);
+    if (withMemory.length) return withMemory[0].r;
+  }
+  return best;
+}
+
+export function clearRepoCache() {
+  repoScanCache.clear();
+}
