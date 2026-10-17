@@ -353,15 +353,15 @@ export async function handleMessage(input, output, deps) {
           const tp = output.parts.find(
             (p) => p && p.type === "text" && typeof p.text === "string" && !isWamSynthetic(p),
           );
-          if (tp) tp.text = rewrite;
+          if (tp) tp.text = tp.text + "\n\n" + rewrite;
         }
         if (input?.message?.parts && input.message.parts.length > 0) {
           const tp = input.message.parts.find((p) => p.type === "text" && typeof p.text === "string");
-          if (tp) tp.text = rewrite;
+          if (tp) tp.text = tp.text + "\n\n" + rewrite;
         }
         if (input?.parts && input.parts.length > 0) {
           const tp = input.parts.find((p) => p.type === "text" && typeof p.text === "string");
-          if (tp) tp.text = rewrite;
+          if (tp) tp.text = tp.text + "\n\n" + rewrite;
         }
         return;
       }
@@ -614,6 +614,10 @@ export async function handleMessage(input, output, deps) {
       if (pack.lines.length) {
         inject.push(pack.lines.join("\n") + "\n");
       }
+      // Expone skillStates para trazabilidad / tests (A, E).
+      try {
+        sessionStore.set(`${input.sessionID}:skillStates`, pack.skillStates || []);
+      } catch {}
 
       if (detectCouplingIntent(promptText)) {
         const couplingPack = await traceCouplingForTask(promptText, { root: wamRoot });
@@ -691,7 +695,7 @@ const { lines } = buildTaskInferenceDirective({
       const visiblePending = pendingItems.slice(0, maxGateReqs);
       const overflowPending = pendingItems.length - maxGateReqs;
       const pendingList = visiblePending.length > 0
-        ? "\n  Requisitos pendientes:\n    " + visiblePending.map((p) => `- ${truncate(p, 150)}`).join("\n    ") + (overflowPending > 0 ? `\n    ...(+${overflowPending} más)` : "") + "\n"
+        ? "Requisitos pendientes:\n" + visiblePending.map((p) => `- ${truncate(p, 150)}`).join("\n") + (overflowPending > 0 ? `\n(...(+${overflowPending} más))` : "")
         : "";
       const gateHold = loadPrompt("notice.completion_gate", { count: gate.pending.length, pendingList, nextAction: updatedState.nextAction });
       emitTextPart(output, gateHold, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
@@ -700,15 +704,15 @@ const { lines } = buildTaskInferenceDirective({
         const tp = output.parts.find(
           (p) => p && p.type === "text" && typeof p.text === "string" && !isWamSynthetic(p),
         );
-        if (tp) tp.text = gateHold;
+        if (tp) tp.text = tp.text + "\n\n" + gateHold;
       }
       if (input?.parts && input.parts.length > 0) {
         const tp = input.parts.find((p) => p.type === "text" && typeof p.text === "string");
-        if (tp) tp.text = gateHold;
+        if (tp) tp.text = tp.text + "\n\n" + gateHold;
       }
       if (input?.message?.parts && input.message.parts.length > 0) {
         const tp = input.message.parts.find((p) => p.type === "text" && typeof p.text === "string");
-        if (tp) tp.text = gateHold;
+        if (tp) tp.text = tp.text + "\n\n" + gateHold;
       }
     } else if (gate.allDone) {
       try {
