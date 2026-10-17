@@ -97,6 +97,51 @@ function isRequirementCapsule(c) {
 }
 
 /**
+ * Reduce un SKILL.md a un máximo de chars preservando Markdown (D).
+ * Estrategia: si el contenido excede el presupuesto, conserva el bloque del
+ * frontmatter inicial + las primeras secciones (encabezados `^##`) que mejor
+ * coincidan con el `reason` de selección. Sólo si eso todavía excede, trunca
+ * duro por longitud conservando saltos de línea.
+ */
+function pruneBySection(content, maxChars, reason) {
+  if (content.length <= maxChars) return content;
+  const markers = [];
+  const re = /^#{1,6} .+$/gm;
+  let m;
+  while ((m = re.exec(content)) !== null) {
+    markers.push({ index: m.index, end: content.indexOf("\n\n", m.index) === -1 ? content.length : content.indexOf("\n\n", m.index), header: m[0] });
+  }
+  if (markers.length === 0) {
+    return content.slice(0, maxChars) + "\n...[truncado]";
+  }
+  // Rankea secciones por solap de tokens con el reason.
+  const reasonTokens = String(reason || "").toLowerCase().split(/[^a-záéíóúñü0-9]+/).filter(Boolean);
+  const ranked = markers.map((sec) => {
+    const body = content.slice(sec.index, sec.end === -1 ? content.length : sec.end);
+    const lower = body.toLowerCase();
+    let hits = 0;
+    for (const t of reasonTokens) if (t && lower.includes(t)) hits++;
+    return { sec, hits };
+  }).sort((a, b) => b.hits - a.hits);
+
+  const out = [];
+  let total = 0;
+  for (const { sec } of ranked) {
+    const slice = content.slice(sec.index, sec.end === -1 ? content.length : sec.end);
+    if (total + slice.length > maxChars) {
+      // Última oportunidad: cabe parcial.
+      const room = maxChars - total;
+      if (room > 80) out.push(slice.slice(0, room) + "\n...[truncado]");
+      break;
+    }
+    out.push(slice);
+    total += slice.length;
+  }
+  if (out.length === 0) return content.slice(0, maxChars) + "\n...[truncado]";
+  return out.join("\n\n");
+}
+
+/**
  * Ensambla el Context Pack de la tarea.
  *
  * @returns { levels, lines, budget_used, budget, budget_violation, reserved, flex, rationale, continuation }
@@ -154,6 +199,9 @@ async function _assembleContextImpl({
 
   /** @type {AdmissionItem[]} */
   const admissionItems = [];
+  // Estados finales por skill (A): SELECTED|ADMITTED|INJECTED|TRUNCATED|OMITTED
+  // con causa. Se llena en el bloque N3 skills y se expone en el return.
+  const skillStates = [];
 
   const reserve = (level, text, admission = ADMISSION.MANDATORY, reason = "required") => {
     // MANDATORY items bypass budget limits — never truncated, never dropped.
@@ -429,56 +477,122 @@ if (!isTrivial) {
       }
     }
 
-    // -- N3 Skills (contenido de skills seleccionadas, consume flex) ---------
+// -- N3 Skills (contenido de skills seleccionadas, consume flex) ---------
     // Inyecta el contenido real de las skills seleccionadas para que el agente
     // respete las restricciones y patrones de cada skill (layer responsibility).
     // Lee directamente del registry sin importar engine.js (evita circular import).
-    if (!isTrivial && skillRegistry && selectedSkills.length > 0) {
-      const skillBudget = Math.floor(flex * 0.4); // 40% del flex restante para skills
-      let skillSpent = 0;
-      
-      // Prioritize prompt-matched (on-demand) skills over always-on base skills so
-      // a tight budget never starves the task-relevant skills. Base skills only
-      // inject if budget remains after the matched ones.
-      const orderedSkills = [...selectedSkills].sort((a, b) => {
-        const ab = a.base ? 1 : 0;
-        const bb = b.base ? 1 : 0;
-        if (ab !== bb) return ab - bb;
-        return (b.relevance || 0) - (a.relevance || 0);
-      });
+    //
+    // Política explícita del primer mensaje (B):
+    //  - isTrivial o mode === "FAST" NO excluyen skills base obligatorias; sí
+    //    suprimen on-demand cuando el usuario pidió respuesta rápida.
+    //  - El caller puede pasar `taskState` con phase === "ASKING" para indicar
+    //    respuesta de aclaración; en ese caso NO se inyecta nada (estado ASKING
+    //    ≠ estado de ejecución; se reporta skillStates con OMITTED por causa).
+    const admissionGate = (skill) => {
+      if (!skill.base && (isTrivial || mode === "FAST")) {
+        return { allowed: false, cause: "trivial-fast" };
+      }
+      return { allowed: true };
+    };
 
-      for (const skill of orderedSkills) {
-        const skillContentMax = skill.base ? 8000 : 1200; // max chars por skill
-        if (skillSpent >= skillBudget) {
-          rationale.push(`N3: budget agotado para skills (${skillSpent}/${skillBudget})`);
-          break;
+    if (skillRegistry && selectedSkills.length > 0) {
+      // Fase de selección: marca SELECTED a cada candidato antes del budget gate.
+      const prepared = selectedSkills.map((s) => {
+        const gate = admissionGate(s);
+        const state = {
+          id: s.id,
+          name: s.name || s.id,
+          base: !!s.base,
+          relevance: s.relevance || 0,
+          reason: s.reason || "",
+          state: gate.allowed ? "SELECTED" : "OMITTED",
+          cause: gate.allowed ? null : gate.cause,
+          tokenCost: 0,
+          truncated: false,
+        };
+        skillStates.push(state);
+        return { skill: s, state, gate };
+      }).filter((p) => p.gate.allowed);
+
+      // Fast path: respuesta de aclaración no ejecuta → no se inyecta nada.
+      if (taskState && taskState.phase === "ASKING") {
+        for (const p of prepared) {
+          // Permanece en SELECTED; se rechaza inyectar porque el handler
+          // retornó antes de llamar al ensamblador en el primer mensaje.
+          p.state.cause = p.state.cause || "asking-clarification";
         }
-        
-        const skillData = skillRegistry[skill.id];
-        if (!skillData) {
-          rationale.push(`N3: ${skill.id} no encontrada en registry`);
-          continue;
+      } else {
+        const skillBudget = Math.floor(flex * 0.4); // 40% del flex restante para skills
+        let skillSpent = 0;
+
+        // Prioritize prompt-matched (on-demand) skills over always-on base skills so
+        // a tight budget never starves the task-relevant skills. Base skills only
+        // inject if budget remains after the matched ones.
+        const ordered = [...prepared].sort((a, b) => {
+          const ab = a.skill.base ? 1 : 0;
+          const bb = b.skill.base ? 1 : 0;
+          if (ab !== bb) return ab - bb;
+          return (b.skill.relevance || 0) - (a.skill.relevance || 0);
+        });
+
+        for (const { skill, state } of ordered) {
+          const skillContentMax = skill.base ? 8000 : 1200; // max chars por skill
+          if (skillSpent >= skillBudget) {
+            state.state = "OMITTED";
+            state.cause = "skill-budget-exhausted";
+            rationale.push(`N3: budget agotado para skills (${skillSpent}/${skillBudget})`);
+            break;
+          }
+
+          const skillData = skillRegistry[skill.id];
+          if (!skillData) {
+            state.state = "OMITTED";
+            state.cause = "not-in-registry";
+            rationale.push(`N3: ${skill.id} no encontrada en registry`);
+            continue;
+          }
+
+          const content = skillData.content || "";
+          if (!content.trim()) {
+            state.state = "OMITTED";
+            state.cause = "no-content";
+            rationale.push(`N3: ${skill.id} sin contenido embebido`);
+            continue;
+          }
+
+          // D: preservar estructura Markdown del contenido (no aplanar saltos).
+          // Si excede skillContentMax, priorizar secciones relevantes (heading-
+          // based pruning) antes de truncar el cuerpo.
+          let finalContent = content;
+          let truncated = false;
+          if (content.length > skillContentMax) {
+            finalContent = pruneBySection(content, skillContentMax, skill.reason || "");
+            truncated = true;
+          }
+
+          const head = `[wam N3 skill] ${skill.id} — ${(skill.reason || "").slice(0, 100)}`;
+          const line = `${head}\n${finalContent}`;
+          const skillAdmission = skill.base ? ADMISSION.OPTIONAL : ADMISSION.CONDITIONAL;
+          const cost = spend("N3", line, skillAdmission, `skill ${skill.id}`);
+          if (cost === 0) {
+            // spend() rechazó por presupuesto global; el contenido no entró al pack.
+            state.state = "OMITTED";
+            state.cause = "flex-budget-exhausted";
+            state.tokenCost = 0;
+            state.truncated = false;
+            rationale.push(`N3: ${skill.id} omitida por presupuesto global (flex agotado)`);
+            continue;
+          }
+          state.state = truncated ? "TRUNCATED" : "INJECTED";
+          state.cause = truncated ? "section-pruned" : null;
+          state.tokenCost = cost;
+          state.truncated = truncated;
+          skillSpent += cost;
+          rationale.push(`N3: ${skill.id} ${state.state.toLowerCase()} (${cost} tok, reason: ${skill.reason})`);
         }
-        
-        const content = skillData.content || "";
-        if (!content.trim()) {
-          rationale.push(`N3: ${skill.id} sin contenido embebido`);
-          continue;
-        }
-        
-        const truncated = content.length > skillContentMax
-          ? content.slice(0, skillContentMax) + `...[truncado]`
-          : content;
-        
-        const head = `[wam N3 skill] ${skill.id} — ${(skill.reason || "").slice(0, 100)}`;
-        const line = `${head}\n  content: ${truncated.replace(/\n+/g, " ").slice(0, skillContentMax)}`;
-        const skillAdmission = skill.base ? ADMISSION.OPTIONAL : ADMISSION.CONDITIONAL;
-        const cost = spend("N3", line, skillAdmission, `skill ${skill.id}`);
-        skillSpent += cost;
-        rationale.push(`N3: ${skill.id} inyectada (${cost} tok, reason: ${skill.reason})`);
+      }
       }
     }
-  }
 
   const lines = [...levels.N0, ...levels.N1, ...levels.N2, ...levels.N3];
 
@@ -513,6 +627,72 @@ if (!isTrivial) {
     collector.set("Tokens_after", lines.reduce((sum, line) => sum + estTokens(line), 0));
   }
 
+  // -- Integrity gate (post-emission recompute) -----------------------------
+  // Recompute metrics AFTER `lines` is finalized so values reflect what was
+  // actually emitted, not pre-reservation estimates. Admission is preserved
+  // (MANDATORY items are always emitted; OPTIONAL/CONDITIONAL may be dropped).
+  const emittedAdmissionItems = admissionItems.filter((it) => {
+    return lines.some((line) => line === it.text);
+  });
+
+  const selectedCount = admissionItems.length;
+  const emittedCount = emittedAdmissionItems.length;
+  const omittedCount = Math.max(0, selectedCount - emittedCount);
+  const emittedMandatorySet = new Set(
+    emittedAdmissionItems.filter((i) => i.admission === ADMISSION.MANDATORY).map((i) => i.text)
+  );
+  const allMandatorySet = new Set(
+    admissionItems.filter((i) => i.admission === ADMISSION.MANDATORY).map((i) => i.text)
+  );
+  const mandatoryOmissions = [];
+  for (const t of allMandatorySet) {
+    if (!emittedMandatorySet.has(t)) mandatoryOmissions.push(t);
+  }
+
+  // Unresolved dependencies: any rationale line tagged with "depends on" / "missing"
+  // dependency, OR any MANDATORY omission (mandatory items are required
+  // dependencies by construction).
+  const unresolvedDependencies = [];
+  for (const r of rationale) {
+    if (
+      typeof r === "string" &&
+      (r.includes("MANDATORY omitted by router") ||
+        r.includes("missing dependency") ||
+        r.startsWith("admission: dependency"))
+    ) {
+      unresolvedDependencies.push(r);
+    }
+  }
+  for (const t of mandatoryOmissions) {
+    if (!unresolvedDependencies.includes(t)) unresolvedDependencies.push(t);
+  }
+
+  // Final sufficiency verdict (post-emission): insufficient iff we have
+  // mandatory omissions, unresolved mandatory dependencies, or the router
+  // already flagged sufficiency === "insufficient".
+  const integrityFailures = [];
+  if (mandatoryOmissions.length > 0) {
+    integrityFailures.push(`${mandatoryOmissions.length} MANDATORY item(s) omitted from emission`);
+  }
+  if (sufficiency === "insufficient") {
+    integrityFailures.push("router reported insufficient context");
+  }
+  if (budget_violation && selectedCount > emittedCount) {
+    integrityFailures.push("budget violation with admitted items dropped");
+  }
+  const finalSufficiency =
+    integrityFailures.length === 0 && (selectedCount === 0 || emittedCount > 0) ? "sufficient" : "insufficient";
+
+  const integrity = {
+    selectedCount,
+    emittedCount,
+    omittedCount,
+    mandatoryOmissions,
+    unresolvedDependencies,
+    finalSufficiency,
+    integrityFailures,
+  };
+
   return {
     levels: Object.fromEntries(Object.entries(levels).map(([k, v]) => [k, v.length])),
     lines,
@@ -524,12 +704,14 @@ if (!isTrivial) {
     rationale,
     continuation,
     source: selectionSource || "legacy",
+    skillStates,
     admission: {
       sufficiency,
       mandatoryCount: mandatoryItems.length,
       mandatoryTokens,
       droppedItems: rationale.filter((r) => r.startsWith("admission: dropped")),
     },
+    integrity,
   };
 }
 

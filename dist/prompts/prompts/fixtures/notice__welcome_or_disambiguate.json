@@ -1,0 +1,8 @@
+{
+  "id": "notice.welcome_or_disambiguate",
+  "vars": {},
+  "mustContain": [
+    "Para comenzar, dime en una frase"
+  ],
+  "mustNotContain": []
+}
