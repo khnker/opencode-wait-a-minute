@@ -7449,3 +7449,5 @@
 {"ts":"2026-10-17T14:54:10.406Z","query_type":"definitions","predicate_class":"symbol","tool":"symbol-lookup","tokens":40,"latency_ms":2,"results":0,"relevant":0,"satisfied":false,"cache_hit":false}
 {"ts":"2026-10-17T14:54:10.407Z","query_type":"definitions","predicate_class":"symbol","tool":"search-code","tokens":200,"latency_ms":15,"results":0,"relevant":0,"satisfied":false,"cache_hit":false}
 {"ts":"2026-10-17T14:54:10.947Z","query_type":"definitions","predicate_class":"symbol","tool":"symbol-lookup","tokens":40,"latency_ms":2,"results":2,"relevant":2,"satisfied":true,"cache_hit":false}
+{"ts":"2026-10-17T15:05:10.043Z","query_type":"implementation","predicate_class":"symbol","tool":"symbol-lookup","tokens":40,"latency_ms":2,"results":0,"relevant":0,"satisfied":false,"cache_hit":false}
+{"ts":"2026-10-17T15:05:10.073Z","query_type":"implementation","predicate_class":"symbol","tool":"search-code","tokens":200,"latency_ms":15,"results":20,"relevant":20,"satisfied":true,"cache_hit":false}
