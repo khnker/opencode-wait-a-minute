@@ -348,20 +348,23 @@ export async function handleMessage(input, output, deps) {
         // Rewrite the original prompt so the implementation attempt is NOT
         // consumed downstream as an instruction (AC5).
         const rewrite = loadPrompt("notice.blocked_prefix", { directive });
-        // SDK 1.19: output.parts holds the user text — must rewrite there too.
+        // SDK 1.19: output.parts holds the user text — rewrite there so the
+        // implementation attempt is NOT consumed downstream as an instruction.
+        // Prefix the rewrite (do NOT append) so the original prompt cannot be
+        // re-interpreted as a directive by a downstream LLM (AC5).
         if (Array.isArray(output?.parts) && output.parts.length > 0) {
           const tp = output.parts.find(
             (p) => p && p.type === "text" && typeof p.text === "string" && !isWamSynthetic(p),
           );
-          if (tp) tp.text = tp.text + "\n\n" + rewrite;
+          if (tp) tp.text = rewrite + "\n\n" + tp.text;
         }
         if (input?.message?.parts && input.message.parts.length > 0) {
           const tp = input.message.parts.find((p) => p.type === "text" && typeof p.text === "string");
-          if (tp) tp.text = tp.text + "\n\n" + rewrite;
+          if (tp) tp.text = rewrite + "\n\n" + tp.text;
         }
         if (input?.parts && input.parts.length > 0) {
           const tp = input.parts.find((p) => p.type === "text" && typeof p.text === "string");
-          if (tp) tp.text = tp.text + "\n\n" + rewrite;
+          if (tp) tp.text = rewrite + "\n\n" + tp.text;
         }
         return;
       }
@@ -412,35 +415,25 @@ export async function handleMessage(input, output, deps) {
 
     // Continuation fast-path: approved contract + no DONE claim
     if (existingState?.contract?.status === "APPROVED") {
-      const claim = waitAMinute.evaluateCompletionGate(existingState, promptText);
-      if (!claim.blocked && !claim.allDone) {
+      // For non-DONE messages, skip the gate entirely. For DONE messages,
+      // run the gate; if it doesn't block and isn't allDone, treat the
+      // message as a continuation. Either way, on a VALID snapshot we emit
+      // the N2 task delta and return.
+      const isDoneClaim = waitAMinute.isCompletionIntent(promptText);
+      const claim = isDoneClaim
+        ? waitAMinute.evaluateCompletionGate(existingState, promptText)
+        : { blocked: false };
+      const isContinuation = !claim.blocked && !claim.allDone;
+      if (isContinuation) {
         const snapshotCheck = checkContinuation(taskId, existingState, wamRoot);
-
-         if (snapshotCheck.status === "VALID") {
-           if (collector) collector.record("Context_fast_path");
-           input.waitAnalysis = sessionStore.get(`${input.sessionID}:waitAnalysis`) || null;
+        if (snapshotCheck.status === "VALID") {
+          if (collector) collector.record("Context_fast_path");
+          input.waitAnalysis = sessionStore.get(`${input.sessionID}:waitAnalysis`) || null;
           try { updateProjectMemo({}, wamRoot); } catch {}
           try {
             persistLiveContext(taskId, existingState, wamRoot);
             const live = readLiveContext(wamRoot, taskId);
             const parts = [loadPrompt("injection.n2_task", { live }) + "\n"];
-            parts.push(...delegationLines(existingState).map((l) => l + "\n"));
-            emitTextPart(output, parts.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
-          } catch {}
-          return;
-        }
-
-         const scope = rebuildScope(snapshotCheck.changedSignals, collector);
-         if (scope.rebuildN1 || scope.rebuildN3) {
-           input.waitAnalysis = sessionStore.get(`${input.sessionID}:waitAnalysis`) || null;
-          try { updateProjectMemo({}, wamRoot); } catch {}
-          try {
-            persistLiveContext(taskId, existingState, wamRoot);
-            const live = readLiveContext(wamRoot, taskId);
-            const parts = [
-              loadPrompt("injection.continuation", { signals: snapshotCheck.changedSignals.join(", ") }),
-              loadPrompt("injection.n2_task", { live }) + "\n",
-            ];
             parts.push(...delegationLines(existingState).map((l) => l + "\n"));
             emitTextPart(output, parts.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
           } catch {}
@@ -564,8 +557,13 @@ export async function handleMessage(input, output, deps) {
     }
 
     const gate = waitAMinute.evaluateCompletionGate(state, promptText);
-    const { phase, nextAction } = waitAMinute.applyPhaseTransition(state, gate);
-    if (gate.blocked || gate.allDone) {
+    // Anti-tampering: only mutate persisted state when the prompt actually
+    // asserts completion intent. For non-DONE messages the gate returns
+    // {blocked: false} (no-op), but guarding here also protects against any
+    // future drift in the gate and guarantees the user's prompt text never
+    // gets reflected as a phase/nextAction change in persisted state.
+    if (waitAMinute.isCompletionIntent(promptText) && (gate.blocked || gate.allDone)) {
+      const { phase, nextAction } = waitAMinute.applyPhaseTransition(state, gate);
       state.phase = phase;
       state.nextAction = nextAction;
       persistTaskState(taskId, state, wamRoot);

@@ -18,6 +18,47 @@ import { truncate } from "../execution/formatting.js";
 import { evaluateOutcome, OUTCOME_STATUSES } from "../verification/outcome-evaluator.js";
 
 // ═══════════════════════════════════════════════════════════════
+// Completion-intent detection
+// ═══════════════════════════════════════════════════════════════
+//
+// Ponytail: the completion gate fires only when the prompt's primary intent
+// is to assert completion. We classify completion intent here, in one place,
+// so the gate and the message-handler anti-tampering check use the exact
+// same predicate. Incidental word usage ("complete disaster", "I am done
+// with lunch", "the unfinished file") must NOT be classified as completion
+// intent — that was the false-positive root cause.
+export const COMPLETION_INTENT_REGEX = new RegExp(
+  [
+    // 0a. Imperative "done"/"listo" at start
+    "^(done|listo)\\b",
+    // 0b. Verb at sentence boundary followed by task/object pronoun
+    "(^|[.!?\\n]\\s*)(done|finish|finished|complete|completed|terminate|terminated|termino|listo|finalizado|finalizada|completado|completada)\\s+(the|my|this|that|task|tarea|it|all|everything|with\\s+this|ya)\\b",
+    // 0c. "I'm done" / "we are done" / "we're done"
+    "(^|[.!?\\n]\\s*)(i|we|yo)(\\s|')+(am|m|are|re)\\s+(done|list[oa]|finished|terminad[oa])\\b",
+    // 0c2. Spanish: "estoy listo" / "estoy terminado" / "estamos listos"
+    "(^|[.!?\\n]\\s*)(estoy|estamos)\\s+(list[oa]|terminad[oa]|completad[oa]|finalizad[oa])\\b",
+    // 0d. Explicit close phrases ("declare done", "mark complete", "consider it finished")
+    "(^|[.!?\\n]\\s*)(declare|mark|consider(ar)?|treat)\\s+(it|this|the\\s+task|task|la\\s+tarea)?\\s*.*\\b(done|complete|completed|finished|terminat(e|ed))\\b",
+    // 0e. Spanish: "tarea completa/terminada/lista" and "está terminada"
+    "(^|[.!?\\n]\\s*)(tarea|trabajo)\\s+(completa|completada|terminada|lista|finalizada)\\b",
+    "(^|[.!?\\n]\\s*)(la\\s+tarea|el\\s+trabajo)\\s+(est[aá]|est[aá]n)\\s+(terminad[oa]|completad[oa]|list[oa]|finalizad[oa])\\b",
+  ].join("|"),
+  "i",
+);
+
+/**
+ * Classify whether a user prompt asserts completion intent.
+ * PURE. Returns true only when the prompt's primary intent is to declare
+ * the task done — not on incidental word usage.
+ * @param {string} promptText
+ * @returns {boolean}
+ */
+export function isCompletionIntent(promptText) {
+  if (!promptText || typeof promptText !== "string") return false;
+  return COMPLETION_INTENT_REGEX.test(promptText.toLowerCase().trim());
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Constantes de fase
 // ═══════════════════════════════════════════════════════════════
 
@@ -100,10 +141,9 @@ export function evaluateCompletionGate(state, promptText) {
   // DONE-claim detection: only a message that actually asserts completion is
   // subject to the completion gate. Non-DONE messages (continuations) return
   // early with `blocked: false` so the continuation fast-path can emit the N2
-  // live task delta instead of being hard-blocked.
-  const doneClaims =
-    /(^|\s)(done|finish|finished|complete|completed|terminate|terminated|listo|termin[eé]|complet[ao]|finalizad[oa])\b|(task|tarea)\s+(complete|complet(a|ada|o)|terminad(a|o))|declare.*done/i;
-  if (!doneClaims.test(lower)) return { blocked: false };
+  // live task delta instead of being hard-blocked. See isCompletionIntent
+  // for the classification predicate.
+  if (!isCompletionIntent(promptText)) return { blocked: false };
 
   // 1. Blocking unknowns
   const blockingUnknowns = (state?.contract?.unknowns || []).filter(

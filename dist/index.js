@@ -6,7 +6,7 @@ import { injectWamParts } from "./src/integration/part-provenance.js";
 import { loadWamConfig } from "./src/config/wam-config.js";
 import { configureLogger } from "./src/integration/logger.js";
 import { setLoggingEnabled, setDebugEnabled, registerLogicGate, wamDebug, wamLog, wamWarn, wamError } from "./src/shared/wam-log.js";
-import { evaluateCompletionGate, applyPhaseTransition } from "./src/integration/orchestration.js";
+import { evaluateCompletionGate, applyPhaseTransition, isCompletionIntent, COMPLETION_INTENT_REGEX } from "./src/integration/orchestration.js";
 import { loadPrompt } from "./src/prompts/loader.js";
 
 import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
@@ -1692,6 +1692,8 @@ const waitAMinute = {
     * para evitar divergencia con la política de finalización.
     */
    evaluateCompletionGate: evaluateCompletionGate,
+   isCompletionIntent: isCompletionIntent,
+   COMPLETION_INTENT_REGEX: COMPLETION_INTENT_REGEX,
 
   /** Transición de fase basada en el resultado del Completion Gate. */
   applyPhaseTransition: function(state, gate) {

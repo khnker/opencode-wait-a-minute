@@ -59,6 +59,7 @@ const waitAMinute = {
     lastAction: "",
   }),
   evaluateCompletionGate: () => ({ blocked: false, allDone: false }),
+  isCompletionIntent: (p) => /^(done|listo)\b|done\s+(the|my|this|that|task|tarea|it|all|everything)\b/i.test(String(p || "")),
   applyPhaseTransition: () => ({ phase: "PROPOSED", nextAction: "Implementar" }),
   approveContract: () => ({ ok: true }),
   presentValidation: () => ({}),
