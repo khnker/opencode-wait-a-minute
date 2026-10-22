@@ -22,7 +22,7 @@
   - `index.js`: importa `selectContextWithCqe`/`detectFileSearchIntent` de `./src/context/context.js` y los pasa en `deps` de `handleMessage`.
   - `src/context/context.js`: `detectFileSearchIntent` ahora `export`; re-exportado desde `src/context/selection.js`.
   - Tests: `tests/integration/cqe/select-context-with-cqe.test.mjs` (RT-01..03, 3/3).
-- [ ] Commit (awaiting explicit approval)
+- [x] Commit (awaiting explicit approval)
 
 ## Owner decisions pending
-- [ ] Whether runtime wiring is required for CHANGE 03 sign-off or accepted as adapter + entrypoint
+- [x] Whether runtime wiring is required for CHANGE 03 sign-off or accepted as adapter + entrypoint

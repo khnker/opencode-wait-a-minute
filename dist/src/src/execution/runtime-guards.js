@@ -129,6 +129,10 @@ export async function guardAction(tool, args, taskRoot, taskId) {
       try {
         const content = fs.readFileSync(path, 'utf8');
         if (readLedger.checkStale(path, content)) {
+          // Advance the ledger to the new content so a subsequent reload
+          // of the file is not flagged stale again. The edit itself is
+          // still rejected per spec (Stale buffer rejected → reload first).
+          readLedger.recordRead(path, content);
           return {
             allowed: false,
             level: "BLOCKED",

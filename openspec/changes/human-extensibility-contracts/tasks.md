@@ -20,4 +20,4 @@
 
 - [x] Extension fixture test passes (new capability added without touching unrelated logic).
 - [x] `npm test` exits 0 (2573 pass / 0 fail).
-- [ ] `openspec validate human-extensibility-contracts --strict` passes.
+- [x] `openspec validate human-extensibility-contracts --strict` passes.

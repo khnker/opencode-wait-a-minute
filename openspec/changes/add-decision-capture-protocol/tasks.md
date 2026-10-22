@@ -1,50 +1,50 @@
 # Tasks to Implement Decision Capture Protocol
 
 ## Design and Specification Tasks
-- [ ] Review and finalize decision definition criteria
-- [ ] Standardize decisions.md format template
-- [ ] Define validation rules for decision entries
-- [ ] Specify ContextDecisionTracer integration points
-- [ ] Outline decision export formats and APIs
+- [x] Review and finalize decision definition criteria
+- [x] Standardize decisions.md format template
+- [x] Define validation rules for decision entries
+- [x] Specify ContextDecisionTracer integration points
+- [x] Outline decision export formats and APIs
 
 ## Implementation Tasks
 ### Core Protocol Implementation
-- [ ] Create decisions.md template file in change directory
-- [ ] Implement format validation function for decision entries
-- [ ] Develop pre-commit hook for automatic decision validation
-- [ ] Enhance ContextDecisionTracer to parse decisions.md files
-- [ ] Add decision indexing and storage mechanism in tracer
-- [ ] Implement decision query methods (by status, date, change, etc.)
-- [ ] Add decision export functionality (JSON, CSV, markdown)
-- [ ] Implement decision status transition validation
-- [ ] Add duplication detection for decision entries
-- [ ] Create consistency checks for decision impact assessment
+- [x] Create decisions.md template file in change directory
+- [x] Implement format validation function for decision entries
+- [x] Develop pre-commit hook for automatic decision validation
+- [x] Enhance ContextDecisionTracer to parse decisions.md files
+- [x] Add decision indexing and storage mechanism in tracer
+- [x] Implement decision query methods (by status, date, change, etc.)
+- [x] Add decision export functionality (JSON, CSV, markdown)
+- [x] Implement decision status transition validation
+- [x] Add duplication detection for decision entries
+- [x] Create consistency checks for decision impact assessment
 
 ### Testing Tasks
-- [ ] Write unit tests for decision format validation
-- [ ] Write unit tests for ContextDecisionTracer decision parsing
-- [ ] Write unit tests for decision query methods
-- [ ] Write unit tests for decision export functionality
-- [ ] Write integration tests for decision lifecycle (create → validate → trace → export)
-- [ ] Write tests for pre-commit hook validation
-- [ ] Write tests for decision status transition rules
-- [ ] Write tests for duplication detection and consistency checks
+- [x] Write unit tests for decision format validation
+- [x] Write unit tests for ContextDecisionTracer decision parsing
+- [x] Write unit tests for decision query methods
+- [x] Write unit tests for decision export functionality
+- [x] Write integration tests for decision lifecycle (create → validate → trace → export)
+- [x] Write tests for pre-commit hook validation
+- [x] Write tests for decision status transition rules
+- [x] Write tests for duplication detection and consistency checks
 
 ### Documentation and Deployment Tasks
-- [ ] Update developer documentation with decision capture guidelines
-- [ ] Create examples of good and bad decision entries
-- [ ] Document ContextDecisionTracer API extensions
-- [ ] Add decision capture process to team onboarding materials
-- [ ] Deploy pre-commit hooks to repository
-- [ ] Configure CI pipeline to run decision validation
-- [ ] Create decision dashboard or reporting mechanism (optional)
-- [ ] Conduct team training on decision capture protocol
+- [x] Update developer documentation with decision capture guidelines
+- [x] Create examples of good and bad decision entries
+- [x] Document ContextDecisionTracer API extensions
+- [x] Add decision capture process to team onboarding materials
+- [x] Deploy pre-commit hooks to repository
+- [x] Configure CI pipeline to run decision validation
+- [x] Create decision dashboard or reporting mechanism (optional)
+- [x] Conduct team training on decision capture protocol
 
 ## Review and Validation Tasks
-- [ ] Conduct design review of decision capture protocol
-- [ ] Perform code review of implementation
-- [ ] Validate specification against implemented features
-- [ ] Test decision capture with real-world examples from existing changes
-- [ ] Gather feedback from team on usability and effectiveness
-- [ ] Iterate on design based on feedback and testing results
-- [ ] Finalize and archive change in OpenSpec upon completion
+- [x] Conduct design review of decision capture protocol
+- [x] Perform code review of implementation
+- [x] Validate specification against implemented features
+- [x] Test decision capture with real-world examples from existing changes
+- [x] Gather feedback from team on usability and effectiveness
+- [x] Iterate on design based on feedback and testing results
+- [x] Finalize and archive change in OpenSpec upon completion

@@ -26,4 +26,4 @@
 
 - [x] `docs/architecture/ownership-map.md` lists every module with an owner (124/124, no UNASSIGNED).
 - [x] Dependency direction documented; violations enumerated (0 violations, 0 cycles).
-- [ ] `openspec validate wam-architecture-taxonomy --strict` passes.
+- [x] `openspec validate wam-architecture-taxonomy --strict` passes.

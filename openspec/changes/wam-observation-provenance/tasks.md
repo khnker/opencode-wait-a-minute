@@ -1,9 +1,9 @@
 # Tasks
 
-- [ ] Definir Observation schema
-- [ ] Añadir source/sourceType
-- [ ] Añadir confidence
-- [ ] Añadir observedAt
-- [ ] Distinguir observation de inference
-- [ ] Integrar cognition-store
-- [ ] Tests de provenance
+- [x] Definir Observation schema
+- [x] Añadir source/sourceType
+- [x] Añadir confidence
+- [x] Añadir observedAt
+- [x] Distinguir observation de inference
+- [x] Integrar cognition-store
+- [x] Tests de provenance

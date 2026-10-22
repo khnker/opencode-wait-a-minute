@@ -1211,6 +1211,30 @@ async function wamCli(args, cfg = {}, root = process.cwd(), taskId = readActiveT
 
   // taskId de la sesión del comando (namespaced ses-<id> si genérico)
 
+  if (sub === "design") {
+    const { loadDesignContext, initDesignContext, setDesignToken, checkDesignDrift } = await import("./src/context/design-context.js");
+    if (action === "show" || action === undefined) {
+      const ctx = loadDesignContext(root);
+      if (!ctx.exists) return "No DESIGN.md found. Run /wam design init";
+      return ctx.raw;
+    }
+    if (action === "init") {
+      const p = initDesignContext(root);
+      return `Initialized DESIGN.md at ${p}`;
+    }
+    if (action === "set") {
+      const [tokenPath, val] = rest;
+      if (!tokenPath || !val) return "Uso: /wam design set <token> <val>";
+      setDesignToken(root, tokenPath, val);
+      return `Set ${tokenPath} = ${val}`;
+    }
+    if (action === "drift") {
+      const drift = checkDesignDrift(root);
+      return drift.drifted ? `Drift detected: ${JSON.stringify(drift.violations)}` : "No design drift detected.";
+    }
+    return "Uso: /wam design [show|init|set|drift]";
+  }
+
   if (sub === "skills") {
     const skills = waitAMinute.getRegistry();
     const list = Object.values(skills);

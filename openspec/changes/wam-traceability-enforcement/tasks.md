@@ -3,24 +3,24 @@
 ## Implementation Tasks
 
 ### 1. Traceability Infrastructure
-- [ ] Define trace ID generation and propagation
-- [ ] Implement middleware for agent action tracking
-- [ ] Setup trace storage (optimized for query)
+- [x] Define trace ID generation and propagation
+- [x] Implement middleware for agent action tracking
+- [x] Setup trace storage (optimized for query)
 
 ### 2. Resource Mapping
-- [ ] Implement resource-to-trace linking
-- [ ] Add resource allocation instrumentation
-- [ ] Validate resource usage against trace data
+- [x] Implement resource-to-trace linking
+- [x] Add resource allocation instrumentation
+- [x] Validate resource usage against trace data
 
 ### 3. Verification Integration
-- [ ] Instrument verification steps with trace context
-- [ ] Map verification artifacts to original actions
-- [ ] Add integrity check for trace logs
+- [x] Instrument verification steps with trace context
+- [x] Map verification artifacts to original actions
+- [x] Add integrity check for trace logs
 
 ## Testing Tasks
-- [ ] Test trace continuity across agent steps
-- [ ] Unit tests for resource allocation tracking
-- [ ] Integration tests for verification artifact mapping
+- [x] Test trace continuity across agent steps
+- [x] Unit tests for resource allocation tracking
+- [x] Integration tests for verification artifact mapping
 
 ## Owner
 WAM Traceability Enforcement Team

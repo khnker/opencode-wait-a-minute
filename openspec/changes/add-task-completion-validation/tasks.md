@@ -1,5 +1,5 @@
 # Tasks
 
-- [ ] Create validation service
-- [ ] Hook into task transition handler
-- [ ] Add unit tests
+- [x] Create validation service
+- [x] Hook into task transition handler
+- [x] Add unit tests

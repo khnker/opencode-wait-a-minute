@@ -1,9 +1,9 @@
 ## Tasks
 
-- [ ] Define canonical edge direction table.
-- [ ] Validate edge types at `addEdge()`.
-- [ ] Validate source/target node compatibility.
-- [ ] Remove non-canonical `depends_on`.
-- [ ] Fix Router traversal according to canonical direction.
-- [ ] Add invalid-edge tests.
-- [ ] Add producer/consumer traversal tests.
+- [x] Define canonical edge direction table.
+- [x] Validate edge types at `addEdge()`.
+- [x] Validate source/target node compatibility.
+- [x] Remove non-canonical `depends_on`.
+- [x] Fix Router traversal according to canonical direction.
+- [x] Add invalid-edge tests.
+- [x] Add producer/consumer traversal tests.

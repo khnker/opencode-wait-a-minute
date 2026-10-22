@@ -37,6 +37,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 
@@ -63,6 +64,37 @@ const START_TIMEOUT_MS = 60000; // 60s for opencode to start and load plugin
 const EVENT_TIMEOUT_MS = 30000; // 30s to observe a plugin event
 const EXPECTED = /\b42\b/;
 const SUMMARY_PREFIX = "WAM_E2E_SUMMARY ";
+
+// The model backend intermittently stalls (opencode emits no model output and
+// never exits), occasionally exits non-zero without a plugin error, and
+// sometimes answers without the expected payload. Those are transient for a
+// live backend, so a bounded number of attempts is made before failing.
+const MAX_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 3000;
+
+// Hooks the plugin must register for the gate to be effective. The plugin
+// factory returns them as a hook map; `plugin.on(...)` registrations are also
+// accepted so the assertion survives a change of registration style.
+const EXPECTED_HOOKS = ["chat.message", "tool.execute.before", "tool.execute.after"];
+
+// Recognized entries of the `.wam/` state directory. The layout comes from
+// src/persistence/memory.js (context/tasks/skills/cache/history) plus the
+// runtime files the plugin writes while a session is active.
+const WAM_STATE_ENTRIES = [
+  "context",
+  "tasks",
+  "skills",
+  "cache",
+  "history",
+  "traces",
+  "metrics",
+  "active-task",
+  "task-state.json",
+  "session.json",
+  "config.json",
+  "references.json",
+  "plugin.log",
+];
 
 const GREEN = "\x1b[32m";
 const RED = "\x1b[31m";
@@ -93,8 +125,17 @@ const wamHome = join(tmpBase, ".wam");
 const configPath = join(workspace, "opencode.jsonc"); // project config
 const wrapperPath = join(workspace, "wam-e2e-entry.mjs");
 const markerPath = join(tmpBase, "wam-plugin-loaded.marker");
+const hooksPath = join(tmpBase, "wam-plugin-hooks.json"); // hook registrations observed by the adapter
 
-const summary = { artifact: null, instance: null, loaded: false, verdict: "fail" };
+const summary = {
+  artifact: null,
+  instance: null,
+  loaded: false,
+  hooks: { on: [], returned: [], registered: [] },
+  state: { dir: null, root: null, entries: [], taskArtifacts: [] },
+  attempts: 0,
+  verdict: "fail",
+};
 let summaryEmitted = false;
 let opencodeProc = null;
 
@@ -119,14 +160,125 @@ function cleanup() {
     } catch (_) {}
     opencodeProc = null;
   }
+  if (process.env.WAM_E2E_DEBUG) {
+    console.error(`[harness] temp dir kept: ${tmpBase}`);
+    return;
+  }
   rmSync(tmpBase, { recursive: true, force: true });
 }
 
 // The plugin persists state under WAM_HOME; a populated directory is direct
 // evidence that the plugin actually loaded and executed from the artifact.
+// --- Observation helpers ------------------------------------------------
+
+function delay(ms) {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+}
+
+/**
+ * A failed attempt is transient unless it points at the environment or at the
+ * plugin itself: a missing binary or a plugin crash must not be retried.
+ * @param {{ timedOut: boolean, spawnError: string | null, pluginError: string | null, code: number, clean: string }} result
+ */
+function isTransient(result) {
+  if (result.spawnError) return false;
+  if (result.pluginError) return false;
+  if (result.timedOut) return true;
+  if (result.code !== 0) return true;
+  if (!EXPECTED.test(result.clean)) return true;
+  return false;
+}
+
+function describeFailure(result) {
+  if (result.spawnError) return `spawn error: ${result.spawnError}`;
+  if (result.pluginError) return `plugin error: ${result.pluginError}`;
+  if (result.timedOut) return "timeout (no model output)";
+  if (result.code !== 0) return `exit code ${result.code}`;
+  if (!EXPECTED.test(result.clean)) return "expected answer missing";
+  return "unknown";
+}
+
+// The plugin resolves its state root from `pluginInput.directory ||
+// process.cwd()` and never reads WAM_HOME (that variable is not part of the
+// runtime contract). The E2E therefore validates the `.wam/` directory the
+// real session creates, instead of the unused WAM_HOME target.
+function readWamEntries(dir) {
+  try {
+    return readdirSync(dir);
+  } catch (_) {
+    return [];
+  }
+}
+
+function collectWamDirs(root, depth, found) {
+  if (depth < 0 || !existsSync(root)) return found;
+  let names = [];
+  try {
+    names = readdirSync(root);
+  } catch (_) {
+    return found;
+  }
+  for (const name of names) {
+    const full = join(root, name);
+    if (name === ".wam") {
+      found.push(full);
+      continue;
+    }
+    let stat = null;
+    try {
+      stat = statSync(full);
+    } catch (_) {
+      continue;
+    }
+    if (!stat.isDirectory()) continue;
+    if (name === "node_modules" || name === ".git") continue;
+    collectWamDirs(full, depth - 1, found);
+  }
+  return found;
+}
+
+/**
+ * Locate the `.wam/` state directory produced by the running plugin.
+ * @returns {{ dir: string, root: string, entries: string[] } | null}
+ */
+function findWamStateDir() {
+  const dirs = new Set();
+  for (const root of [workspace, tmpBase]) {
+    const direct = join(root, ".wam");
+    if (existsSync(direct)) dirs.add(direct);
+  }
+  for (const dir of collectWamDirs(tmpBase, 4, [])) dirs.add(dir);
+  const candidates = [...dirs].map((dir) => ({
+    dir,
+    root: dirname(dir),
+    entries: readWamEntries(dir),
+  }));
+  if (candidates.length === 0) return null;
+  // Prefer the directory that actually holds state over an empty one.
+  candidates.sort((a, b) => b.entries.length - a.entries.length);
+  return candidates[0];
+}
+
+/**
+ * Hook registrations observed by the adapter.
+ * @returns {{ on: string[], returned: string[], registered: string[] }}
+ */
+function readHookRegistrations() {
+  const empty = { on: [], returned: [], registered: [] };
+  if (!existsSync(hooksPath)) return empty;
+  try {
+    const parsed = JSON.parse(readFileSync(hooksPath, "utf8"));
+    const on = Array.isArray(parsed.on) ? parsed.on.map(String) : [];
+    const returned = Array.isArray(parsed.returned) ? parsed.returned.map(String) : [];
+    return { on, returned, registered: [...new Set([...on, ...returned])] };
+  } catch (_) {
+    return empty;
+  }
+}
+
 function wamStatePresent() {
   try {
-    return existsSync(wamHome) && readdirSync(wamHome).length > 0;
+    return findWamStateDir() !== null;
   } catch (_) {
     return false;
   }
@@ -148,9 +300,14 @@ function resetEvidence() {
   try {
     rmSync(markerPath, { force: true });
   } catch (_) {}
+  // The plugin creates `.wam/` itself (from pluginInput.directory/cwd); the
+  // harness must NOT pre-create it, otherwise "created by the plugin" could
+  // not be asserted. Clear any state left by a previous attempt instead.
   try {
     rmSync(wamHome, { recursive: true, force: true });
-    mkdirSync(wamHome, { recursive: true });
+  } catch (_) {}
+  try {
+    rmSync(join(workspace, ".wam"), { recursive: true, force: true });
   } catch (_) {}
 }
 
@@ -165,8 +322,11 @@ function runOpencode(env) {
 
     resetEvidence();
     log("spawn", "launching opencode with simple prompt...");
-    // A prompt that triggers the plugin quickly without heavy reasoning.
-    const prompt = "¿Cuánto es 6 multiplicado por 7? Responde solo con el número.";
+    // A tool-using prompt is required on purpose: the plugin persists its
+    // `.wam/` state from the tool.execute.* hooks, so a pure Q&A session would
+    // never create the state directory this E2E has to validate.
+    const prompt =
+      "Usa la herramienta bash para ejecutar el comando `echo 42` y responde únicamente con el número que imprima.";
 
     try {
       opencodeProc = spawn("opencode", ["run", prompt], {
@@ -286,7 +446,8 @@ function runOpencode(env) {
 async function main() {
   mkdirSync(workspace, { recursive: true });
   mkdirSync(configHome, { recursive: true });
-  mkdirSync(wamHome, { recursive: true });
+  // `.wam/` is intentionally NOT pre-created: its creation by the plugin is
+  // part of what this E2E validates.
 
   // Step 1: pack the repo into the isolated temp dir.
   log("pack", "creating tarball from repo...");
@@ -357,14 +518,43 @@ async function main() {
   // OpenCode 1.18.x resolves `plugin` config entries as npm specs, file paths
   // (relative to the declaring config) or file URLs. `.mjs` is NOT recognized;
   // the adapter is written as `.js` so Bun loads it as ESM.
+  // The adapter is also the observation point for hook registration: it wraps
+  // `input.plugin` to record `plugin.on(...)` calls and captures the hook map
+  // returned by the plugin factory. Both are written to WAM_E2E_HOOKS so the
+  // harness can assert that the plugin really registered its hooks.
   const wrapperSource =
     `import fs from "node:fs";\n` +
     `import WaitAMinutePlugin from ${JSON.stringify(installedMain)};\n` +
     `export default async function waitAMinuteE2EEntry(input) {\n` +
+    `  const registered = { on: [], returned: [] };\n` +
+    `  const record = (kind, name) => {\n` +
+    `    try { if (!registered[kind].includes(name)) registered[kind].push(name); } catch (_) {}\n` +
+    `  };\n` +
+    `  let nextInput = input;\n` +
+    `  const api = input && input.plugin;\n` +
+    `  if (api && typeof api.on === "function") {\n` +
+    `    nextInput = { ...input, plugin: new Proxy(api, {\n` +
+    `      get(target, prop, receiver) {\n` +
+    `        if (prop === "on") {\n` +
+    `          return (name, handler) => { record("on", String(name)); return target.on(name, handler); };\n` +
+    `        }\n` +
+    `        const value = Reflect.get(target, prop, receiver);\n` +
+    `        return typeof value === "function" ? value.bind(target) : value;\n` +
+    `      },\n` +
+    `    }) };\n` +
+    `  }\n` +
     `  if (process.env.WAM_E2E_MARKER) {\n` +
     `    try { fs.writeFileSync(process.env.WAM_E2E_MARKER, "loaded", "utf8"); } catch (_) {}\n` +
     `  }\n` +
-    `  return WaitAMinutePlugin(input);\n` +
+    `  const result = await WaitAMinutePlugin(nextInput);\n` +
+    `  for (const key of Object.keys(result || {})) record("returned", key);\n` +
+    `  if (result && typeof result.hooks === "object") {\n` +
+    `    for (const key of Object.keys(result.hooks)) record("returned", key);\n` +
+    `  }\n` +
+    `  if (process.env.WAM_E2E_HOOKS) {\n` +
+    `    try { fs.writeFileSync(process.env.WAM_E2E_HOOKS, JSON.stringify(registered), "utf8"); } catch (_) {}\n` +
+    `  }\n` +
+    `  return result;\n` +
     `}\n`;
   const pluginEntryPath = join(workspace, "wam-e2e-entry.js");
   writeFileSync(pluginEntryPath, wrapperSource, "utf8");
@@ -383,14 +573,22 @@ async function main() {
   log("setup", `created temporary opencode config at ${configPath}`);
 
   // Step 4: isolate HOME/XDG/WAM.
+  // PWD/INIT_CWD MUST be overridden too: `spawn` changes the child's working
+  // directory but leaves the inherited PWD pointing at the checkout, and
+  // OpenCode resolves its project directory from PWD. Without this the session
+  // runs against the real repository instead of the isolated workspace and the
+  // plugin writes its `.wam/` state into the checkout.
   const env = {
     ...process.env,
     HOME: tmpBase, // so .opencode and .wam are under tmpBase
+    PWD: workspace,
+    INIT_CWD: workspace,
     XDG_CONFIG_HOME: configHome, // isolate global config
     XDG_DATA_HOME: join(tmpBase, ".local", "share"),
     XDG_STATE_HOME: join(tmpBase, ".local", "state"),
-    WAM_HOME: wamHome,
+    WAM_HOME: wamHome, // NOTE: the plugin never reads it (state root = directory/cwd)
     WAM_E2E_MARKER: markerPath, // written by the adapter when the installed plugin loads
+    WAM_E2E_HOOKS: hooksPath, // hook registrations observed by the adapter
     OPENCODE_TELEMETRY_ENABLED: "false",
     OPENCODE_AUTOUPDATE_CHECK: "false",
   };
@@ -419,16 +617,21 @@ async function main() {
 
   // Step 6: spawn real opencode and observe the plugin.
   // The model backend intermittently stalls (opencode emits no model output and
-  // never exits); retry a few times before declaring the harness failed.
-  const MAX_ATTEMPTS = 3;
+  // never exits), occasionally exits non-zero without a plugin error, and
+  // sometimes answers without the expected payload. All of those are transient
+  // for a live backend, so retry a bounded number of times before failing.
   let result = await runOpencode(env);
-  for (let attempt = 2; attempt <= MAX_ATTEMPTS && result.timedOut; attempt++) {
+  let attempt = 1;
+  while (attempt < MAX_ATTEMPTS && isTransient(result)) {
     log(
       "retry",
-      `opencode attempt ${attempt - 1}/${MAX_ATTEMPTS} stalled; retrying`
+      `opencode attempt ${attempt}/${MAX_ATTEMPTS} failed transiently (${describeFailure(result)}); retrying in ${RETRY_DELAY_MS}ms`
     );
+    await delay(RETRY_DELAY_MS);
     result = await runOpencode(env);
+    attempt += 1;
   }
+  summary.attempts = attempt;
   const wamState = wamStatePresent();
   const marker = pluginMarkerPresent();
   summary.loaded = result.pluginLoaded || wamState || marker;
@@ -460,9 +663,76 @@ async function main() {
   if (!summary.loaded) {
     fail("plugin", "plugin was not observed loading from the packed artifact", 1);
   }
+
+  // Hook registration: the plugin must actually subscribe to the OpenCode
+  // hooks, otherwise the gate is inert even though the module loaded.
+  const hooks = readHookRegistrations();
+  summary.hooks = hooks;
+  if (hooks.registered.length === 0) {
+    fail(
+      "hooks",
+      "no hook registration observed (neither plugin.on(...) nor a returned hook map)",
+      1
+    );
+  }
+  const missingHooks = EXPECTED_HOOKS.filter((h) => !hooks.registered.includes(h));
+  if (missingHooks.length > 0) {
+    fail(
+      "hooks",
+      `expected hook(s) not registered: ${missingHooks.join(", ")} (registered: ${hooks.registered.join(", ") || "none"})`,
+      1
+    );
+  }
+  log("hooks", `registered hooks: ${hooks.registered.join(", ")}`);
+
+  // `.wam/` lifecycle: the plugin must create its own state directory and
+  // populate it during the session.
+  const state = findWamStateDir();
+  summary.state = {
+    dir: state ? state.dir : null,
+    root: state ? state.root : null,
+    entries: state ? state.entries : [],
+    taskArtifacts: [],
+  };
+  log(
+    "state",
+    `searched: ${join(workspace, ".wam")} | ${join(tmpBase, ".wam")} | workspace=[${readdirSync(workspace).join(",")}] | tmpBase=[${readdirSync(tmpBase).join(",")}]`
+  );
+  if (!state) {
+    fail("state", "plugin did not create a .wam/ state directory during the session", 1);
+  }
+  const lifecycleEntries = state.entries.filter((e) => WAM_STATE_ENTRIES.includes(e));
+  if (lifecycleEntries.length === 0) {
+    fail(
+      "state",
+      `.wam/ exists but holds no recognized state (entries: ${state.entries.join(", ") || "none"})`,
+      1
+    );
+  }
+  // Task lifecycle: the session must have persisted an active task, either as
+  // the active-task pointer, as a per-task directory, or as task state.
+  const taskDirsPath = join(state.dir, "tasks");
+  const taskDirs = existsSync(taskDirsPath)
+    ? readdirSync(taskDirsPath).filter((e) => !e.startsWith("."))
+    : [];
+  const taskArtifacts = [
+    existsSync(join(state.dir, "active-task")) ? "active-task" : null,
+    taskDirs.length > 0 ? "tasks/" : null,
+    existsSync(join(state.dir, "task-state.json")) ? "task-state.json" : null,
+  ].filter(Boolean);
+  if (taskArtifacts.length === 0) {
+    fail(
+      "state",
+      `.wam/ holds no task lifecycle artifact (entries: ${state.entries.join(", ") || "none"})`,
+      1
+    );
+  }
+  summary.state.taskArtifacts = taskArtifacts;
+  log("state", `.wam/ at ${state.dir} -> ${lifecycleEntries.join(", ")}`);
+
   log(
     "result",
-    "round-trip verified: model answered and plugin loaded from the packed artifact"
+    "round-trip verified: model answered, hooks registered and plugin loaded from the packed artifact"
   );
 }
 

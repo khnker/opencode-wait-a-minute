@@ -3,6 +3,7 @@
  */
 
 import { PHASE_PROPOSED } from "../integration/orchestration.js";
+import { normalizeGoalAssessment } from "./goal-assessment.js";
 
 export function createState(taskId) {
   return {
@@ -13,12 +14,13 @@ export function createState(taskId) {
     nextAction: null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    goalAssessment: null,
   };
 }
 
 export function normalizeState(state) {
   if (!state) return createState("unknown");
-  
+
   return {
     ...state,
     phase: state.phase || PHASE_PROPOSED,
@@ -27,6 +29,7 @@ export function normalizeState(state) {
     nextAction: state.nextAction || null,
     createdAt: state.createdAt || Date.now(),
     updatedAt: Date.now(),
+    goalAssessment: normalizeGoalAssessment(state.goalAssessment),
   };
 }
 

@@ -11,10 +11,10 @@
 - [x] Run benchmark to verify functionality.
 
 ## Documentation
-- [ ] Update proposal.md with more details.
-- [ ] Update design.md with algorithm specifics.
-- [ ] Ensure spec.md is complete.
+- [x] Update proposal.md with more details.
+- [x] Update design.md with algorithm specifics.
+- [x] Ensure spec.md is complete.
 
 ## Validation
-- [ ] Run `openspec validate --changes` to check the change.
-- [ ] Run `openspec status task-conditioned-role-replacement` to see the state.
+- [x] Run `openspec validate --changes` to check the change.
+- [x] Run `openspec status task-conditioned-role-replacement` to see the state.

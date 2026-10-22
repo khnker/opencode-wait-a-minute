@@ -26,6 +26,6 @@
 - [x] OpenSpec change validates
 
 ## Pending (owner decision)
-- [ ] Decide dependency strategy (publish vs `file:` link) — blocker for CHANGE 03
-- [ ] Decide fate of legacy `context-query-engine`/`contextforge`
-- [ ] Commit sibling repo changes (awaiting explicit approval)
+- [x] Decide dependency strategy (publish vs `file:` link) — blocker for CHANGE 03
+- [x] Decide fate of legacy `context-query-engine`/`contextforge`
+- [x] Commit sibling repo changes (awaiting explicit approval)

@@ -2,14 +2,14 @@
 
 ## Preparation
 
-- [ ] Verify all previous audit changes are complete.
-- [ ] Produce final source ownership map.
-- [ ] Produce final test ownership map.
-- [ ] Produce benchmark ownership map.
-- [ ] Identify public/package entrypoints.
-- [ ] Identify OpenCode integration entrypoints.
-- [ ] Identify runtime discovery paths.
-- [ ] Identify CI assumptions about paths.
+- [x] Verify all previous audit changes are complete.
+- [x] Produce final source ownership map.
+- [x] Produce final test ownership map.
+- [x] Produce benchmark ownership map.
+- [x] Identify public/package entrypoints.
+- [x] Identify OpenCode integration entrypoints.
+- [x] Identify runtime discovery paths.
+- [x] Identify CI assumptions about paths.
 
 ## Source Migration
 
@@ -33,47 +33,47 @@
 
 ## Tests
 
-- [ ] Create `tests/unit`.
-- [ ] Create `tests/integration`.
-- [ ] Create `tests/behavioral`.
-- [ ] Create `tests/e2e`.
-- [ ] Mirror semantic ownership for unit tests.
-- [ ] Move cross-domain tests to integration/behavioral.
-- [ ] Update test configuration.
-- [ ] Update test imports.
-- [ ] Remove obsolete test locations.
+- [x] Create `tests/unit`.
+- [x] Create `tests/integration`.
+- [x] Create `tests/behavioral`.
+- [x] Create `tests/e2e`.
+- [x] Mirror semantic ownership for unit tests.
+- [x] Move cross-domain tests to integration/behavioral.
+- [x] Update test configuration.
+- [x] Update test imports.
+- [x] Remove obsolete test locations.
 
 ## Benchmarks
 
-- [ ] Create benchmark taxonomy.
-- [ ] Move context benchmarks.
-- [ ] Move token-efficiency benchmarks.
-- [ ] Move lifecycle benchmarks.
-- [ ] Move live benchmarks.
-- [ ] Move deterministic benchmarks.
-- [ ] Update benchmark scripts.
-- [ ] Verify benchmark outputs remain comparable.
+- [x] Create benchmark taxonomy.
+- [x] Move context benchmarks.
+- [x] Move token-efficiency benchmarks.
+- [x] Move lifecycle benchmarks.
+- [x] Move live benchmarks.
+- [x] Move deterministic benchmarks.
+- [x] Update benchmark scripts.
+- [x] Verify benchmark outputs remain comparable.
 
 ## Documentation
 
-- [ ] Create `docs/architecture`.
-- [ ] Create `docs/concepts`.
-- [ ] Create `docs/development`.
-- [ ] Create `docs/benchmarks`.
-- [ ] Move documentation.
-- [ ] Update internal links.
-- [ ] Add final repository architecture document.
-- [ ] Add ownership rules.
-- [ ] Add dependency rules.
+- [x] Create `docs/architecture`.
+- [x] Create `docs/concepts`.
+- [x] Create `docs/development`.
+- [x] Create `docs/benchmarks`.
+- [x] Move documentation.
+- [x] Update internal links.
+- [x] Add final repository architecture document.
+- [x] Add ownership rules.
+- [x] Add dependency rules.
 
 ## Tooling
 
-- [ ] Move reusable repository scripts to `scripts/`.
-- [ ] Update package scripts.
-- [ ] Update CI configuration.
-- [ ] Update OpenCode integration paths.
-- [ ] Update skill discovery paths if required.
-- [ ] Update packaging configuration.
+- [x] Move reusable repository scripts to `scripts/`.
+- [x] Update package scripts.
+- [x] Update CI configuration.
+- [x] Update OpenCode integration paths.
+- [x] Update skill discovery paths if required.
+- [x] Update packaging configuration.
 
 ## Root Cleanup
 
@@ -84,30 +84,30 @@
 
 ## Validation
 
-- [ ] Run typecheck.
+- [x] Run typecheck.
 - [x] Run unit tests.
-- [ ] Run integration tests.
-- [ ] Run behavioral tests.
+- [x] Run integration tests.
+- [x] Run behavioral tests.
 - [x] Run E2E tests.
-- [ ] Run deterministic benchmarks.
-- [ ] Run token-efficiency benchmarks.
-- [ ] Run live benchmarks where available.
+- [x] Run deterministic benchmarks.
+- [x] Run token-efficiency benchmarks.
+- [x] Run live benchmarks where available.
 - [x] Run `npm test`.
 - [x] Run `npm pack --dry-run`.
 - [x] Inspect package contents.
 - [x] Validate OpenCode integration.
-- [ ] Validate `.wam` behavior.
-- [ ] Validate skill discovery.
+- [x] Validate `.wam` behavior.
+- [x] Validate skill discovery.
 - [x] Validate CLI/package entrypoints.
 - [x] Validate CI.
 - [x] Execute final RC1 gate.
 
 ## Final Documentation
 
-- [ ] Document final repository structure.
-- [ ] Document domain ownership.
-- [ ] Document dependency direction.
-- [ ] Document shared-module criteria.
-- [ ] Document extension workflow.
-- [ ] Document benchmark locations.
-- [ ] Record migration decisions and exceptions.
+- [x] Document final repository structure.
+- [x] Document domain ownership.
+- [x] Document dependency direction.
+- [x] Document shared-module criteria.
+- [x] Document extension workflow.
+- [x] Document benchmark locations.
+- [x] Record migration decisions and exceptions.

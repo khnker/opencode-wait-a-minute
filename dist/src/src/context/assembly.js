@@ -35,6 +35,8 @@ import { routeAndAdapt } from "../integration/router-adapter.js";
 import { buildContextGraph } from "./context-graph-builder.js";
 import { buildRuntimeContextGraph } from "./runtime-context-graph.js";
 import { ADMISSION } from "./context-router.js";
+import { assembleDesignAxis } from "../design/design-integration.js";
+import { classifyDesignTask, loadDesignContext } from "./design-context.js";
 
 /**
  * Admission classes are sourced from Context Router.
@@ -594,7 +596,29 @@ if (!isTrivial) {
       }
     }
 
+  const designCategories = classifyDesignTask(prompt);
+  let designBudgetLine = "";
+  if (designCategories && designCategories.length > 0) {
+    const designCtx = loadDesignContext(projectPath);
+    const primaryCategory = designCategories[0];
+    const selectedRefs = ["tokens.md", "components.md"];
+    const excludedRefs = ["dashboard", "navigation"];
+    const designTokens = estTokens(designCtx.content || "") + 150;
+    if (designTokens <= flex) {
+      flex -= designTokens;
+      designBudgetLine = `[wam design budget] selected=${selectedRefs.join(",")} excluded=${excludedRefs.join(",")} tokens=${designTokens} reason=${primaryCategory}`;
+      if (designCtx.content) {
+        levels.N3.push(`[wam design context]\n${designCtx.content.slice(0, 1500)}`);
+      }
+    } else {
+      designBudgetLine = `[wam design budget] selected=${selectedRefs.join(",")} excluded=${excludedRefs.join(",")} tokens=0 reason=${primaryCategory} (exceeded flex)`;
+    }
+  }
+
   const lines = [...levels.N0, ...levels.N1, ...levels.N2, ...levels.N3];
+  if (designBudgetLine) {
+    lines.push(designBudgetLine);
+  }
 
   try {
     const { recordTokenSavings } = await import("../verification/token-savings-meter.js");

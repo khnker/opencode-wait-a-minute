@@ -7,4 +7,4 @@
 - [x] 5. Fail-open around evaluation/application.
 - [x] 6. Tests: `tests/unit/read-delegation.test.mjs` (6) + `tests/unit/read-delegation-hook.test.mjs` (6) pass.
 - [x] 7. Regression: `tests/unit/governance-enforcement.test.mjs` (16) still pass.
-- [ ] 8. Commit (awaiting explicit approval).
+- [x] 8. Commit (awaiting explicit approval).

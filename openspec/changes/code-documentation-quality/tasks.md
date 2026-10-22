@@ -2,7 +2,7 @@
 
 - [x] Audit production comments.
 - [x] Audit JSDoc.
-- [ ] Audit tests where comments explain important behavior.
+- [x] Audit tests where comments explain important behavior.
 - [x] Audit benchmarks and token-accounting documentation.
 - [x] Classify comments C0-C4.
 - [x] Remove redundant C3 comments.
@@ -26,4 +26,4 @@
 - [x] No C4 comments remain in production code (corrected in `verification-policy.js`).
 - [x] High-risk invariants documented in `docs/`.
 - [x] `npm test` exits 0 (2573 pass / 0 fail).
-- [ ] `openspec validate code-documentation-quality --strict` passes.
+- [x] `openspec validate code-documentation-quality --strict` passes.

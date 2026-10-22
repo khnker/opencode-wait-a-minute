@@ -1,13 +1,13 @@
 # Tasks
 
-- [ ] Definir admission class enum
-- [ ] Aplicar admission a N0 (project context)
-- [ ] Aplicar admission a N2 (task state)
-- [ ] Clasificar dependencias de cápsulas
-- [ ] Modificar context selection en assembly.js
-- [ ] Eliminar OPTIONAL antes de sacrificar dependencia
-- [ ] Reportar insufficiency explícitamente
-- [ ] Agregar budget stress tests
-- [ ] Test: MANDATORY preservado aunque exceda budget
-- [ ] Test: OPTIONAL descartado primero
-- [ ] Test: sufficiency failure cuando MANDATORY no cabe
+- [x] Definir admission class enum
+- [x] Aplicar admission a N0 (project context)
+- [x] Aplicar admission a N2 (task state)
+- [x] Clasificar dependencias de cápsulas
+- [x] Modificar context selection en assembly.js
+- [x] Eliminar OPTIONAL antes de sacrificar dependencia
+- [x] Reportar insufficiency explícitamente
+- [x] Agregar budget stress tests
+- [x] Test: MANDATORY preservado aunque exceda budget
+- [x] Test: OPTIONAL descartado primero
+- [x] Test: sufficiency failure cuando MANDATORY no cabe

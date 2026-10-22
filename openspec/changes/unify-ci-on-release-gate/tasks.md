@@ -26,4 +26,4 @@
 - [x] 4.3 `npm run gate` reports all required stages PASS
 - [x] 4.4 `openspec validate unify-ci-on-release-gate --strict` passes
 - [x] 4.5 Update `CHANGELOG.md`
-- [ ] 4.6 Commit
+- [x] 4.6 Commit

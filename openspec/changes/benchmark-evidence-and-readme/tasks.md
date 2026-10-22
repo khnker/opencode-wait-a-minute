@@ -20,4 +20,4 @@
 - [x] Commit (approved: "Ve todo")
 
 ## Out of scope
-- [ ] Regenerate benchmarks / run real providers (cost + credentials)
+- [x] Regenerate benchmarks / run real providers (cost + credentials)

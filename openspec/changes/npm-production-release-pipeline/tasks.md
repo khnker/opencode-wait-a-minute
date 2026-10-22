@@ -27,7 +27,7 @@
 - [x] 3.7 Verify package `files` includes everything required at runtime and excludes development-only content.
 
 ## 4. Release verification
-- [ ] 4.1 Publish to npm from release workflow.
-- [ ] 4.2 Install published version into clean temporary project.
-- [ ] 4.3 Run package smoke verification against published version.
-- [ ] 4.4 Verify npm provenance is present for published package.
+- [x] 4.1 Publish to npm from release workflow.
+- [x] 4.2 Install published version into clean temporary project.
+- [x] 4.3 Run package smoke verification against published version.
+- [x] 4.4 Verify npm provenance is present for published package.

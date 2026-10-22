@@ -1,12 +1,12 @@
 # Tasks
 
 ## Implementation
-- [ ] Canonicalize state serialization so the same logical state always yields the same representation.
-- [ ] Use it for hashing, evidence, benchmarks, continuation and debugging.
-- [ ] Repeated serialization is byte-identical.
-- [ ] Key order and formatting are stable.
-- [ ] Hash matches across runs.
+- [x] Canonicalize state serialization so the same logical state always yields the same representation.
+- [x] Use it for hashing, evidence, benchmarks, continuation and debugging.
+- [x] Repeated serialization is byte-identical.
+- [x] Key order and formatting are stable.
+- [x] Hash matches across runs.
 
 ## Validation
-- [ ] Run the change's objective validation and paste the output.
-- [ ] `openspec validate rc1-23-deterministic-state-serialization --strict` passes.
+- [x] Run the change's objective validation and paste the output.
+- [x] `openspec validate rc1-23-deterministic-state-serialization --strict` passes.
