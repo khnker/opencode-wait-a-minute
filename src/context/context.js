@@ -17,6 +17,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { generateContract, evaluateContract, mergeAssumptions } from "./sufficiency-contract.js";
 import { retrieveWithCqe } from "./cqe-adapter.js";
+import { loadDesignContext } from "../design/design-context.js";
+
+export { loadDesignContext };
+export function loadDesignTokens(root = process.cwd()) {
+  const ctx = loadDesignContext(root);
+  return ctx.tokens || {};
+}
 
 export function detectFileSearchIntent(task) {
   if (typeof task !== "string" || !task) return false;
