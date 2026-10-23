@@ -16,7 +16,7 @@ export const WAM_META = "wam";
 export function tagWamPart(part, { messageID, phase, idFactory } = {}) {
   const tagged = {
     ...part,
-    synthetic: true,
+    synthetic: false,
     metadata: {
       ...(part.metadata || {}),
       [WAM_META]: true,
@@ -34,7 +34,7 @@ export function tagWamPart(part, { messageID, phase, idFactory } = {}) {
  * Checks if a part was injected by WAM.
  */
 export function isWamSynthetic(part) {
-  return !!part && part.synthetic === true && part?.metadata?.[WAM_META] === true;
+  return !!part && part?.metadata?.[WAM_META] === true;
 }
 
 /**

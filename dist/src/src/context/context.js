@@ -9,12 +9,13 @@
  * niveles los emite assembly.js, Context Pack Builder).
  *
  * Unidades: Context Capsules (.wam/capsules/<id>.json), identidad de sesión
- * (.wam/session.json), paquete de contexto por tarea. Sin vector DB ni
+ * (.wam/session_<sessionID>.json), paquete de contexto por tarea. Sin vector DB ni
  * embeddings; capa de alias determinística (closed set) para tokens sinónimos.
  */
 
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { generateContract, evaluateContract, mergeAssumptions } from "./sufficiency-contract.js";
 import { retrieveWithCqe } from "./cqe-adapter.js";
 import { loadDesignContext } from "../design/design-context.js";
@@ -64,8 +65,37 @@ function capsulesDir(root) {
   return path.join(root || process.cwd(), ".wam", "capsules");
 }
 
-function sessionFile(root) {
+const DEFAULT_SESSION_KEY = "default";
+const SAFE_SESSION_ID = /^[A-Za-z0-9_-]{1,128}$/;
+
+function sanitizeSessionKey(sessionID) {
+  return String(sessionID || DEFAULT_SESSION_KEY).replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+function sessionFile(root, sessionID) {
+  return path.join(root || process.cwd(), ".wam", `session_${sanitizeSessionKey(sessionID)}.json`);
+}
+
+// Legacy identity file: used when no OpenCode session is in scope (one per root).
+function legacySessionFile(root) {
   return path.join(root || process.cwd(), ".wam", "session.json");
+}
+
+// Pointer to the OpenCode session that is currently active in a root.
+function activeSessionFile(root) {
+  return path.join(root || process.cwd(), ".wam", "active_session.json");
+}
+
+/**
+ * Deterministic WAM session id derived from the OpenCode sessionID.
+ * Continuity: the same OpenCode session always resolves to the same id.
+ * Isolation: two different OpenCode sessions never resolve to the same id.
+ */
+export function sessionIdFromOpenCode(sessionID) {
+  const raw = String(sessionID || "").trim();
+  if (!raw) return "";
+  if (SAFE_SESSION_ID.test(raw)) return raw;
+  return `ses_${createHash("sha256").update(raw).digest("hex").slice(0, 16)}`;
 }
 
 function genId(prefix) {
@@ -84,30 +114,97 @@ function fileExists(p) {
   }
 }
 
-// -- Change 3: session identity derived per root --------------------------------
+// -- Change 3: session identity derived per root and sessionID -------------------
 // Session ID is scoped to (root, OpenCode sessionID), never global.
-// Different roots NEVER share session identity.
+// Different roots or different session IDs NEVER share session identity.
+
+/**
+ * Identity of the OpenCode session that is currently active in a root.
+ * Call sites that do not know the sessionID (assembly, CLI) resolve it here,
+ * so they never fall back to a shared "default" identity.
+ */
+function activeSessionId(root) {
+  try {
+    const file = activeSessionFile(root);
+    if (fileExists(file)) {
+      const s = JSON.parse(fs.readFileSync(file, "utf-8"));
+      if (s.session_id) return s.session_id;
+    }
+  } catch {}
+  return "";
+}
+
+/**
+ * Registers an OpenCode session as the active one of its root and returns its
+ * WAM identity. The pointer makes every session-scoped call site (even those
+ * without a sessionID in scope) resolve the running session.
+ */
+export function setActiveSession(root, sessionID) {
+  const base = root || process.cwd();
+  const sid = getSessionId(base, sessionID);
+  try {
+    fs.mkdirSync(path.join(base, ".wam"), { recursive: true });
+    fs.writeFileSync(activeSessionFile(base), JSON.stringify({
+      session_id: sid,
+      opencode_session_id: sessionID || null,
+      updated_at: nowIso(),
+    }, null, 2));
+  } catch {}
+  return sid;
+}
 
 export function getSessionId(root, sessionID) {
-  const file = sessionFile(root);
-  const key = `${root}:${sessionID || "default"}`;
-  // Per-(root,session) cache — never shared across roots
+  const base = root || process.cwd();
+  const key = `${base}:${sessionID || DEFAULT_SESSION_KEY}`;
   if (!getSessionId._cache) getSessionId._cache = new Map();
+
+  if (!sessionID) {
+    // No session in scope → resolve the active session of this root.
+    const active = activeSessionId(base);
+    if (active) return active;
+    // No active session → legacy per-root identity (.wam/session.json).
+    const file = legacySessionFile(base);
+    let sid = "";
+    try {
+      if (fileExists(file)) {
+        const s = JSON.parse(fs.readFileSync(file, "utf-8"));
+        if (s.session_id) sid = s.session_id;
+      }
+    } catch {}
+    if (!sid) {
+      sid = genId("ses");
+      try {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, JSON.stringify({ session_id: sid, created_at: nowIso() }, null, 2));
+      } catch {}
+    }
+    return sid;
+  }
+
+  // Per-(root,session) cache — never shared across roots or session IDs
   if (getSessionId._cache.has(key)) return getSessionId._cache.get(key);
 
+  const file = sessionFile(base, sessionID);
+  // Identity is derived from the OpenCode sessionID, so it is unique per
+  // session by construction: two sessions never share one session file.
+  let sid = sessionIdFromOpenCode(sessionID);
+  let created = nowIso();
   try {
     if (fileExists(file)) {
       const s = JSON.parse(fs.readFileSync(file, "utf-8"));
-      if (s.session_id) {
-        getSessionId._cache.set(key, s.session_id);
-        return s.session_id;
-      }
+      // Continuity: keep the identity already bound to this session file.
+      if (s.session_id) sid = s.session_id;
+      if (s.created_at) created = s.created_at;
     }
   } catch {}
-  const sid = genId("ses");
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ session_id: sid, created_at: nowIso() }, null, 2));
+    fs.writeFileSync(file, JSON.stringify({
+      session_id: sid,
+      opencode_session_id: sessionID,
+      created_at: created,
+      updated_at: nowIso(),
+    }, null, 2));
   } catch {}
   getSessionId._cache.set(key, sid);
   return sid;
@@ -188,13 +285,13 @@ export function getCapsule(contextId, root) {
  * Crea una Context Capsule. `level` por defecto L3 Session (lo más conservador).
  * Provenance inferred NO puede promoverse a L1 silenciosamente (ver promoteCapsule).
  */
-export function createCapsule(entry, root) {
+export function createCapsule(entry, root, sessionID = null) {
   const contextId = entry.context_id || genId("cap");
   const level = LEVELS.includes(entry.level) ? entry.level : "L3";
   const provenance = PROVENANCE.includes(entry.provenance) ? entry.provenance : "inferred";
   const capsule = {
     context_id: contextId,
-    session_id: entry.session_id || getSessionId(root),
+    session_id: entry.session_id || getSessionId(root, sessionID),
     level,
     lifecycle: LIFECYCLE.includes(entry.lifecycle) ? entry.lifecycle : "active",
     purpose: entry.purpose || "",

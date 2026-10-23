@@ -12,8 +12,9 @@ embeddings; matching uses a closed alias set.
   (`src/context/context.js`). Each capsule carries a level (`L1`–`L4`), a
   lifecycle status (`candidate`, `active`, `superseded`, `stale`, `invalidated`)
   and provenance (`user_decided`, `observed`, `inferred`).
-- **Session** — `.wam/session.json` records session state scoped to
-  `(root, OpenCode sessionID)` via `getSessionId`.
+- **Session** — `.wam/session_<sessionID>.json` records session state scoped to
+  `(root, OpenCode sessionID)` via `getSessionId`; `.wam/active_session.json`
+  points to the session currently running in that root.
 - **Selection** — `selectContext` picks the highest-relevance items that fit the
   active budget. Relevance is computed from a deterministic alias set, not
   similarity search.

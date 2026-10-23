@@ -534,6 +534,14 @@ export async function handleMessage(input, output, deps) {
       (state.contract?.status === "REJECTED" && explicitYes)
     ) {
       waitAMinute.approveContract(taskId, wamRoot);
+      const skillsLine = analysis.skills?.selected?.length
+        ? analysis.skills.selected.map((s) => s.name).join(", ")
+        : "ninguna";
+      emitTextPart(
+        output,
+        `[wam] Contrato aprobado — estrategia activada. Skills en uso: ${skillsLine}. Próximo paso: ${state.nextAction || "continuar"}`,
+        { sessionID: input.sessionID, messageID: output.message?.id || input.messageID }
+      );
       try {
         recordDecision({
           id: `strategy-${taskId}-${Date.now()}`,

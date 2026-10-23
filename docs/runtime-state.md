@@ -9,7 +9,9 @@ at execution time and may be written on every run.
 |------|-------|-------|
 | `.wam/` (entire tree) | **Ignored** | Covered by `/.wam/` in `.gitignore`. |
 | `.wam/task-state.json` | Runtime | Task queue state; recreated on use. |
-| `.wam/session.json` | Runtime | Active session pointer. |
+| `.wam/session_<sessionID>.json` | Runtime | Session identity of one OpenCode session. |
+| `.wam/active_session.json` | Runtime | Active session pointer. |
+| `.wam/session.json` | Runtime | Legacy identity when no OpenCode session is in scope. |
 | `.wam/context/**` | Runtime | Session logs, project memo, recent changes. |
 | `.wam/snapshots/**` | Runtime | Context/continuation snapshots. |
 | `.wam/skills/**` | Runtime | Runtime skill registry/cache. |

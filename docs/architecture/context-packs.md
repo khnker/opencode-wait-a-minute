@@ -29,6 +29,12 @@ Context Packs is the subsystem responsible for context management, including cla
 - **Mechanism**: Combines classified and captured context into unified context packs
 - **Integration**: Works with context builder (`src/context/context-builder.js`)
 
+### Canonical Project Context (CPC)
+- **File**: `src/context/canonical-project-context.js`
+- **Purpose**: Inyecta el grounding canónico del proyecto cuando arranca una tarea
+- **Mechanism**: Clasifica el memo de proyecto (`.wam/context/project.md`) en hechos verificados y supuestos, rechaza contenido de sesión y respeta un presupuesto duro de < 150 tokens
+- **Outputs**: Bloque `[wam CPC]` inyectado como parte sintética WAM en el hook `chat.message` (idempotente)
+- **Integration**: Complementa N0-N3 del context pack; no los reemplaza ni escribe en el memo
 ### Context Builder
 - **File**: `src/context/context-builder.js`
 - **Purpose**: Builds context packs for agent consumption

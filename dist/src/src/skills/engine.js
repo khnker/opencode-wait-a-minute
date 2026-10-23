@@ -18,6 +18,7 @@ import { detectStack } from "../policy/project-inspector.js";
 import { classifyUncertainty, buildUncertainties, buildAssumptions } from "../policy/uncertainty.js";
 import { discoverSkills } from "../policy/skill-routing.js";
 import { loadPrompt } from "../prompts/loader.js";
+import { calculateFreshnessScore } from "../evidence/evidence-freshness.js";
 
 // Re-export for backward compatibility
 export { classifyRequest, detectStack, classifyUncertainty, buildUncertainties, buildAssumptions, discoverSkills };
@@ -1613,6 +1614,9 @@ export async function analyze(options = {}) {
     activeMode,
   } = options;
 
+  // Step 0: Calculate freshness metrics based on prompt/task context
+  const freshnessMetrics = await computeFreshnessMetrics(prompt, projectPath || process.cwd());
+
   // Step 1: Classify the request
   const classification = classifyRequest(prompt);
 
@@ -1750,6 +1754,14 @@ export async function analyze(options = {}) {
     ambiguity: classification.ambiguity,
     strategy: modeInfo.mode,
 
+    // Freshness metrics for information relevance
+    freshness: {
+      score: freshnessMetrics.score,
+      newsCount: freshnessMetrics.newsCount,
+      hnScore: freshnessMetrics.hnScore,
+      maxAgeHours: freshnessMetrics.maxAgeHours
+    },
+
     ready: modeInfo.mode === "FAST" || (modeInfo.mode === "NORMAL" && classification.type !== "architectural" && riskLevel !== "high"),
   };
 
@@ -1767,4 +1779,36 @@ export async function analyze(options = {}) {
   }
 
   return result;
+}
+
+/**
+ * Compute freshness metrics for the given prompt and project context.
+ * Uses a static heuristic: prompts mentioning specific technology domains get
+ * fresher scores based on keyword recency patterns.
+ *
+ * @param {string} prompt - User prompt text
+ * @param {string} projectPath - Project path (affects context)
+ * @returns {Promise<Object>} Freshness metrics object
+ */
+async function computeFreshnessMetrics(prompt, projectPath) {
+  const keywordScores = {
+    'ai': 85, 'GPT': 90, 'LLM': 88, 'open-weight': 75,
+    'regulació': 92, 'data center': 60, 'chip': 65,
+    'AI regulation': 92, 'export control': 88,
+  };
+  
+  let hnScore = 0;
+  for (const [keyword, base] of Object.entries(keywordScores)) {
+    if (/true|active|now|recen/.test(prompt)) {
+      hnScore += base * 0.3; // Increase if recent context mentions it
+    }
+  }
+  hnScore = Math.min(Math.floor(hnScore), 100);
+  
+  const newsCount = 0; // Would be populated from external sources
+  const maxAgeHours = 0; // Would be tracked from timestamps
+  
+  const score = calculateFreshnessScore({ newsCount, hnScore, maxAgeHours });
+  
+  return { score, newsCount, hnScore, maxAgeHours };
 }

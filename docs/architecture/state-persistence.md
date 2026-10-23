@@ -14,7 +14,9 @@ and process restarts.
 
 ```text
 .wam/
-├── session.json                  # session identity (root + sessionID scoped)
+├── session_<sessionID>.json       # session identity (one file per OpenCode session)
+├── active_session.json            # pointer to the running OpenCode session
+├── session.json                   # legacy identity (no OpenCode session in scope)
 ├── task-state.json               # runtime task state
 ├── tasks/<taskId>/task.json      # per-task state
 ├── capsules/<id>.json            # context capsules (L1–L4)

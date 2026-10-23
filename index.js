@@ -11,8 +11,9 @@ import { loadPrompt } from "./src/prompts/loader.js";
 
 import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
 import { purgeTasks } from "./src/persistence/retention-manager.js";
-import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, selectContextWithCqe, detectFileSearchIntent, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules } from "./src/context/context.js";
+import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, selectContextWithCqe, detectFileSearchIntent, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules, setActiveSession } from "./src/context/context.js";
 import { assembleContext } from "./src/context/assembly.js";
+import { injectCanonicalProjectContext } from "./src/context/canonical-project-context.js";
 import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./src/verification/verification.js";
 import { ContextDecisionTracer } from "./src/context/context-decision-audit.js";
 import { guardAction } from "./src/execution/runtime-guards.js";
@@ -369,19 +370,16 @@ const GENERIC_SLUGS = new Set([
 function readActiveTaskIdFresh(root, options = {}) {
   const rec = readActiveTaskRecord(root);
   if (!rec) return null;
-  // Session-owned binding: the record belongs to THIS session, so it never
-  // goes stale — 1 sesión = 1 task, sobrevive restarts. Solo se abandona por
-  // apertura explícita (/wam task switch), cambio de contexto o sesión nueva.
-  if (options.sessionId && rec.sessionId && rec.sessionId === options.sessionId) {
+  // Si el registro tiene sessionId y el caller pasa sessionId, deben coincidir estrictamente.
+  // Si pertenecen a sesiones distintas, nunca se adopta (evita que sesiones nuevas hereden tareas previas por TTL).
+  if (options.sessionId && rec.sessionId) {
+    if (rec.sessionId !== options.sessionId) return null;
     if (options.projectRoot && rec.projectRoot && rec.projectRoot !== root) return null;
     return rec.id;
   }
   const ttlMs = options.ttlMs || 60000;
   if (!rec.ts) return null;
   if (Date.now() - rec.ts > ttlMs) return null;
-  // Validate ownership: if record has sessionId, it must match caller session;
-  // if record has projectRoot, it must match caller's root. This prevents
-  // session A from silently adopting session B's active-task.
   if (options.sessionId && rec.sessionId && rec.sessionId !== options.sessionId) return null;
   if (options.projectRoot && rec.projectRoot && rec.projectRoot !== root) return null;
   return rec.id;
@@ -415,15 +413,19 @@ function effectiveTaskId(input, sessionTasks, wamRoot, promptText) {
   const cached = sessionTasks?.get?.(input?.sessionID);
   if (cached) return { taskId: cached, fallbackKind: "cached" };
   
-  // Priority 3: Session-owned active task (durable binding, no TTL when the
-  // sessionId matches — 1 sesión = 1 task, sobrevive restarts). Rejects
-  // records from other sessions — this is what stops a session from silently
-  // adopting another session's active task.
-  const fresh = readActiveTaskIdFresh(wamRoot, {
-    sessionId: input?.sessionID,
-    projectRoot: wamRoot,
-  });
-  if (fresh) return { taskId: fresh, fallbackKind: "active" };
+  // Priority 3 (revised): Session-owned active task — only adopt if this
+  // sessionID already has a cached entry in sessionTasks (i.e. this is a
+  // continuation of an existing session, not a brand-new session). When
+  // sessionTasks has no record for sessionID, skip the active-task read so
+  // the session starts fresh and the welcome message appears.
+  const hasSessionEntry = sessionTasks?.has?.(input?.sessionID);
+  if (hasSessionEntry) {
+    const fresh = readActiveTaskIdFresh(wamRoot, {
+      sessionId: input?.sessionID,
+      projectRoot: wamRoot,
+    });
+    if (fresh) return { taskId: fresh, fallbackKind: "active" };
+  }
   
   // Priority 4: Derive slug ONLY for new task creation (not continuation)
   // Prompts NO continuación y con sustantivo descriptivo → derivar slug.
@@ -758,6 +760,127 @@ const WaitAMinutePlugin = async (pluginInput) => {
   const sessionTasks = new Map(); // sessionID → taskId activo visto en chat.message
   const client = pluginInput?.client;
 
+  try {
+    const http = await import("node:http");
+    const port = Number(process.env.WAM_DASHBOARD_PORT || process.env.PORT || 4321);
+    const server = http.createServer(async (req, res) => {
+      const url = new URL(req.url, `http://${req.headers.host}`);
+      if (url.pathname === "/api/sessions") {
+        const sessions = [];
+        for (const [sid, root] of sessionRoots.entries()) {
+          const wamRoot = sessionWamRoots.get(sid) || root;
+          const taskId = sessionTasks.get(sid) || "default-task";
+          let state = null;
+          try {
+            state = getTaskState(taskId, wamRoot);
+          } catch {}
+          sessions.push({
+            sessionID: sid,
+            root,
+            wamRoot,
+            taskId,
+            state: state || { phase: "UNKNOWN" },
+          });
+        }
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ sessions }));
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Wait a Minute Dashboard</title>
+<style>
+body { margin: 0; font-family: system-ui, sans-serif; display: flex; height: 100vh; background: #0f172a; color: #f8fafc; }
+.sidebar { width: 320px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; }
+.sidebar h2 { padding: 16px; margin: 0; font-size: 1.1rem; border-bottom: 1px solid #334155; }
+.session-list { overflow-y: auto; flex: 1; list-style: none; padding: 0; margin: 0; }
+.session-item { padding: 12px 16px; border-bottom: 1px solid #334155; cursor: pointer; transition: background 0.2s; }
+.session-item:hover, .session-item.active { background: #334155; }
+.session-id { font-weight: bold; font-size: 0.9rem; color: #38bdf8; word-break: break-all; }
+.session-meta { font-size: 0.8rem; color: #94a3b8; margin-top: 4px; }
+.main { flex: 1; padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+.card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; }
+h1, h3 { margin-top: 0; }
+pre { background: #0f172a; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; color: #e2e8f0; }
+.badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; background: #0284c7; color: white; }
+</style>
+</head>
+<body>
+<div class="sidebar">
+<h2>Active Sessions</h2>
+<ul id="sessions" class="session-list"></ul>
+</div>
+<div class="main">
+<div class="card">
+<h1 id="title">Select a Session</h1>
+<div id="details"><p>Choose a session from the left sidebar to inspect its active task, phase, and state details.</p></div>
+</div>
+<div class="card">
+<h3>Raw State</h3>
+<pre id="raw-state">{}</pre>
+</div>
+</div>
+<script>
+let currentSessions = [];
+let selectedSessionId = null;
+async function refresh() {
+  try {
+    const res = await fetch('/api/sessions');
+    const data = await res.json();
+    currentSessions = data.sessions || [];
+    renderList();
+    if (selectedSessionId) {
+      renderDetails(selectedSessionId);
+    } else if (currentSessions.length > 0) {
+      selectedSessionId = currentSessions[0].sessionID;
+      renderList();
+      renderDetails(selectedSessionId);
+    }
+  } catch (e) {}
+}
+function renderList() {
+  const ul = document.getElementById('sessions');
+  ul.innerHTML = currentSessions.map(s => \`
+    <li class="session-item \${s.sessionID === selectedSessionId ? 'active' : ''}" onclick="selectSession('\${s.sessionID}')">
+      <div class="session-id">\${s.sessionID}</div>
+      <div class="session-meta">Task: \${s.taskId} | Phase: <span class="badge">\${s.state?.phase || 'UNKNOWN'}</span></div>
+    </li>
+  \`).join('');
+}
+function selectSession(id) {
+  selectedSessionId = id;
+  renderList();
+  renderDetails(id);
+}
+function renderDetails(id) {
+  const s = currentSessions.find(x => x.sessionID === id);
+  if (!s) return;
+  document.getElementById('title').innerText = \`Session: \${s.sessionID}\`;
+  document.getElementById('details').innerHTML = \`
+    <p><strong>Root Directory:</strong> \${s.root}</p>
+    <p><strong>WAM Root:</strong> \${s.wamRoot}</p>
+    <p><strong>Active Task ID:</strong> \${s.taskId}</p>
+    <p><strong>Current Phase:</strong> <span class="badge">\${s.state?.phase || 'UNKNOWN'}</span></p>
+    <p><strong>Contract:</strong> \${s.state?.contract ? JSON.stringify(s.state.contract, null, 2) : 'None'}</p>
+  \`;
+  document.getElementById('raw-state').innerText = JSON.stringify(s, null, 2);
+}
+setInterval(refresh, 2000);
+refresh();
+</script>
+</body>
+</html>`);
+    });
+    server.listen(port, () => {
+      console.log(`[WaitAMinute] Dashboard running at http://localhost:${port}`);
+    }).on("error", (err) => {
+      console.log(`[WaitAMinute] Dashboard server failed to start:`, err.message);
+    });
+  } catch (e) {}
+
   async function resolveSessionBase(sessionID) {
     if (sessionRoots.has(sessionID)) return sessionRoots.get(sessionID);
     let base = projectDirectory;
@@ -788,7 +911,13 @@ const WaitAMinutePlugin = async (pluginInput) => {
       initMemory(root);
       try { purgeTasks(path.join(root, '.wam', 'tasks')); } catch (e) { wamError(`Retention purge failed: ${e}`); }
     } catch {}
-    if (sessionID) sessionWamRoots.set(sessionID, root);
+    if (sessionID) {
+      sessionWamRoots.set(sessionID, root);
+      // Bind this root to the running OpenCode session: session-scoped call
+      // sites (even those without sessionID in scope) resolve this identity
+      // instead of a shared default one.
+      try { setActiveSession(root, sessionID); } catch {}
+    }
     return root;
   };
 
@@ -859,8 +988,8 @@ async function postToolExecution(input, output) {
 
     // Chat message hook — Persistence & Progress Gate.
     // Slim adapter: delegates message processing to src/integration/message-handler.js.
-    "chat.message": (input, output) =>
-      handleMessage(input, output, {
+    "chat.message": (input, output) => {
+      const pending = handleMessage(input, output, {
         bypassed,
         sessionTasks,
         sessionStore,
@@ -928,8 +1057,31 @@ async function postToolExecution(input, output) {
         closeSession,
         getSessionId,
         classifyAskingMessage,
-      }),
-
+      });
+      // CPC: contexto canónico del proyecto — se inyecta al arrancar una tarea.
+      // Enganchado sin await: no debe alterar la resolución del hook ni el orden
+      // de las partes inyectadas por el handler.
+      Promise.resolve(pending)
+        .then(async () => {
+          try {
+            const sid = input?.sessionID;
+            const taskId = sessionTasks.get(sid);
+            const root = sessionWamRoots.get(sid);
+            if (taskId && root) {
+              const state = await ensureWamMemory(root, taskId);
+              if (state?.phase === "PROPOSED") {
+                injectCanonicalProjectContext(output, {
+                  root,
+                  taskId,
+                  messageID: output?.message?.id || input?.messageID,
+                });
+              }
+            }
+          } catch {}
+        })
+        .catch(() => {});
+      return pending;
+    },
     // Handle /wam CLI (opencode 1.18.25: commands arrive via command.execute.before)
     "command.execute.before": async (input, output) => {
       if (input.command !== "wam") return;
@@ -939,7 +1091,7 @@ async function postToolExecution(input, output) {
       const argsArr = Array.isArray(input.arguments)
         ? input.arguments
         : (typeof input.arguments === "string" ? input.arguments.split(/\s+/) : []);
-      const wamText = await wamCli(argsArr, cfg, root, taskKey);
+      const wamText = await wamCli(argsArr, cfg, root, taskKey, sid);
       emitTextPart(output, wamText, { sessionID: sid, messageID: output.message?.id || input.messageID });
     },
 
@@ -1190,7 +1342,7 @@ function classifyAskingMessage(text = "") {
  * /wam CLI — opencode 1.18.25 entrega comandos vía command.execute.before,
  * no vía ctx.command. Lógica extraída del handler antiguo.
  */
-async function wamCli(args, cfg = {}, root = process.cwd(), taskId = readActiveTaskId(root) || "default-task") {
+async function wamCli(args, cfg = {}, root = process.cwd(), taskId = readActiveTaskId(root) || "default-task", sessionID = null) {
   const [sub, action, ...rest] = args || [];
 
   if (sub === "config") {
@@ -1448,8 +1600,8 @@ const sel = routeSkillsV2(prompt, {}, waitAMinute.getRegistry(), "STANDARD");
       return `Promovida ${id} → ${target} [${r.capsule.provenance}]`;
     }
     if (action === "session") {
-      const sid = getSessionId(root);
-      const caps = listCapsules(process.cwd(), { sessionId: sid });
+      const sid = getSessionId(root, sessionID);
+      const caps = listCapsules(root, { sessionId: sid });
       return `session: ${sid}\ncapsules de esta sesión: ${caps.length}\nL1 base: ${listCapsules(process.cwd(), { level: "L1", lifecycle: "active" }).length} cápsula(s)`;
     }
     if (action === "migrate") {
@@ -2039,8 +2191,9 @@ const waitAMinute = {
       (a) => a.classification === "DECISION_CRITICAL" && a.status !== "resolved"
     );
     const validationLines = [
-      `wait-a-minute: contrato ${contractStatus}${analysis.phase ? ` (fase ${analysis.phase})` : ""}`,
-      `req: ${(analysis.completionContract?.requirements || []).join("; ") || "—"}`,
+      `[wam] Intervención activa — contrato ${contractStatus} (fase ${analysis.phase || "PROPOSED"})`,
+      `skills activas: ${skillsLine}`,
+      `requisitos: ${(analysis.completionContract?.requirements || []).join("; ") || "—"}`,
       ...(blockingUnknowns.length
         ? [`blocking: ${blockingUnknowns.map((u) => `${u.id} ${u.question}`).join(" | ")}`]
         : []),
@@ -2048,7 +2201,7 @@ const waitAMinute = {
         ? [`assumptions blocking: ${blockingAssumptions.map((a) => `${a.id} ${a.statement}`).join(" | ")}`]
         : []),
       "",
-      "Ejecutar lo pedido. Si la instrucción es ambigua, preguntar.",
+      `Plan: ${analysis.nextAction || "Ejecutar lo pedido con soporte de skills WAM."}`,
       "/wam contract approve → aprobar | /wam compress → resumen terse",
     ];
 
