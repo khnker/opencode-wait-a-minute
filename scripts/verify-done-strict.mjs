@@ -138,7 +138,7 @@ const checks = [];
 // 1. Unit & integration tests
 checks.push({
   name: "Unit & Integration Test Suite",
-  ...runStrict("Unit & Integration Test Suite", "node scripts/run-tests.mjs"),
+  ...runStrict("Unit & Integration Test Suite", "node scripts/run-tests.mjs", { timeout: 600000 }),
 });
 
 // 2. Persistence: load the real module and exercise a real query path.

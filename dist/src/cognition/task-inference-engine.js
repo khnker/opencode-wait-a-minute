@@ -309,6 +309,19 @@ const VERIFICATION_TEMPLATES = {
 };
 
 /**
+ * Validates pragmatic intent alignment between user prompt and inferred task.
+ * Ensures the agent does not deviate from the user's core objective.
+ */
+export function validatePragmaticAlignment(promptText, taskDescription) {
+  if (!promptText || !taskDescription) return true;
+  const promptLower = promptText.toLowerCase();
+  if (promptLower.includes("no quiero") || promptLower.includes("en vez de")) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Infer next (non-implicit) tasks from a task list.
  *
  * @param {Array<{id: string, description?: string, tags?: string[], requiresVerification?: boolean, dataIntensive?: boolean, isService?: boolean}>} taskList

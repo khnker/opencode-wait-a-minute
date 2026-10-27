@@ -110,7 +110,8 @@ function snapshotPath(taskId, root) {
 /**
  * Create a context snapshot for a task.
  */
-export function createSnapshot(taskId, taskState, root) {
+export function createSnapshot(taskId, taskState, root = process.cwd()) {
+  root = root || process.cwd();
   const snapshot = {
     taskId,
     gitRevision: getGitRevision(root),
@@ -126,7 +127,8 @@ export function createSnapshot(taskId, taskState, root) {
 /**
  * Load an existing snapshot for a task.
  */
-export function loadSnapshot(taskId, root) {
+export function loadSnapshot(taskId, root = process.cwd()) {
+  root = root || process.cwd();
   try {
     const raw = fs.readFileSync(snapshotPath(taskId, root), "utf-8");
     return JSON.parse(raw);
@@ -143,7 +145,8 @@ export function loadSnapshot(taskId, root) {
  * @param {string} root
  * @returns {SnapshotCheck}
  */
-export function checkContinuation(taskId, currentTaskState, root, collector = null) {
+export function checkContinuation(taskId, currentTaskState, root = process.cwd(), collector = null) {
+  root = root || process.cwd();
   const finish = (result) => {
     if (collector) collector.record(result.status === "VALID" ? "Snapshot_hit" : "Snapshot_miss");
     return result;

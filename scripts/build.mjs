@@ -1,6 +1,7 @@
 // Minimal build script to satisfy the production build gate.
 // Copies source files to dist/ to allow the dev server to serve them.
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
+import fs from 'node:fs';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 
@@ -10,10 +11,11 @@ const DIST = join(ROOT, 'dist');
 console.log('=== Building WAM (Production Build Simulation) ===');
 
 try {
-  // 1. Ensure dist exists
-  if (!mkdirSync(DIST, { recursive: true })) {
-    // Already exists
+  // 1. Rebuild dist from scratch so stale or nested copies never accumulate.
+  if (fs.existsSync(DIST)) {
+    fs.rmSync(DIST, { recursive: true, force: true });
   }
+  mkdirSync(DIST, { recursive: true });
 
   // 2. Copy main entry and core files to dist
   const filesToCopy = ['index.js', 'package.json'];

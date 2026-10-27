@@ -1,9 +1,0 @@
-{
-  "id": "nudge.discovery.glob",
-  "vars": {},
-  "mustContain": [
-    "'glob' tool",
-    "raw bash file listing/finding"
-  ],
-  "mustNotContain": []
-}

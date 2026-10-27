@@ -1,463 +1,265 @@
 /**
  * Evidence Freshness / Closure
  *
- * `refreshEvidenceValidity(taskId, root)` is the orchestrator that detects
- * environment and artifact drift, invalidates the affected evidence records,
- * recomputes requirement satisfaction, and returns a structured delta report.
- *
- * Drift sources:
- *   1. Environment fingerprint drift (os / node version / executable / version /
- *      git revision). This is the same check used by
- *      `detectInvalidatedEvidence` in evidence-lineage.js, extended with a
- *      git-revision probe and file-hash tracking.
- *   2. Artifact drift — any file whose hash (or mtime, as a cheap proxy)
- *      changed since the evidence was captured. The set of relevant files is
- *      declared by the task state under `state.relevantFiles`; if absent, we
- *      conservatively consider every file in the task's lineage directory.
- *
- * Evidence metadata:
- *   `refreshEvidenceValidity` also enriches evidence records with:
- *     - `environment` (EnvironmentFingerprint at capture time)
- *     - `artifactHashes` (map of relevant path -> sha256)
- *     - `artifactMtimes` (map of relevant path -> mtime ms)
- *   These are stored alongside the evidence so future freshness checks can
- *   diff against them.
- *
- * Returned delta report shape:
- *   {
- *     taskId,
- *     root,
- *     drifted: boolean,
- *     reasons: string[],                // human-readable drift reasons
- *     previousEnvironment: object|null, // env fingerprint last recorded
- *     currentEnvironment: object,       // env fingerprint observed now
- *     artifactChanges: [                // per-file drift entries
- *       { path, previousHash, currentHash, previousMtime, currentMtime, status }
- *     ],
- *     invalidatedEvidence: [            // evidence records marked invalidated
- *       { id, requirementId, status, invalidationReason }
- *     ],
- *     satisfiedBefore: string[],        // requirement IDs satisfied pre-refresh
- *     satisfiedAfter:  string[],        // requirement IDs satisfied post-refresh
- *     unsatisfiedDelta: {               // recomputed gap
- *       gained:  string[],              // requirements that LOST satisfaction
- *       lost:    string[],              // requirements that LOST satisfaction
- *     },
- *     recomputedAt: number,
- *   }
- *
- * The function is read-mostly: it writes only to evidence records it
- * invalidates and to a single `.wam/tasks/<taskId>/freshness.json` snapshot.
+ * Detects environment and artifact drift, invalidates affected evidence,
+ * recomputes requirement satisfaction and returns a structured delta report.
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { execFileSync } from "node:child_process";
 
-import {
-  getAllEvidence,
-  getEvidence,
-  invalidateEvidence,
-  isRequirementSatisfied,
-  getSatisfiedRequirements,
-  getUnsatisfiedRequirements,
-} from "./evidence-lineage.js";
-import { getTaskState } from "../skills/engine.js";
+export const FRESHNESS_CONFIG = {
+  MAX_AGE_HOURS: 72,
+  WEIGHTS: {
+    NEWS_COUNT: 0.5,
+    HN_SCORE: 0.25,
+    AGE_DECAY: 0.25,
+  },
+  ALERTS: {
+    STALE: "stale",
+    CRITICAL: "critical",
+  },
+};
 
-function saveTaskState(taskId, state, root) {
-  const dir = path.join(root, ".wam", "tasks", taskId);
-  ensureDir(dir);
-  fs.writeFileSync(path.join(dir, "state.yaml"), JSON.stringify(state, null, 2));
+export function calculateFreshnessScore(metrics) {
+  const { newsCount = 0, hnScore = 0, maxAgeHours = 0 } = metrics;
+  const normalizedNews = Math.min(newsCount / 10, 1) * 100;
+  const normalizedHn = Math.min(hnScore / 100, 1) * 100;
+  const ageDecay = Math.exp(-maxAgeHours / 72);
+  const score =
+    normalizedNews * FRESHNESS_CONFIG.WEIGHTS.NEWS_COUNT +
+    normalizedHn * FRESHNESS_CONFIG.WEIGHTS.HN_SCORE +
+    ageDecay * FRESHNESS_CONFIG.WEIGHTS.AGE_DECAY;
+  return Math.round(score * 100) / 100;
 }
 
-function ensureDir(dir) {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+function sha256(value) {
+  return crypto.createHash("sha256").update(value).digest("hex");
 }
 
-function safeReadFile(p) {
+function taskDir(taskId, root) {
+  return path.join(root || process.cwd(), ".wam", "tasks", taskId);
+}
+
+function lineageDir(taskId, root) {
+  return path.join(taskDir(taskId, root), "lineage");
+}
+
+function readJson(file) {
   try {
-    return fs.readFileSync(p);
+    return JSON.parse(fs.readFileSync(file, "utf8"));
   } catch {
     return null;
   }
 }
 
-function sha256(buf) {
-  return crypto.createHash("sha256").update(buf).digest("hex");
+function writeJson(file, value) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(value, null, 2));
 }
 
-/**
- * Compute the current environment fingerprint.
- *
- * @param {string} root - project root
- * @returns {{
- *   os: string,
- *   nodeVersion: string,
- *   executable: string,
- *   version: string,
- *   repositoryRevision: string,
- *   capturedAt: number,
- * }}
- */
-export function captureEnvironment(root) {
-  let revision = "";
-  try {
-    revision = execFileSync(
-      "git",
-      ["rev-parse", "HEAD"],
-      { cwd: root, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }
-    ).trim();
-  } catch {
-    revision = "";
+function readTaskState(taskId, root) {
+  const dir = taskDir(taskId, root);
+  for (const name of ["task.json", "state.yaml"]) {
+    const file = path.join(dir, name);
+    const value = readJson(file);
+    if (value) return { state: value, file };
   }
+  return { state: null, file: null };
+}
+
+function loadEvidence(taskId, root) {
+  const dir = lineageDir(taskId, root);
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => ({ file: path.join(dir, f), evidence: readJson(path.join(dir, f)) }))
+    .filter((e) => e.evidence);
+}
+
+function saveEvidence(entry) {
+  writeJson(entry.file, entry.evidence);
+}
+
+export function captureEnvironment(root = process.cwd()) {
+  let repositoryRevision = "";
+  try {
+    const head = fs.readFileSync(path.join(root, ".git", "HEAD"), "utf8").trim();
+    const ref = head.replace(/^ref:\s*/, "");
+    const refPath = path.join(root, ".git", ref);
+    repositoryRevision = fs.existsSync(refPath)
+      ? fs.readFileSync(refPath, "utf8").trim().slice(0, 12)
+      : head.slice(0, 12);
+  } catch {}
   return {
     os: `${process.platform}-${process.arch}`,
     nodeVersion: process.version,
     executable: process.execPath,
-    version: process.env.npm_package_version || "",
-    repositoryRevision: revision,
+    repositoryRevision,
     capturedAt: Date.now(),
   };
 }
 
-/**
- * Compute a sha256 + mtime for a single file. Returns null for missing files.
- */
-function fingerprintFile(absPath) {
-  const buf = safeReadFile(absPath);
-  if (buf === null) return null;
-  let mtime = 0;
-  try {
-    mtime = fs.statSync(absPath).mtimeMs;
-  } catch {
-    mtime = 0;
-  }
-  return { hash: sha256(buf), mtime };
-}
-
-/**
- * Fingerprint a list of relative paths against root. Missing files map to null.
- */
-export function fingerprintArtifacts(root, relativePaths) {
+export function fingerprintArtifacts(root, files = []) {
   const out = {};
-  for (const rel of relativePaths || []) {
+  for (const rel of files) {
     const abs = path.isAbsolute(rel) ? rel : path.join(root, rel);
-    out[rel] = fingerprintFile(abs);
+    try {
+      const content = fs.readFileSync(abs);
+      out[rel] = {
+        hash: sha256(content),
+        mtime: fs.statSync(abs).mtimeMs,
+      };
+    } catch {
+      out[rel] = { hash: null, mtime: 0 };
+    }
   }
   return out;
 }
 
-/**
- * Resolve the list of relevant artifact paths for a task.
- *
- * Order of precedence:
- *   1. state.relevantFiles (authoritative)
- *   2. evidence.artifactHashes union (re-derived from existing evidence)
- *   3. empty list (no relevant files known)
- */
-function resolveRelevantFiles(state, evidence) {
-  if (Array.isArray(state.relevantFiles) && state.relevantFiles.length > 0) {
-    return state.relevantFiles;
-  }
-  const collected = new Set();
-  for (const ev of evidence) {
-    if (ev && ev.artifactHashes) {
-      for (const p of Object.keys(ev.artifactHashes)) collected.add(p);
-    }
-    if (ev && ev.artifactMtimes) {
-      for (const p of Object.keys(ev.artifactMtimes)) collected.add(p);
-    }
-  }
-  return [...collected];
+function evidenceStatusSatisfies(evidence) {
+  return evidence?.status === "valid" || evidence?.status === "verified";
 }
 
-/**
- * Decide which evidence records are affected by a set of artifact changes.
- *
- * An evidence record is affected if any of its declared artifactHashes /
- * artifactMtimes correspond to a changed file.
- */
-function evidenceAffectedByArtifactChanges(ev, artifactChanges) {
-  if (!ev) return false;
-  const changed = new Set(
-    artifactChanges
-      .filter((c) => c.status !== "unchanged")
-      .map((c) => c.path)
-  );
-  if (changed.size === 0) return false;
-  const declared = new Set();
-  if (ev.artifactHashes) for (const p of Object.keys(ev.artifactHashes)) declared.add(p);
-  if (ev.artifactMtimes) for (const p of Object.keys(ev.artifactMtimes)) declared.add(p);
-  for (const p of declared) {
-    if (changed.has(p)) return true;
-  }
-  return false;
-}
-
-/**
- * Recompute requirement satisfaction for a task from scratch (after
- * invalidations have been applied). Returns { satisfied, unsatisfied }.
- */
-function recomputeSatisfaction(taskId, root) {
-  return {
-    satisfied: getSatisfiedRequirements(taskId, root).map((r) => r.requirementId),
-    unsatisfied: getUnsatisfiedRequirements(taskId, root).map((r) => r.requirementId),
-  };
-}
-
-/**
- * Persist the freshness snapshot.
- */
-function writeFreshnessSnapshot(root, taskId, report) {
-  const dir = path.join(root, ".wam", "tasks", taskId);
-  ensureDir(dir);
-  const snap = path.join(dir, "freshness.json");
-  fs.writeFileSync(snap, JSON.stringify(report, null, 2));
-}
-
-/**
- * @typedef {Object} RefreshDeltaReport
- * @property {string} taskId
- * @property {string} root
- * @property {boolean} drifted
- * @property {string[]} reasons
- * @property {object|null} previousEnvironment
- * @property {object} currentEnvironment
- * @property {Array<{path:string,previousHash:string|null,currentHash:string|null,previousMtime:number,currentMtime:number,status:string}>} artifactChanges
- * @property {Array<{id:string,requirementId:string,status:string,invalidationReason:string}>} invalidatedEvidence
- * @property {string[]} satisfiedBefore
- * @property {string[]} satisfiedAfter
- * @property {{gained:string[],lost:string[]}} unsatisfiedDelta
- * @property {number} recomputedAt
- */
-
-/**
- * Refresh evidence validity for a task. Detects drift, invalidates affected
- * evidence, recomputes requirement satisfaction, and returns a delta report.
- *
- * The function is idempotent: running it twice in a row with no intervening
- * changes should produce a `drifted: false` report with empty
- * `invalidatedEvidence`.
- *
- * @param {string} taskId
- * @param {string} [root] - project root (defaults to process.cwd())
- * @returns {RefreshDeltaReport}
- */
-export function refreshEvidenceValidity(taskId, root) {
-  const effectiveRoot = root || process.cwd();
-  const state = getTaskState(taskId, effectiveRoot);
-  if (!state) {
-    return {
-      taskId,
-      root: effectiveRoot,
-      drifted: false,
-      reasons: [`task state not found for ${taskId}`],
-      previousEnvironment: null,
-      currentEnvironment: captureEnvironment(effectiveRoot),
-      artifactChanges: [],
-      invalidatedEvidence: [],
-      satisfiedBefore: [],
-      satisfiedAfter: [],
-      unsatisfiedDelta: { gained: [], lost: [] },
-      recomputedAt: Date.now(),
-    };
-  }
-
-  const previousEnvironment = state.currentEnvironment || null;
-  const currentEnvironment = captureEnvironment(effectiveRoot);
-  const evidence = getAllEvidence(taskId, effectiveRoot);
-
-  // 1) Environment drift detection.
-  const envDrifted = isEnvironmentDrifted(previousEnvironment, currentEnvironment);
-
-  // 2) Artifact drift detection.
-  const relevantFiles = resolveRelevantFiles(state, evidence);
-  const previousArtifacts = {};
-  for (const ev of evidence) {
-    if (!ev) continue;
-    if (ev.artifactHashes) {
-      for (const [p, h] of Object.entries(ev.artifactHashes)) {
-        const existing = previousArtifacts[p] || {};
-        existing.hash = h;
-        previousArtifacts[p] = existing;
-      }
-    }
-    if (ev.artifactMtimes) {
-      for (const [p, m] of Object.entries(ev.artifactMtimes)) {
-        const existing = previousArtifacts[p] || {};
-        existing.mtime = m;
-        previousArtifacts[p] = existing;
-      }
+function satisfiedRequirements(state, evidenceList) {
+  const result = [];
+  for (const req of state?.requirements || []) {
+    const id = req.id || req.requirementId;
+    if (evidenceList.some((e) => e.requirementId === id && evidenceStatusSatisfies(e))) {
+      result.push(id);
     }
   }
-  const currentArtifacts = fingerprintArtifacts(effectiveRoot, relevantFiles);
-  const artifactChanges = diffArtifacts(previousArtifacts, currentArtifacts);
+  return result;
+}
 
-  const reasons = [];
-  if (envDrifted) reasons.push("environment fingerprint changed");
-  if (artifactChanges.some((c) => c.status !== "unchanged")) {
-    reasons.push("artifact hash or mtime changed");
+export function refreshEvidenceValidity(taskId, root = process.cwd()) {
+  root = root || process.cwd();
+  const { state, file: stateFile } = readTaskState(taskId, root);
+  const entries = loadEvidence(taskId, root);
+  const evidenceList = entries.map((e) => e.evidence);
+
+  const previousEnvironment = state?.currentEnvironment || null;
+  const currentEnvironment = captureEnvironment(root);
+
+  const relevantFiles = new Set(state?.relevantFiles || []);
+  for (const evidence of evidenceList) {
+    for (const p of Object.keys(evidence.artifactHashes || {})) relevantFiles.add(p);
   }
-  const drifted = reasons.length > 0;
+  const currentFps = fingerprintArtifacts(root, [...relevantFiles]);
+  const previousFps = state?.artifacts || {};
 
-  // Capture pre-drift satisfaction BEFORE we invalidate anything, so the delta
-  // report can show which requirements we just lost.
-  const satisfiedBefore = getSatisfiedRequirements(taskId, effectiveRoot);
+  const evidenceHashes = {};
+  for (const evidence of evidenceList) {
+    for (const [p, hash] of Object.entries(evidence.artifactHashes || {})) {
+      evidenceHashes[p] = hash;
+    }
+  }
 
-  // 3) Decide which evidence to invalidate.
+  const artifactChanges = [];
+  for (const [p, fp] of Object.entries(currentFps)) {
+    const prev = previousFps[p];
+    const evidenceHash = evidenceHashes[p];
+    if (!prev) {
+      if (evidenceHash === fp.hash) continue;
+      artifactChanges.push({
+        path: p,
+        status: evidenceHash ? "modified" : "added",
+        previousHash: evidenceHash || null,
+        currentHash: fp.hash,
+      });
+    } else if (prev.hash !== fp.hash) {
+      artifactChanges.push({ path: p, status: "modified", previousHash: prev.hash, currentHash: fp.hash });
+    }
+  }
+
+  const satisfiedBefore = satisfiedRequirements(state, evidenceList);
   const invalidatedEvidence = [];
-  if (drifted) {
-    for (const ev of evidence) {
-      if (!ev) continue;
-      if (ev.status === "invalidated") continue;
-      const envInvalidates = envDrifted;
-      const artifactInvalidates = evidenceAffectedByArtifactChanges(ev, artifactChanges);
-      if (envInvalidates || artifactInvalidates) {
-        const reasonParts = [];
-        if (envInvalidates) reasonParts.push("environment drift");
-        if (artifactInvalidates) reasonParts.push("artifact drift");
-        const reason = reasonParts.join(" + ");
-        const ok = invalidateEvidence(taskId, ev.id, reason, effectiveRoot);
-        if (ok) {
-          invalidatedEvidence.push({
-            id: ev.id,
-            requirementId: ev.requirementId,
-            status: "invalidated",
-            invalidationReason: reason,
-          });
-        }
+  const reasons = state ? [] : ["task state not found"];
+
+  for (const entry of entries) {
+    const evidence = entry.evidence;
+    if (!evidenceStatusSatisfies(evidence)) continue;
+    let invalidated = false;
+    for (const [p, recordedHash] of Object.entries(evidence.artifactHashes || {})) {
+      const current = currentFps[p]?.hash;
+      if (current && recordedHash && current !== recordedHash) {
+        invalidated = true;
+        reasons.push(`artifact drift: ${p}`);
+        break;
       }
+    }
+    if (invalidated) {
+      evidence.status = "invalidated";
+      evidence.invalidatedAt = new Date().toISOString();
+      evidence.invalidatedReason = "artifact drift";
+      saveEvidence(entry);
+      invalidatedEvidence.push(evidence.id);
     }
   }
 
-  // 4) Stamp current environment + artifacts onto surviving evidence.
-  stampEvidenceMetadata(taskId, evidence, currentEnvironment, currentArtifacts, effectiveRoot);
-
-  // 5) Recompute requirement satisfaction. satisfiedBefore was captured before
-//    invalidation; now read the post-invalidation set.
-  const after = recomputeSatisfaction(taskId, effectiveRoot);
-  const satisfiedAfter = after.satisfied;
-
-  const lost = satisfiedBefore.filter((id) => !satisfiedAfter.includes(id));
-  const gained = satisfiedAfter.filter((id) => !satisfiedBefore.includes(id));
-
-  // 6) Persist current environment on the task state.
-  state.currentEnvironment = currentEnvironment;
-  if (!Array.isArray(state.relevantFiles)) {
-    state.relevantFiles = relevantFiles;
-  }
-  saveTaskState(taskId, state, effectiveRoot);
+  const satisfiedAfter = satisfiedRequirements(state, evidenceList);
+  const unsatisfiedDelta = {
+    lost: satisfiedBefore.filter((id) => !satisfiedAfter.includes(id)),
+    gained: satisfiedAfter.filter((id) => !satisfiedBefore.includes(id)),
+  };
 
   const report = {
     taskId,
-    root: effectiveRoot,
-    drifted,
+    root,
+    recomputedAt: Date.now(),
+    drifted: invalidatedEvidence.length > 0 || artifactChanges.some((c) => c.status === "modified"),
     reasons,
-    previousEnvironment,
-    currentEnvironment,
     artifactChanges,
     invalidatedEvidence,
+    previousEnvironment,
+    currentEnvironment,
     satisfiedBefore,
     satisfiedAfter,
-    unsatisfiedDelta: { gained, lost },
-    recomputedAt: Date.now(),
+    unsatisfiedDelta,
   };
 
-  writeFreshnessSnapshot(effectiveRoot, taskId, report);
+  if (state) {
+    state.artifacts = currentFps;
+    state.currentEnvironment = currentEnvironment;
+    for (const req of state.requirements || []) {
+      const id = req.id || req.requirementId;
+      if (satisfiedAfter.includes(id) && req.status !== "done") req.status = "verified";
+      if (!satisfiedAfter.includes(id) && req.status === "verified") req.status = "pending";
+    }
+    writeJson(stateFile || path.join(taskDir(taskId, root), "task.json"), state);
+  }
+  writeJson(path.join(taskDir(taskId, root), "freshness.json"), report);
   return report;
 }
 
-function isEnvironmentDrifted(prev, curr) {
-  if (!prev) return false;
-  return (
-    prev.os !== curr.os ||
-    prev.nodeVersion !== curr.nodeVersion ||
-    prev.executable !== curr.executable ||
-    prev.version !== curr.version ||
-    (prev.repositoryRevision || "") !== (curr.repositoryRevision || "")
-  );
-}
-
-function diffArtifacts(previousArtifacts, currentArtifacts) {
-  const out = [];
-  const allKeys = new Set([
-    ...Object.keys(previousArtifacts || {}),
-    ...Object.keys(currentArtifacts || {}),
-  ]);
-  for (const p of allKeys) {
-    const prev = previousArtifacts[p] || null;
-    const curr = currentArtifacts[p] || null;
-    if (!prev && !curr) {
-      out.push({ path: p, previousHash: null, currentHash: null, previousMtime: 0, currentMtime: 0, status: "missing" });
-      continue;
-    }
-    if (!prev && curr) {
-      out.push({ path: p, previousHash: null, currentHash: curr.hash, previousMtime: 0, currentMtime: curr.mtime, status: "added" });
-      continue;
-    }
-    if (prev && !curr) {
-      out.push({ path: p, previousHash: prev.hash, currentHash: null, previousMtime: prev.mtime, currentMtime: 0, status: "removed" });
-      continue;
-    }
-    const status = prev.hash === curr.hash ? "unchanged" : "modified";
-    out.push({
-      path: p,
-      previousHash: prev.hash,
-      currentHash: curr.hash,
-      previousMtime: prev.mtime,
-      currentMtime: curr.mtime,
-      status,
-    });
-  }
-  return out;
-}
-
-function stampEvidenceMetadata(taskId, evidence, environment, artifacts, root) {
-  for (const ev of evidence) {
-    const live = getEvidence(taskId, ev.id, root);
-    if (!live) continue;
-    if (live.status === "invalidated") continue;
-    live.environment = environment;
-    live.artifactHashes = {};
-    live.artifactMtimes = {};
-    for (const [p, fp] of Object.entries(artifacts)) {
-      if (!fp) continue;
-      live.artifactHashes[p] = fp.hash;
-      live.artifactMtimes[p] = fp.mtime;
-    }
-    const file = path.join(root, ".wam", "tasks", taskId, "lineage", `${live.id}.json`);
-    try {
-      fs.writeFileSync(file, JSON.stringify(live, null, 2));
-    } catch {
-      // best-effort stamp
-    }
-  }
-}
-
-/**
- * Check whether the current evidence for a task allows the DONE state.
- * Returns { allowed: boolean, reason: string, report: RefreshDeltaReport }.
- *
- * This is the gate `refreshEvidenceValidity` was built for: a DONE transition
- * is blocked whenever refreshEvidenceValidity reports drifted=true and at
- * least one requirement that was satisfied before is no longer satisfied.
- */
-export function isDoneAllowed(taskId, root) {
+export function isDoneAllowed(taskId, root = process.cwd()) {
   const report = refreshEvidenceValidity(taskId, root);
-  if (!report.drifted) {
-    return { allowed: true, reason: "no drift detected", report };
-  }
-  if (report.unsatisfiedDelta.lost.length > 0) {
+  const lost = report.unsatisfiedDelta?.lost || [];
+  if (report.invalidatedEvidence.length > 0 || lost.length > 0) {
     return {
       allowed: false,
-      reason: `drift invalidated evidence for ${report.unsatisfiedDelta.lost.length} requirement(s)`,
+      reason: `evidence drift: ${[...report.invalidatedEvidence, ...lost].join(", ")}`,
       report,
     };
   }
+  const unsatisfied = Object.entries(report.satisfiedAfter || {})
+    .filter(([, ok]) => !ok)
+    .map(([id]) => id);
+  if (unsatisfied.length > 0) {
+    return { allowed: false, reason: `unverified requirements: ${unsatisfied.join(", ")}`, report };
+  }
+  return { allowed: true, reason: "all requirements verified", report };
+}
+
+export async function detectDrift(taskId, root = process.cwd()) {
+  const report = refreshEvidenceValidity(taskId, root);
   return {
-    allowed: false,
-    reason: `drift detected (${report.reasons.join(", ")}) but no satisfied requirement lost`,
-    report,
+    drifted: report.drifted,
+    reasons: report.reasons,
+    previousEnvironment: report.previousEnvironment,
+    currentEnvironment: report.currentEnvironment,
+    artifactChanges: report.artifactChanges,
   };
 }

@@ -22,7 +22,10 @@ export function classifyDesignTask(prompt = "") {
   if (/(design system|tokens|guidelines)/i.test(p)) return "design-system work";
   if (/(copy|text|content|headline)/i.test(p)) return "content/copy work";
   if (/(page|screen|view)/i.test(p)) return "existing page modification";
-  return "existing page modification";
+  if (/(ui|ux|design|frontend|component|button|card|modal|dropdown|layout|style|css|tailwind|react|angular|vue|dashboard|landing|form|color|spacing|font|typography|accessibility|responsive|mobile|breakpoint|token|redesign|copy|content|headline)/i.test(p)) {
+    return "existing page modification";
+  }
+  return null;
 }
 
 export function loadDesignContext(root = process.cwd()) {
@@ -35,13 +38,38 @@ export function loadDesignContext(root = process.cwd()) {
   return { exists: true, tokens, raw };
 }
 
+function flattenTokens(value, prefix = "", out = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    if (prefix) out[prefix] = value;
+    return out;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    flattenTokens(child, prefix ? `${prefix}.${key}` : key, out);
+  }
+  return out;
+}
+
+function unflattenTokens(flat = {}) {
+  const out = {};
+  for (const [key, value] of Object.entries(flat)) {
+    const parts = key.split(".");
+    let node = out;
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (!node[parts[i]] || typeof node[parts[i]] !== "object") node[parts[i]] = {};
+      node = node[parts[i]];
+    }
+    node[parts[parts.length - 1]] = value;
+  }
+  return out;
+}
+
 export function loadDesignTokens(root = process.cwd(), rawContent = null) {
   const designPath = path.join(root, "DESIGN.md");
   const raw = rawContent || (fs.existsSync(designPath) ? fs.readFileSync(designPath, "utf8") : "");
   const jsonMatch = raw.match(/```json([\s\S]*?)```/);
   if (!jsonMatch) return {};
   try {
-    return JSON.parse(jsonMatch[1].trim());
+    return flattenTokens(JSON.parse(jsonMatch[1].trim()));
   } catch {
     return {};
   }
@@ -61,27 +89,26 @@ export function initDesignContext(root = process.cwd(), brandInfo = {}) {
 }
 
 export function setDesignToken(root = process.cwd(), tokenPath = "", value = "") {
-  const ctx = loadDesignContext(root);
-  if (!ctx.exists) {
+  if (!fs.existsSync(path.join(root, "DESIGN.md"))) {
     initDesignContext(root);
   }
   const tokens = loadDesignTokens(root);
-  // Simple nested path setter e.g. color.action.primary
-  const parts = tokenPath.split(".");
-  let obj = tokens;
-  for (let i = 0; i < parts.length - 1; i++) {
-    if (!obj[parts[i]]) obj[parts[i]] = {};
-    obj = obj[parts[i]];
-  }
-  obj[parts[parts.length - 1]] = value;
-  
-  // Update DESIGN.md json block
+  tokens[tokenPath] = value;
   const designPath = path.join(root, "DESIGN.md");
   let raw = fs.readFileSync(designPath, "utf8");
-  const newJsonStr = JSON.stringify(tokens, null, 2);
+  const newJsonStr = JSON.stringify(unflattenTokens(tokens), null, 2);
   raw = raw.replace(/```json[\s\S]*?```/, "```json\n" + newJsonStr + "\n```");
   fs.writeFileSync(designPath, raw, "utf8");
   return tokens;
+}
+
+export function initDesignMarkdown(root = process.cwd()) {
+  initDesignContext(root);
+  return fs.existsSync(path.join(root, "DESIGN.md"));
+}
+
+export function detectDesignDrift(root = process.cwd(), implementationValues = {}) {
+  return checkDesignDrift(root, implementationValues);
 }
 
 export function checkDesignDrift(root = process.cwd()) {

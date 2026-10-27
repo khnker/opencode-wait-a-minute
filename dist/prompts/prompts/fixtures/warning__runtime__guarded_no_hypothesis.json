@@ -1,9 +1,0 @@
-{
-  "id": "warning.runtime.guarded_no_hypothesis",
-  "vars": {},
-  "mustContain": [
-    "GUARDED action without hypothesisId",
-    "before mutating"
-  ],
-  "mustNotContain": []
-}

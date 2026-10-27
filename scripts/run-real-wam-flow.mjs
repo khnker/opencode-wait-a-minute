@@ -29,7 +29,7 @@ async function runRealFlow() {
     }
   };
   const output1 = { message: { id: "out-001", parts: [] } };
-  console.log("\n[Turn 1] Sending prompt: 'Implementar un nuevo endpoint...'");
+  console.log("\n[Turn 1] Raw output1:", JSON.stringify(output1, null, 2));
   await plugin["chat.message"](input1, output1);
   console.log("-> Injected parts:");
   for (const [i, part] of output1.message.parts.entries()) {

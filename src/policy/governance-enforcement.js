@@ -221,22 +221,17 @@ export function enforceGovernance(tool, state, ctx = {}) {
 
   const pending = (state.requirements || state.contract?.requirements || [])
     .filter((r) => r.status !== "done" && r.status !== "verified").length;
-
-  // Nothing to approve: a tracked contract in a non-approved state with no
-  // pending requirements and no unknowns has no work to gate. Denying here is
-  // a fail-closed deadlock (the block message even reports "0 requisito(s)
-  // pendiente(s)"). Fail open, like an untracked session, so the first write
-  // of a fresh task is never bricked.
-  //
-  // Note: previously this required `declared.length === 0` too, which combined
-  // with the contract file-derivation in index.js meant every edit (which
-  // always declares its own target file) would deadlock on a fresh PROPOSED
-  // contract. The new rule is: pending === 0 AND unknowns.length === 0 → no
-  // work to gate, regardless of declared files.
   const unknowns = state?.contract?.unknowns || state?.unknowns || [];
+
   if (pending === 0 && unknowns.length === 0) {
     logDecision({ decision: "allow", reason: "empty-contract", tool, phase });
     return { allowed: true, reason: "empty-contract" };
+  }
+
+  // Si no hay requisitos pendientes, permitimos cambios sencillos y directos sin requerir aprobación explícita de contrato.
+  if (pending === 0 && (!ctx.declaredFiles || ctx.declaredFiles.length === 0) && unknowns.length === 0) {
+    logDecision({ decision: "allow", reason: "simple-direct-change", tool, phase });
+    return { allowed: true, reason: "simple-direct-change" };
   }
 
   // Hard fail-open: a PROPOSED/DRAFT contract with zero pending requirements,

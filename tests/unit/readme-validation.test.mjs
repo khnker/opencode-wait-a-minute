@@ -130,7 +130,7 @@ test("Task Resume: /wam task switch + hook persiste bajo tarea activa", async ()
   const taskId = `rv-rs-${Date.now()}`;
   const hooks = await pluginDefault({ directory: CWD, client: {}, project: {}, $: {} });
   const outSwitch = { parts: [] };
-  await hooks["command.execute.before"]({ command: "wam", arguments: `task switch ${taskId}` }, outSwitch);
+  await hooks["command.execute.before"]({ command: "wam", sessionID: "rv4", arguments: `task switch ${taskId}` }, outSwitch);
   assert.ok(outSwitch.parts[0].text.includes(`Tarea activa: ${taskId}`), "switch ok");
   await hooks["chat.message"]({ sessionID: "rv4", message: { parts: [{ type: "text", text: "continuar" }] } }, { message: {}, parts: [] });
   assert.ok(getTaskState(taskId), "estado bajo tarea activa");

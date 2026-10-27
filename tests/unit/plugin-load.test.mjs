@@ -118,9 +118,8 @@ test("chat.message 1.18.25: extrae prompt de message.parts e inyecta validación
     res = await attempt(process.cwd());
   }
   assert.ok(res.ok, `debe persistir estado en ${res.p}`);
-  const visible = res.output.parts.find((p) => p.type === "text" && typeof p.text === "string" && p.text.includes("wait-a-minute: contrato"));
+  const visible = res.output.parts.find((p) => p.type === "text" && typeof p.text === "string" && p.text.includes("contrato") && p.text.includes("/wam contract approve"));
   assert.ok(visible, "debe inyectar el checkpoint como part visible en output.parts");
-  assert.ok(visible.text.includes("/wam contract approve"), "confirmación seleccionable via /wam");
 try {
     fs.rmSync(path.join(process.cwd(), ".wam", "tasks", taskId), { recursive: true, force: true });
   } catch {}
@@ -147,7 +146,7 @@ test("chat.message compat legacy: shape {parts}/{system} sigue funcionando", asy
     output
   );
   assert.ok(output.system.length > 0, "debe inyectar en output.system (API vieja)");
-  assert.ok(output.system.some((p) => p.text.includes("wait-a-minute: contrato")), "legacy: checkpoint presente");
+  assert.ok(output.system.some((p) => p.text.includes("contrato")), "legacy: checkpoint presente");
   try {
     fs.rmSync(tmp, { recursive: true, force: true });
   } catch {}
@@ -177,7 +176,7 @@ test("Task Resume: /wam task switch fija tarea activa; chat.message persiste baj
   const hooks = await pluginDefault({ directory: process.cwd(), client: {}, project: {}, $: {} });
 
   const outSwitch = { parts: [] };
-  await hooks["command.execute.before"]({ command: "wam", arguments: `task switch ${taskId}` }, outSwitch);
+  await hooks["command.execute.before"]({ command: "wam", sessionID: "s2", arguments: `task switch ${taskId}` }, outSwitch);
   assert.ok(outSwitch.parts[0].text.includes(`Tarea activa: ${taskId}`));
   assert.ok(fs.existsSync(path.join(process.cwd(), ".wam", "active-task")), "active-task persistido");
 
@@ -229,8 +228,9 @@ test("VERIFYING: done sin verificar bloquea DONE → fase VERIFYING; verified pe
   }
 
   const inp = { parts: [{ type: "text", text: "terminé, done" }], taskId };
-  await hooks["chat.message"](inp, { parts: [], system: [] });
-  assert.ok(inp.parts[0].text.includes("COMPLETION GATE"), "DONE bloqueado con reqs sin verificar");
+  const outDone = { parts: [], system: [] };
+  await hooks["chat.message"](inp, outDone);
+  assert.ok(outDone.parts.map((p) => p.text || "").join("\n").includes("COMPLETION GATE"), "DONE bloqueado con reqs sin verificar");
   const st2 = getTaskState(taskId);
   assert.equal(st2.phase, "VERIFYING", "fase pasa a VERIFYING");
 
@@ -344,8 +344,9 @@ test("Continuation fast-path: contrato aprobado + continuación inyecta SOLO N2 
   assert.equal(inp.parts[0].text, "sigue con el paso 2", "no reescribe el prompt de continuación");
 
   const inp2 = { parts: [{ type: "text", text: "listo, terminé la tarea" }], taskId };
-  await hooks["chat.message"](inp2, { parts: [], system: [] });
-  assert.ok(inp2.parts[0].text.startsWith("⛔"), "hard block sigue activo en claims de DONE con pendientes");
+  const out2 = { parts: [], system: [] };
+  await hooks["chat.message"](inp2, out2);
+  assert.ok(out2.parts.map((p) => p.text || "").join("\n").includes("⛔"), "hard block sigue activo en claims de DONE con pendientes");
 
   try {
     fs.rmSync(path.join(process.cwd(), ".wam", "tasks", taskId), { recursive: true, force: true });

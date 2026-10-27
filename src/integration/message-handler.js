@@ -15,14 +15,19 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { hasWamMarkerFor, isWamSynthetic } from "./part-provenance.js";
+import { hasWamMarkerFor, injectWamParts, isWamSynthetic } from "./part-provenance.js";
 import { buildTaskInferenceDirective } from "../cognition/task-inference-engine.js";
 import { buildRoleDirective } from "../cognition/task-role-engine.js";
 import { detectCouplingIntent, traceCouplingForTask } from "../context/selection.js";
 import { loadPrompt } from "../prompts/loader.js";
 import { confirmCompletion } from "../verification/verification-policy.js";
 import { validateState } from "../state/task-state.js";
+import { buildCompletionValidation } from "./orchestration.js";
 import { pruneCompletedTasks } from "../persistence/retention-manager.js";
+import { classifyIntentLane, INTENT_LANES } from "../policy/intent-router.js";
+import { loadHistoryEntries, retrieveIntentHistory } from "../context/intent-history.js";
+import { applyContextBudget } from "../context/context-budget.js";
+import { loadConversationMemory, recordTurn, formatMemoryForContext } from "../persistence/conversation-memory.js";
 
 // Idempotency guard: a chat.message invocation must be processed at most once
 // per message id + kind. The store is normally owned by the plugin instance
@@ -142,6 +147,7 @@ export async function handleMessage(input, output, deps) {
   const {
     collector = null,
     bypassed,
+    sessionBypasses,
     sessionTasks,
     sessionStore,
     cfg,
@@ -188,7 +194,8 @@ export async function handleMessage(input, output, deps) {
   } = deps;
 
   try {
-    if (bypassed) return;
+    const sid = input?.sessionID;
+    if (bypassed || (sid && sessionBypasses?.has(sid))) return;
 
     // Idempotency: never process the same message twice. WAM injects synthetic
     // parts into `output`; without this guard a re-invocation (retry/replay)
@@ -259,9 +266,9 @@ export async function handleMessage(input, output, deps) {
       const active = sessionTasks.get(input.sessionID) || readActiveTaskIdFresh(wamRoot);
       const st = active ? getTaskState(active, wamRoot) : null;
       if (st && st.phase !== "DONE") {
-        emitTextPart(output, loadPrompt("notice.pending_task", { active, phase: st.phase }), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+        emitTextPart(output, loadPrompt("notice.pending_task", { active, phase: st.phase }), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
       } else {
-        emitTextPart(output, loadPrompt("notice.no_active_task"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+        emitTextPart(output, loadPrompt("notice.no_active_task"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
       }
       return;
     }
@@ -314,11 +321,13 @@ export async function handleMessage(input, output, deps) {
     // default-task o ses-<id> sin pista específica, saludamos al usuario y
     // le pedimos que describa la tarea para sacarlo del namespace genérico.
     // Solo se emite una vez por sessionID (no en cada continuación).
+    // Silenciado por defecto para reducir fricción; habilitar con cfg.verboseWelcome
     const shouldGreet =
       !input?.tool &&
       !isContinuationPrompt(promptText) &&
       input.sessionID &&
-      !greetedSessions.has(input.sessionID);
+      !greetedSessions.has(input.sessionID) &&
+      cfg?.verboseWelcome === true;
     if (shouldGreet) {
       const greeting = loadPrompt("notice.welcome_or_disambiguate", {
         kind: fallbackKind,
@@ -327,6 +336,7 @@ export async function handleMessage(input, output, deps) {
       const result = emitTextPart(output, greeting, {
         sessionID: input.sessionID,
         messageID: output.message?.id || input.messageID,
+        visible: true,
       });
       if (result && result.status === "inserted") {
         greetedSessions.add(input.sessionID);
@@ -344,7 +354,7 @@ export async function handleMessage(input, output, deps) {
         const directive = u
           ? loadPrompt("notice.blocked_question", { id: u.id, question: u.question })
           : loadPrompt("notice.blocked_generic");
-        emitTextPart(output, directive, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+        emitTextPart(output, directive, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
         // Rewrite the original prompt so the implementation attempt is NOT
         // consumed downstream as an instruction (AC5).
         const rewrite = loadPrompt("notice.blocked_prefix", { directive });
@@ -369,7 +379,7 @@ export async function handleMessage(input, output, deps) {
         return;
       }
       if (kind === "new-intent") {
-        emitTextPart(output, loadPrompt("notice.new_intent"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+        emitTextPart(output, loadPrompt("notice.new_intent"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
         // Override the explicit taskId so subsequent analysis creates a fresh
         // task (task-<ts>) without contaminating unknowns from the previous task.
         const newTaskId = `task-${Date.now()}`;
@@ -393,7 +403,7 @@ export async function handleMessage(input, output, deps) {
             answer: u?.answer || trimmed,
             question: u?.question || "pregunta resuelta",
           }),
-          { sessionID: input.sessionID, messageID: output.message?.id || input.messageID },
+          { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true },
         );
         // After resolving, fall through to re-analysis so contract is rebuilt.
       }
@@ -433,7 +443,12 @@ export async function handleMessage(input, output, deps) {
           try {
             persistLiveContext(taskId, existingState, wamRoot);
             const live = readLiveContext(wamRoot, taskId);
-            const parts = [loadPrompt("injection.n2_task", { live }) + "\n"];
+            const parts = [
+              loadPrompt("injection.continuation", {
+                signals: snapshotCheck.changedSignals?.join(", ") || "no-changes",
+              }) + "\n",
+              loadPrompt("injection.n2_task", { live }) + "\n",
+            ];
             parts.push(...delegationLines(existingState).map((l) => l + "\n"));
             emitTextPart(output, parts.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
           } catch {}
@@ -455,6 +470,11 @@ export async function handleMessage(input, output, deps) {
 
     const state = waitAMinute.buildPersistedState(taskId, analysis, wamRoot);
     state.lastAction = promptText;
+    const intentLane = classifyIntentLane(promptText, {
+      phase: state.phase,
+      contractStatus: state.contract?.status,
+      hasActiveTask: Boolean(existingState?.requirements?.length || state.requirements?.length),
+    });
 
     // Task Dedup - CANDIDATE ONLY: never overrides taskId implicitly.
     // - If input.taskId is explicit → NEVER override; do NOT even consult findDuplicateTask
@@ -466,7 +486,7 @@ export async function handleMessage(input, output, deps) {
       if (existingTaskId && existingTaskId !== taskId) {
         // Candidate-only: report, do not reassign. The session continues with
         // the freshly-initialized taskId; the user can reuse via /wam task switch.
-        emitTextPart(output, loadPrompt("notice.similar_task", { taskId: existingTaskId }), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+        emitTextPart(output, loadPrompt("notice.similar_task", { taskId: existingTaskId }), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
       }
     }
 
@@ -500,7 +520,7 @@ export async function handleMessage(input, output, deps) {
       for (const u of finalQuestions) {
         questions.push(`⛔ [wait-a-minute] ASKING — ${u.id}: ${u.question}\nNo implementar hasta responder. Responder: /wam answer ${u.id} <respuesta>`);
       }
-      emitTextPart(output, questions.join("\n\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+      emitTextPart(output, questions.join("\n\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
       return;
     }
 
@@ -520,7 +540,7 @@ export async function handleMessage(input, output, deps) {
 
     if (state.contract?.status === "PROPOSED" && state.phase === "PROPOSED" && userRejects) {
       waitAMinute.rejectContract(taskId, wamRoot);
-      emitTextPart(output, "Contrato rechazado — dime cómo ajustarlo (edita requisitos o describe de nuevo la tarea).", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+      emitTextPart(output, "Contrato rechazado — dime cómo ajustarlo (edita requisitos o describe de nuevo la tarea).", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
       try {
         const fresh = getTaskState(taskId, wamRoot);
         if (fresh) {
@@ -539,8 +559,8 @@ export async function handleMessage(input, output, deps) {
         : "ninguna";
       emitTextPart(
         output,
-        `[wam] Contrato aprobado — estrategia activada. Skills en uso: ${skillsLine}. Próximo paso: ${state.nextAction || "continuar"}`,
-        { sessionID: input.sessionID, messageID: output.message?.id || input.messageID }
+        `Contrato aprobado — estrategia activada. Skills en uso: ${skillsLine}. Próximo paso: ${state.nextAction || "continuar"}`,
+        { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true }
       );
       try {
         recordDecision({
@@ -558,19 +578,28 @@ export async function handleMessage(input, output, deps) {
         state.phase = fresh.phase;
         state.nextAction = fresh.nextAction;
       }
-    } else if (state.contract?.status === "PROPOSED" && state.phase === "PROPOSED" && !state.contractPrompted) {
-      emitTextPart(output, "¿Apruebo este contrato? Responde sí para aprobar o no para rechazar. (o /wam contract approve)", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+    } else if (
+      state.contract?.status === "PROPOSED" &&
+      state.phase === "PROPOSED" &&
+      !state.contractPrompted &&
+      intentLane.lane === INTENT_LANES.TASK_NEW
+    ) {
+      emitTextPart(output, "¿Apruebo este contrato? Responde sí para aprobar o no para rechazar. (o /wam contract approve)", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
       state.contractPrompted = true;
       try { persistTaskState(taskId, state, wamRoot); } catch {}
     }
 
-    const gate = waitAMinute.evaluateCompletionGate(state, promptText);
+    const isTrivialAnalysis =
+      intentLane.lane === INTENT_LANES.CONVERSATION ||
+      analysis.intent?.classification === "trivial" ||
+      analysis.strategy === "FAST";
+    const gate = isTrivialAnalysis
+      ? { blocked: false, allDone: false }
+      : waitAMinute.evaluateCompletionGate(state, promptText);
     // Anti-tampering: only mutate persisted state when the prompt actually
-    // asserts completion intent. For non-DONE messages the gate returns
-    // {blocked: false} (no-op), but guarding here also protects against any
-    // future drift in the gate and guarantees the user's prompt text never
-    // gets reflected as a phase/nextAction change in persisted state.
-    if (waitAMinute.isCompletionIntent(promptText) && (gate.blocked || gate.allDone)) {
+    // asserts completion intent. The gate always evaluates real state now, so
+    // this guard guarantees a normal message never mutates phase/nextAction.
+    if (!isTrivialAnalysis && waitAMinute.isCompletionIntent(promptText) && (gate.blocked || gate.allDone)) {
       const { phase, nextAction } = waitAMinute.applyPhaseTransition(state, gate);
       state.phase = phase;
       state.nextAction = nextAction;
@@ -579,16 +608,42 @@ export async function handleMessage(input, output, deps) {
 
     const updatedState = getTaskState(taskId, wamRoot) || state;
 
+    // Snapshot the persisted state so the next continuation can use the fast-path.
+    try { createSnapshot(taskId, updatedState, wamRoot); } catch {}
+
     // Live context snapshot
     try { persistLiveContext(taskId, updatedState, wamRoot); } catch {}
 
     // ---- Context Assembly ----
     const inject = [];
+    const auxInject = [];
+
+    if ((intentLane.lane === INTENT_LANES.TASK_NEW || intentLane.lane === INTENT_LANES.CORRECTION) && !waitAMinute.isCompletionIntent(promptText)) {
+      try {
+        const history = retrieveIntentHistory(
+          loadHistoryEntries(wamRoot, { taskId }),
+          promptText,
+          { limit: 3, threshold: 0.35 }
+        );
+        if (history.length) {
+          auxInject.push(
+            `[wam history]\n${history
+              .map((h) => `- (${h.source}) ${String(h.text || "").replace(/\s+/g, " ").slice(0, 200)}`)
+              .join("\n")}\n`
+          );
+        }
+      } catch {}
+      try {
+        const memory = loadConversationMemory(wamRoot, input.sessionID);
+        const memoryText = formatMemoryForContext(memory, promptText, 3);
+        if (memoryText) auxInject.push(`[wam memory]\n${memoryText}\n`);
+      } catch {}
+    }
 
     const reqs = updatedState.requirements || [];
-    const pend = reqs.filter((r) => r.status !== "done");
+    const pend = reqs.filter((r) => r.status !== "done" && r.status !== "verified");
     const objective = updatedState.contract?.objective || analysis.intent?.goal || null;
-    if (!(analysis.intent?.classification === "trivial" || analysis.strategy === "FAST")) {
+    if (intentLane.lane !== INTENT_LANES.CONVERSATION) {
       if (updatedState.phase === "PROPOSED" && !updatedState.contractDisplayed) {
         const visible = reqs.slice(0, MAX_VISIBLE_REQS);
         const overflow = reqs.length - MAX_VISIBLE_REQS;
@@ -704,22 +759,19 @@ const { lines } = buildTaskInferenceDirective({
         ? "Requisitos pendientes:\n" + visiblePending.map((p) => `- ${truncate(p, 150)}`).join("\n") + (overflowPending > 0 ? `\n(...(+${overflowPending} más))` : "")
         : "";
       const gateHold = loadPrompt("notice.completion_gate", { count: gate.pending.length, pendingList, nextAction: updatedState.nextAction });
-      emitTextPart(output, gateHold, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+      emitTextPart(output, gateHold, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
+      // La validación viaja al LLM como parte propia (no como reescritura del
+      // mensaje del usuario): el modelo debe continuar con la acción
+      // solicitada ("Listo, continúa") en vez de re-declarar DONE.
+      const validation = buildCompletionValidation(gate, updatedState);
+      injectWamParts(
+        output,
+        [{ id: genPartId(), type: "text", text: validation.text }],
+        { messageID: output.message?.id || input.messageID, sessionID: input.sessionID, phase: "gate-validation", idFactory: genPartId, position: "append" },
+      );
       // SDK 1.19: rewrite the non-synthetic text part on output.parts too.
-      if (Array.isArray(output?.parts) && output.parts.length > 0) {
-        const tp = output.parts.find(
-          (p) => p && p.type === "text" && typeof p.text === "string" && !isWamSynthetic(p),
-        );
-        if (tp) tp.text = tp.text + "\n\n" + gateHold;
-      }
-      if (input?.parts && input.parts.length > 0) {
-        const tp = input.parts.find((p) => p.type === "text" && typeof p.text === "string");
-        if (tp) tp.text = tp.text + "\n\n" + gateHold;
-      }
-      if (input?.message?.parts && input.message.parts.length > 0) {
-        const tp = input.message.parts.find((p) => p.type === "text" && typeof p.text === "string");
-        if (tp) tp.text = tp.text + "\n\n" + gateHold;
-      }
+      // Eliminada la mutación destructiva de input/output.parts para evitar inyección y contaminación de mensajes del usuario.
+      // -------------------------------------------------------------
     } else if (gate.allDone) {
       try {
         confirmCompletion(updatedState, {
@@ -768,8 +820,13 @@ const { lines } = buildTaskInferenceDirective({
     if (updatedState.contract?.status === "APPROVED") {
       inject.push(...delegationLines(updatedState));
     }
-    if (inject.length > 0) {
-      emitTextPart(output, inject.join("\n") + "\n", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+    try { recordTurn({ sessionID: input.sessionID, user: promptText }, wamRoot); } catch {}
+    const budgetedAux = applyContextBudget(auxInject, {
+      state: updatedState.phase || intentLane.lane,
+    });
+    const budgetedInject = [...inject, ...budgetedAux];
+    if (budgetedInject.length > 0) {
+      emitTextPart(output, budgetedInject.join("\n") + "\n", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
     }
 
     if (updatedState.contract?.status !== "APPROVED" && updatedState.phase !== "DONE") {

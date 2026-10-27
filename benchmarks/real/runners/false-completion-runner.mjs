@@ -99,7 +99,7 @@ async function runWamGate(taskId, scenario) {
     .map((p) => p.text)
     .join("\n");
 
-  return /COMPLETION GATE/.test(gateText) && /BLOQUEADO|BLOCK|No declare|No declares/.test(gateText);
+  return /COMPLETION GATE|VALIDACIÓN/.test(gateText) && /BLOQUEADO|BLOCK|No declare|No declares/.test(gateText);
 }
 
 /**

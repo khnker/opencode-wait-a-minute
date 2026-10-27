@@ -74,6 +74,9 @@ function loadState() {
   if (!check.valid) {
     fail(`Invalid task state: ${check.error}`);
   }
+  if (Object.keys(state.tasks || {}).length === 0) {
+    fail("Invalid task state: No tasks defined");
+  }
 
   return state;
 }

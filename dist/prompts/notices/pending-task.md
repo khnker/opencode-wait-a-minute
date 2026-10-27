@@ -11,4 +11,4 @@ verification: src/prompts/characterization.test.mjs
 dependencies: []
 status: active
 ---
-[wait-a-minute] {{phase}} Hay una tarea pendiente: {{active}}. ¿Quieres continuarla? Responde /wam resume {{active}} o define una tarea nueva — no asumo intención.
+[wait-a-minute] Hay una tarea pendiente: {{active}} (fase {{phase}}). ¿Quieres continuarla? Responde /wam resume {{active}} o define una tarea nueva — no asumo intención.

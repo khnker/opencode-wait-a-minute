@@ -42,7 +42,9 @@ export function classifyBash(command) {
 
   // Check for multi-command pipes that are NOT purely filtering/counting
   // Allowed filters/counters: grep, rg, wc, head, tail, sort, uniq, awk, sed (if read-only? wait, prompt says: "Pipelines that only filter (e.g. grep x | wc -l) stay read-only; anything writing or running a build/script is 'justified'")
-  const parts = clean.split(/\s*\|\s*/);
+  // Split en pipes reales: ignora \| escapados y pipes dentro de comillas
+  // simples/dobles (p.ej. grep "a\|b" es UN stage, no dos).
+  const parts = splitPipeline(clean);
   const primary = parts[0].trim().split(/\s+/)[0];
 
   const allowedDiscoveryTools = new Set(["grep", "rg", "find", "cat", "head", "tail", "ls", "tree", "wc"]);
@@ -54,13 +56,49 @@ export function classifyBash(command) {
   // Check remaining pipeline parts
   const allowedPipelineFilters = new Set(["grep", "rg", "wc", "head", "tail", "sort", "uniq", "awk", "sed", "cat"]);
   for (let i = 1; i < parts.length; i++) {
-    const pCmd = parts[i].trim().split(/\s+/)[0];
+    const stage = parts[i].trim();
+    const pCmd = stage.split(/\s+/)[0];
+    if (pCmd === "xargs") {
+      // `... | xargs grep|rg ...` sigue siendo búsqueda read-only; cualquier
+      // otro subcomando vía xargs puede mutar → justified.
+      const rest = stage.split(/\s+/).slice(1).filter((t) => !/^-[a-zA-Z0-9-]+$/.test(t) && !/^[{}+]+$/.test(t));
+      const sub = (rest[0] || "").split("/").pop();
+      if (sub !== "grep" && sub !== "rg") {
+        return { kind: "justified", primary, reason: `pipeline contains non-filtering command 'xargs ${sub || "?"}'` };
+      }
+      continue;
+    }
     if (!allowedPipelineFilters.has(pCmd)) {
       return { kind: "justified", primary, reason: `pipeline contains non-filtering command '${pCmd}'` };
     }
   }
 
   return { kind: "read-only", primary, reason: "pure read-only discovery or filtering pipeline" };
+}
+
+function splitPipeline(clean) {
+  const parts = [];
+  let cur = "";
+  let sq = false;
+  let dq = false;
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean[i];
+    if (ch === "\\") {
+      cur += ch + (clean[i + 1] ?? "");
+      i++;
+      continue;
+    }
+    if (ch === "'" && !dq) { sq = !sq; cur += ch; continue; }
+    if (ch === '"' && !sq) { dq = !dq; cur += ch; continue; }
+    if (ch === "|" && !sq && !dq) {
+      parts.push(cur);
+      cur = "";
+      continue;
+    }
+    cur += ch;
+  }
+  parts.push(cur);
+  return parts.map((p) => p.trim()).filter(Boolean);
 }
 
 export function nudgeFor(command) {

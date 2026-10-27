@@ -1,6 +1,0 @@
-{
-  "id": "policy.discovery.rules",
-  "vars": {},
-  "mustContain": [],
-  "mustNotContain": []
-}

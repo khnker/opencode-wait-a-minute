@@ -18,6 +18,58 @@ import { truncate } from "../execution/formatting.js";
 import { evaluateOutcome, OUTCOME_STATUSES } from "../verification/outcome-evaluator.js";
 
 // ═══════════════════════════════════════════════════════════════
+// Completion-intent detection
+// ═══════════════════════════════════════════════════════════════
+//
+// Ponytail: the completion gate fires only when the prompt's primary intent
+// is to assert completion. We classify completion intent here, in one place,
+// so the gate and the message-handler anti-tampering check use the exact
+// same predicate. Incidental word usage ("complete disaster", "I am done
+// with lunch", "the unfinished file") must NOT be classified as completion
+// intent — that was the false-positive root cause.
+export const COMPLETION_INTENT_REGEX = new RegExp(
+  [
+    // 0a. Imperative "done"/"listo"/"terminado" at start
+    "^(done|listo|terminado|terminada|completado|completada|finalizado|finalizada)\\b",
+    // 0b. Verb at sentence boundary followed by task/object pronoun
+    "(^|[.!?\\n,;]\\s*)(done|finish|finished|complete|completed|terminate|terminated|termino|listo|finalizado|finalizada|completado|completada)\\s+(the|my|this|that|task|tarea|it|all|everything|with\\s+this|ya)\\b",
+    // 0c. "I'm done" / "we are done" / "we're done"
+    "(^|[.!?\\n,;]\\s*)(i|we|yo)(\\s|')+(am|m|are|re)\\s+(done|list[oa]|finished|terminad[oa])\\b",
+    // 0c2. Spanish: "estoy listo" / "estoy terminado" / "estamos listos"
+    "(^|[.!?\\n,;]\\s*)(estoy|estamos)\\s+(list[oa]|terminad[oa]|completad[oa]|finalizad[oa])\\b",
+    // 0d. Explicit close phrases ("declare done", "mark complete", "consider it finished")
+    "(^|[.!?\\n,;]\\s*)(declare|mark|consider(ar)?|treat)\\s+(it|this|the\\s+task|task|la\\s+tarea)?\\s*.*\\b(done|complete|completed|finished|terminat(e|ed))\\b",
+    // 0e. Spanish: "tarea completa/terminada/lista" and "está terminada"
+    "(^|[.!?\\n,;]\\s*)(tarea|trabajo)\\s+(completa|completada|terminada|lista|finalizada)\\b",
+    "(^|[.!?\\n,;]\\s*)(la\\s+tarea|el\\s+trabajo)\\s+(est[aá]|est[aá]n)\\s+(terminad[oa]|completad[oa]|list[oa]|finalizad[oa])\\b",
+    "(^|[.!?\\n,;]\\s*)(termin[eé]|termine)\\s+(la\\s+)?tarea\\b",
+    "\\b(est[aá]|estoy|estamos)\\s+done\\b",
+    // 0h. Task-scoped completion claim ("task complete", "the task is complete")
+    "\\b(task|tarea|trabajo|this|everything|all)\\s+(is\\s+)?(complete|completed|done|finished|completo|completa|terminado|terminada)\\b",
+    // 0g. Soft completion claim ("todo ok", "todo listo", "ya está, todo hecho")
+    "\\b(todo|toda)\\s+(ok|listo|listos|hecho|hecha|hechos|terminado|terminada|completo|completa|resuelto|resuelta)\\b",
+    // 0f. Trailing DONE-claim ("todo listo, done", "hecho, terminado")
+    "(^|[,;.!?]\\s*)\\b(done|listo|terminado|terminada|completado|completada|finalizado|finalizada)\\s*[.!]?$",
+  ].join("|"),
+  "i",
+);
+
+/**
+ * Classify whether a user prompt asserts completion intent.
+ * PURE. Returns true only when the prompt's primary intent is to declare
+ * the task done — not on incidental word usage.
+ * @param {string} promptText
+ * @returns {boolean}
+ */
+export function isCompletionIntent(promptText) {
+  if (!promptText || typeof promptText !== "string") return false;
+  const text = promptText.toLowerCase().trim();
+  // Una pregunta no es un claim de completitud ("¿ya está?", "is it complete?").
+  if (text.endsWith("?")) return false;
+  return COMPLETION_INTENT_REGEX.test(text);
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Constantes de fase
 // ═══════════════════════════════════════════════════════════════
 
@@ -67,14 +119,23 @@ export function nextActionFrom(state) {
   const pending = (state?.requirements || []).find(
     (r) => !["done", "verified"].includes(r.status)
   );
-  if (pending)
-    return `Implementar ${truncate(pending.title)} (${pending.id} ${pending.status})`;
-  const unverified = (state?.requirements || []).find((r) => r.status === "done");
+  if (pending) {
+    const title = truncate(pending.title);
+    const label = /^[A-ZÁÉÍÓÚÑ]/.test(title) ? title : `Implementar ${title}`;
+    return `${label} (${pending.id} ${pending.status})`;
+  }
+  const unverified = (state?.requirements || []).find(
+    (r) =>
+      r.status === "done" ||
+      (r.status === "verified" && !(r.evidence || []).length)
+  );
   if (unverified)
     return `Verificar ${truncate(unverified.title)} — /wam progress ${unverified.id} verified <evidencia>`;
   if (state?.requirements?.length) {
-    // If all requirements are verified, we are done
-    const allVerified = (state.requirements || []).every(r => r.status === "verified");
+    // If all requirements are verified with evidence, we are done
+    const allVerified = (state.requirements || []).every(
+      (r) => r.status === "verified" && (r.evidence || []).length > 0
+    );
     if (allVerified) {
       return "Tarea completa — contrato verificado";
     }
@@ -95,15 +156,7 @@ export function nextActionFrom(state) {
  * @returns {{ blocked: boolean, allDone?: boolean, verifying?: boolean, pending?: string[], autoApprove?: boolean }}
  */
 export function evaluateCompletionGate(state, promptText) {
-  const lower = (promptText || "").toLowerCase().trim();
-
-  // DONE-claim detection: only a message that actually asserts completion is
-  // subject to the completion gate. Non-DONE messages (continuations) return
-  // early with `blocked: false` so the continuation fast-path can emit the N2
-  // live task delta instead of being hard-blocked.
-  const doneClaims =
-    /(^|\s)(done|finish|finished|complete|completed|terminate|terminated|listo|termin[eé]|complet[ao]|finalizad[oa])\b|(task|tarea)\s+(complete|complet(a|ada|o)|terminad(a|o))|declare.*done/i;
-  if (!doneClaims.test(lower)) return { blocked: false };
+  const completionIntent = isCompletionIntent(promptText);
 
   // 1. Blocking unknowns
   const blockingUnknowns = (state?.contract?.unknowns || []).filter(
@@ -132,18 +185,20 @@ export function evaluateCompletionGate(state, promptText) {
     };
   }
 
-  // 3. Pending requirements (not done/verified, or done without evidence)
-  const pending = (state?.requirements || []).filter(
-    (r) =>
-      (r.status !== "done" && r.status !== "verified") ||
-      (r.status === "done" && !(r.evidence || []).length)
-  );
+  // 3. Pending requirements (not done/verified, or done/verified without evidence)
+  const isRequirementSatisfied = (r) =>
+    (r?.status === "done" || r?.status === "verified") &&
+    Array.isArray(r?.evidence) &&
+    r.evidence.length > 0;
+  const requirements = state?.requirements || [];
+  const pending = requirements.filter((r) => !isRequirementSatisfied(r));
   if (pending.length > 0) {
     return {
       blocked: true,
       pending: pending.map((r) => {
         const missingEvidence =
-          r.status === "done" && !(r.evidence || []).length;
+          (r.status === "done" || r.status === "verified") &&
+          !(r.evidence || []).length;
         return `${r.id} — ${r.title}${missingEvidence ? " (sin evidencia)" : ""}`;
       }),
     };
@@ -172,9 +227,9 @@ export function evaluateCompletionGate(state, promptText) {
     };
   }
 
-  // 6. All requirements must be verified
+  // 6. All requirements must be verified with evidence
   const unverified = (state?.requirements || []).filter(
-    (r) => r.status !== "verified"
+    (r) => r.status !== "verified" || !(r.evidence || []).length
   );
   if (unverified.length > 0) {
     return {
@@ -244,7 +299,7 @@ export function evaluateCompletionGate(state, promptText) {
      };
    }
 
-   return { blocked: false, allDone: true };
+   return { blocked: false, allDone: true, completionIntent };
 }
 
 /**
@@ -254,6 +309,42 @@ export function evaluateCompletionGate(state, promptText) {
  * @param {{ blocked: boolean, allDone?: boolean, verifying?: boolean }} gate - Resultado del gate
  * @returns {{ phase: string, nextAction: string }}
  */
+/**
+ * Acción que el usuario solicita al LLM cuando el completion gate rechaza
+ * un claim de completitud: seguir implementando lo que falta.
+ */
+export const COMPLETION_GATE_REQUESTED_ACTION = "Listo, continúa";
+
+/**
+ * Construye la validación que se envía al LLM cuando el completion gate
+ * rechaza un claim de completitud (el LLM dijo DONE pero faltan requisitos).
+ * PURE: (gate, state) → payload con el texto de validación dirigido al LLM.
+ * @param {{blocked?:boolean, verifying?:boolean, pending?:string[]}} gate
+ * @param {Object} [state]
+ * @returns {{ text:string, pending:string[], nextAction:string, requestedAction:string }}
+ */
+export function buildCompletionValidation(gate, state = {}) {
+  const pending = Array.isArray(gate?.pending) ? gate.pending : [];
+  const nextAction = state?.nextAction || nextActionFrom(state);
+  const lines = [
+    "⛔ [wait-a-minute] VALIDACIÓN — la afirmación de completitud fue rechazada: el LLM declaró DONE pero el contrato todavía tiene requisitos pendientes.",
+  ];
+  if (pending.length > 0) {
+    lines.push("Requisitos pendientes:");
+    for (const item of pending) lines.push(`- ${truncate(item, 150)}`);
+  }
+  lines.push(
+    `Acción solicitada por el usuario: "${COMPLETION_GATE_REQUESTED_ACTION}" → implementa los requisitos pendientes y vuelve a verificarlos. No declares DONE.`,
+  );
+  lines.push(`Continuar con: ${nextAction}`);
+  return {
+    text: lines.join("\n"),
+    pending,
+    nextAction,
+    requestedAction: COMPLETION_GATE_REQUESTED_ACTION,
+  };
+}
+
 export function applyPhaseTransition(state, gate) {
   if (gate.blocked) {
     return {

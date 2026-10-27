@@ -1,6 +1,0 @@
-{
-  "id": "policy.decision-gate.rules",
-  "vars": {},
-  "mustContain": [],
-  "mustNotContain": []
-}

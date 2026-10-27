@@ -217,7 +217,9 @@ export function addRecentChange({ date, scope, changes = [], verification = "" }
       ? sections[0].trim()
       : "# Recent Changes";
   const rest = sections.slice(1);
-  const all = [header, section, ...rest];
+  // Keep the newest N entries so recent-changes.md cannot grow without bound.
+  const MAX_RECENT_CHANGES = 50;
+  const all = [header, section, ...rest.slice(0, MAX_RECENT_CHANGES - 1)];
   return updateContext(
     "recentChanges",
     all.join("\n\n"),

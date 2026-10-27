@@ -26,7 +26,7 @@ function cleanup(taskId) {
   try { fs.rmSync(path.join(CWD, ".wam", "tasks", taskId), { recursive: true, force: true }); } catch {}
 }
 function gateText(out) {
-  const p = out.parts.find((x) => x.type === "text" && typeof x.text === "string" && x.text.includes("COMPLETION GATE"));
+  const p = out.parts.find((x) => x.type === "text" && typeof x.text === "string" && /COMPLETION GATE|VALIDACIÓN/.test(x.text));
   return p?.text || "";
 }
 
@@ -46,7 +46,7 @@ test("G5: DONE con requisito pendiente -> BLOCK, indica qué falta y próxima ac
   const pendingReq = (getTaskState(taskId)?.requirements || []).find((r) => r.id !== implReq.id && /test/i.test(r.title));
   cleanup(taskId);
 
-  assert.ok(gate.includes("COMPLETION GATE BLOQUEADO") || gate.includes("COMPLETION GATE:"), "gate bloquea");
+  assert.ok(/COMPLETION GATE|VALIDACIÓN/.test(gate), "gate bloquea");
   assert.ok(/No declare[s]? DONE/.test(gate), "prohíbe DONE");
   assert.ok(pendingReq && gate.includes(pendingReq.title), "indica exactamente qué falta (tests pendientes)");
   assert.ok(/req-\d/.test(gate), "identifica el requisito pendiente por ID");

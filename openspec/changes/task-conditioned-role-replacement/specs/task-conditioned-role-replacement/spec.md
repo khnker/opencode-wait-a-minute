@@ -1,43 +1,33 @@
-# Task-Conditioned Role Replacement Spec
+# Spec: Task-conditioned role replacement
 
-## Objective
-Replace the generic role in the WAM context with a specialized role instruction based on the task's objective and requirements.
+## ADDED Requirements
 
-## Stakeholders
-- Developers using WAM for software engineering tasks.
-- The WAM system itself, to improve the quality of model responses.
+### Requirement: Select a role from the task
 
-## Functional Requirements
-1. The system must be able to select a role from a predefined set based on the task's objective and requirements.
-2. The selected role must be formatted into one or two lines of instruction.
-3. The role instruction must be injected into the WAM context without duplicating existing roles.
-4. The feature must be configurable and disabled by default.
-5. The system must provide a benchmark to evaluate the impact of role selection.
+The system MUST select a deterministic role from the task objective and requirements.
 
-## Non-Functional Requirements
-- The role selection algorithm must be deterministic and pure.
-- The injection must not alter the existing context structure (N0-N3) beyond adding the role instruction.
-- The benchmark must be able to run without external dependencies (e.g., no network calls for the deterministic part).
+#### Scenario: Role selection
 
-## Acceptance Criteria
-1. Unit tests for `task-role-engine.js` pass.
-2. Integration tests for `message-handler.js` pass.
-3. The benchmark runs and shows idempotence and correct role selection for the provided scenarios.
-4. The feature flag is respected (disabled by default).
-5. No existing functionality is broken (regression tests pass).
+- **GIVEN** a task with an objective and requirements
+- **WHEN** the role is computed
+- **THEN** a role from the predefined set is selected
 
-## Implementation Details
-- Module: `src/cognition/task-role-engine.js`
-- Integration: `src/integration/message-handler.js`
-- Configuration: `src/config/wam-config.js`
-- Benchmark: `benchmarks/task-conditioned-role-replacement/`
+### Requirement: Inject a bounded role instruction
 
-## Dependencies
-- None beyond the existing WAM codebase.
+The system MUST inject the selected role as a one- or two-line instruction without duplicating an existing role.
 
-## Risks
-- Incorrect role selection leading to less relevant model responses.
-- Mitigation: The benchmark and unit tests validate the selection logic.
+#### Scenario: Role injection
 
-## Open Issues
-None.
+- **GIVEN** a selected role and the current context
+- **WHEN** the role is injected
+- **THEN** the context receives one bounded role instruction
+
+### Requirement: Feature is configurable and disabled by default
+
+The role replacement MUST be configurable and MUST be disabled by default.
+
+#### Scenario: Default configuration
+
+- **GIVEN** no explicit configuration
+- **WHEN** WAM builds the context
+- **THEN** role replacement is disabled

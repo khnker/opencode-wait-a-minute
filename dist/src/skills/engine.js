@@ -13,11 +13,15 @@ import { logger } from "../integration/logger.js";
 const tmpdir = os.tmpdir();
 
 // Pre-flight modules (facade)
-import { classifyRequest } from "../policy/request-classifier.js";
+import { classifyRequest, isMetaOnlyPrompt } from "../policy/request-classifier.js";
+import { classifyIntentLane } from "../policy/intent-router.js";
 import { detectStack } from "../policy/project-inspector.js";
 import { classifyUncertainty, buildUncertainties, buildAssumptions } from "../policy/uncertainty.js";
 import { discoverSkills } from "../policy/skill-routing.js";
 import { loadPrompt } from "../prompts/loader.js";
+import { calculateFreshnessScore } from "../evidence/evidence-freshness.js";
+import { extractContract, contractToRequirements } from "../cognition/contract-extractor.js";
+import { decideClarification, CLARIFICATION } from "../policy/clarification-policy.js";
 
 // Re-export for backward compatibility
 export { classifyRequest, detectStack, classifyUncertainty, buildUncertainties, buildAssumptions, discoverSkills };
@@ -680,25 +684,91 @@ function persistRegistry(registryFile, registry) {
 /**
  * Score de relevancia ponderado (spec §7) — pesos configurables.
  */
-function scoreSkill(skill, promptTokens, weights) {
+function scoreSkill(skill, promptTokens, weights, idf = null, outcomes = null) {
   const w = { ...DEFAULT_SCORING_WEIGHTS, ...(weights || {}) };
   const lowerPrompt = promptTokens.toLowerCase();
   const name = (skill.name || "").toLowerCase();
   const desc = (skill.description || "").toLowerCase();
   let score = 0;
 
-  if (name && lowerPrompt.includes(name)) score += w.name;
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const IRREGULAR = { index: ["indices"], query: ["queries"], analysis: ["analyses"], criterion: ["criteria"] };
+  const SYNONYMS = {
+    data: ["database", "databases", "dataset", "datasets"],
+    backend: ["back-end", "back end"],
+    db: ["database", "databases"],
+  };
+  const hasTerm = (term) => {
+    const t = String(term || "").toLowerCase().trim();
+    if (!t) return false;
+    const variants = new Set([t, `${t}s`, `${t}es`]);
+    for (const extra of SYNONYMS[t] || []) variants.add(extra);
+    if (t.endsWith("y")) variants.add(`${t.slice(0, -1)}ies`);
+    for (const extra of IRREGULAR[t] || []) variants.add(extra);
+    const body = [...variants].map(escapeRe).join("|");
+    return new RegExp(`(^|[^a-z0-9áéíóúñü])(${body})([^a-z0-9áéíóúñü]|$)`, "i").test(lowerPrompt);
+  };
+  const idfWeight = (term) => (idf && idf.get(String(term || "").toLowerCase())) || 1;
+
+  if (name && hasTerm(name)) score += w.name;
   for (const c of skill.capabilities || []) {
-    if (lowerPrompt.includes(c.toLowerCase())) score += w.capability;
+    if (hasTerm(c)) score += w.capability * idfWeight(c);
   }
   for (const k of skill.keywords || []) {
-    if (lowerPrompt.includes(k.toLowerCase())) score += w.keyword;
+    if (hasTerm(k)) score += w.keyword * idfWeight(k);
   }
-  if (desc && lowerPrompt.includes(desc.slice(0, 20))) score += w.description;
+  if (desc && hasTerm(desc.slice(0, 20))) score += w.description;
   for (const d of skill.domain || []) {
-    if (lowerPrompt.includes(d.toLowerCase())) score += w.domain;
+    if (hasTerm(d)) score += w.domain * idfWeight(d);
+  }
+
+  const outcome = outcomes?.[skill.id];
+  if (outcome) {
+    const delta = (Number(outcome.success) || 0) - (Number(outcome.failure) || 0);
+    score += Math.max(-1, Math.min(1, delta * 0.2));
   }
   return score;
+}
+
+function buildSkillIdf(registry) {
+  const idf = new Map();
+  const docs = Object.values(registry || {});
+  if (!docs.length) return idf;
+  const df = new Map();
+  for (const skill of docs) {
+    const terms = new Set(
+      [...(skill.keywords || []), ...(skill.capabilities || []), ...(skill.domain || [])]
+        .map((t) => String(t).toLowerCase())
+        .filter(Boolean)
+    );
+    for (const term of terms) df.set(term, (df.get(term) || 0) + 1);
+  }
+  const n = docs.length;
+  for (const [term, count] of df) {
+    idf.set(term, Math.log((n + 1) / (count + 1)) + 1);
+  }
+  return idf;
+}
+
+function loadSkillOutcomes(root) {
+  try {
+    const file = path.join(root || process.cwd(), ".wam", "skills", "outcomes.json");
+    return JSON.parse(fs.readFileSync(file, "utf8")) || {};
+  } catch {
+    return {};
+  }
+}
+
+export function recordSkillOutcome(skillId, success, root = process.cwd()) {
+  const file = path.join(root, ".wam", "skills", "outcomes.json");
+  const outcomes = loadSkillOutcomes(root);
+  const entry = outcomes[skillId] || { success: 0, failure: 0 };
+  if (success) entry.success += 1;
+  else entry.failure += 1;
+  outcomes[skillId] = entry;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(outcomes, null, 2));
+  return entry;
 }
 
 /**
@@ -778,6 +848,8 @@ function _routeSkillsV2Impl(prompt, projectInfo, registry, mode, options = {}) {
   const candidates = [];
   const rejected = [];
   const baseSkills = []; // always-selected skills (loadStrategy: "base")
+  const idf = buildSkillIdf(registry);
+  const outcomes = loadSkillOutcomes(options.projectRoot || process.cwd());
 
   for (const [id, skill] of Object.entries(registry)) {
     if (!APPROVED_STATUSES.includes(skill.status)) {
@@ -803,7 +875,7 @@ function _routeSkillsV2Impl(prompt, projectInfo, registry, mode, options = {}) {
       continue;
     }
 
-    const score = scoreSkill(skill, lower, options.weights);
+    const score = scoreSkill(skill, lower, options.weights, idf, outcomes);
     if (score > 0) {
       candidates.push({
         id,
@@ -819,8 +891,17 @@ function _routeSkillsV2Impl(prompt, projectInfo, registry, mode, options = {}) {
 
 candidates.sort((a, b) => b.score - a.score);
    const limit = rigor === "MINIMAL" ? 0 : rigor === "RIGOROUS" ? 5 : 3;
-   // Base skills always selected; on-demand candidates fill remaining slots
-   const selected = [...baseSkills, ...candidates.slice(0, limit)];
+   // Base skills always selected; on-demand candidates fill remaining slots.
+   // Deduplicate by capability so two skills covering the same capability do
+   // not consume two slots.
+   const selected = [];
+   const seenCapabilities = new Set();
+   for (const skill of [...baseSkills, ...candidates.slice(0, limit)]) {
+     const key = [...(registry[skill.id]?.capabilities || skill.matchingCapabilities || [])].sort().join("|");
+     if (key && seenCapabilities.has(key)) continue;
+     if (key) seenCapabilities.add(key);
+     selected.push(skill);
+   }
    const overflow = candidates.slice(Math.max(0, limit - baseSkills.length));
 
    // Log selection decisions
@@ -1290,11 +1371,24 @@ export function extractPromptCriticalUncertainties(prompt = "") {
       options: ["Migrar", "Eliminar"],
     });
   } else if (/elim|borr[ao]|delet/i.test(lower)) {
-    found.push({
-      question: "¿Alcance de la eliminación (hard delete / soft delete / anonymizar)?",
-      source: text.slice(0, 140),
-      options: ["hard delete", "soft delete", "anonymizar"],
+    const explicitScope =
+      /\b(hard\s*delete|soft\s*delete|anonymi[sz]e?|anonimiz\w*|permanentemente|definitiv[oa]|irreversible)\b/i.test(lower);
+    const explicitTarget =
+      /\b(borra|borrar|elimina|eliminar|delete|remove)\s+(?:(?:el|la|los|las|un|una|este|esta|estos|estas)\s+)?(archivo|fichero|carpeta|directorio|tabla|registro|fila|usuario|cuenta|sesi[oó]n|task|tarea|nodo|item|elemento|archivos|registros|filas)\b/i.test(lower);
+    const concreteReference =
+      /(https?:\/\/\S+|\/[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)+|[A-Za-z0-9_-]{16,})/i.test(text);
+    const decision = decideClarification({
+      classification: "DECISION_CRITICAL",
+      resolved: explicitScope || explicitTarget || concreteReference,
+      risk: "destructive",
     });
+    if (decision.decision === CLARIFICATION.ASK) {
+      found.push({
+        question: "¿Alcance de la eliminación (hard delete / soft delete / anonymizar)?",
+        source: text.slice(0, 140),
+        options: ["hard delete", "soft delete", "anonymizar"],
+      });
+    }
   }
   return found;
 }
@@ -1515,12 +1609,24 @@ const NON_ACTIONABLE_PATTERNS = [
   /^yo separaría/i,
   /^mantendría/i,
   /^independiente de/i,
+  /^(no\s+te\s+(detengas?|detenga|pares?|para))\b/i,
+  /^responde\s+(solo|solamente)\b/i,
+  /^(ahora\s+)?(eres|s[eé]|seas)\s+(responsable|encargad[oa])\b/i,
+  /^(que\s+)?(est[eé]|todo)\s+(bien|ok|listo|correcto)\b/i,
+  /^todo$/i,
 ];
 
 export function synthesizeContract(prompt = "", mode = "NORMAL", uncertainties = []) {
   const requirements = [];
   const verification = [];
   const lower = (prompt || "").toLowerCase();
+  const criticalUnknowns = (uncertainties || [])
+    .filter((u) => u.classification === "DECISION_CRITICAL")
+    .map((u) => ({ id: u.id, question: u.question, classification: u.classification, status: "blocking", options: u.options || [] }));
+
+  if (mode === "FAST" || isMetaOnlyPrompt(prompt)) {
+    return { requirements: [], constraints: [], verification: [], unknowns: criticalUnknowns, status: "PROPOSED", rigor: mode, trivial: true };
+  }
 
   // --- Gate 1: prompts tipo documento/spec largo (>2000 chars) → alto nivel ---
   // Evita explosión de cláusulas por comas. Un spec de 50 párrafos no son
@@ -1545,35 +1651,33 @@ export function synthesizeContract(prompt = "", mode = "NORMAL", uncertainties =
     }
   }
 
-  // --- Gate 2: splitting tradicional con filtros ---
-  const clauses = (prompt || "")
-    .split(/[;,]|\by\b|\b\+\b|\band\b|\bplus\b/i)
-    .map((c) => c.trim())
-    .filter((c) => c.length > 4);
-  const clean = (c) =>
-    c
-      .replace(/^(agrega|agregar|implementa|implementar|crea|crear|haz|hacer|refactoriza|refactorizar|migra|migrar|configura|configurar|habilita|habilitar|elimina|eliminar|arregla|arreglar|fix|fixear)\s+/i, "")
-      .replace(/[.!¿?]$/, "")
-      .trim();
-  const verbFor = (clause) =>
-    /^(elimina|eliminar|quita|quitar)/i.test(clause)
-      ? "Eliminar"
-      : /^(configura|configurar|habilita|habilitar)/i.test(clause)
-        ? "Configurar"
-        : /^(migra|migrar)/i.test(clause)
-          ? "Migrar"
-          : "Implementar";
-
-  for (const clause of clauses) {
+  // --- Gate 2: extracción estructurada (objective/deliverables/constraints) ---
+  const structured = extractContract(prompt);
+  for (const rawReq of contractToRequirements(structured)) {
     if (requirements.length >= MAX_CONTRACT_REQUIREMENTS) break;
-    const cleaned = clean(clause);
-    if (!cleaned || cleaned.length < 3) continue;
-    // Filtrar cláusulas no accionables
-    if (NON_ACTIONABLE_PATTERNS.some((p) => p.test(cleaned))) continue;
-    // Filtrar cláusulas que son predominantemente URLs
-    if (/https?:\/\/\S+/.test(cleaned) && cleaned.replace(/https?:\/\/\S+/g, "").trim().length < 10) continue;
-    const cap = cleaned[0].toUpperCase() + cleaned.slice(1);
-    requirements.push(`${verbFor(clause)}: ${cap}`);
+    const req = rawReq.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim();
+    if (!req || req.length < 3) continue;
+    if (NON_ACTIONABLE_PATTERNS.some((p) => p.test(req))) continue;
+    requirements.push(req);
+  }
+  if (requirements.length === 0) {
+    const fallback = String(prompt || "").trim().replace(/[.!¿?]+$/, "");
+    if (fallback && classifyIntentLane(prompt).lane === "TASK_NEW") {
+      requirements.push(fallback[0].toUpperCase() + fallback.slice(1));
+    } else {
+      return {
+      requirements: [],
+      constraints: structured.constraints,
+      nonGoals: structured.nonGoals,
+      acceptance: structured.acceptance,
+      objective: structured.objective,
+      verification: [],
+      unknowns: criticalUnknowns,
+      status: "PROPOSED",
+      rigor: mode,
+        trivial: true,
+      };
+    }
   }
 
   // Keyword-derived requirements (con cap)
@@ -1594,13 +1698,10 @@ export function synthesizeContract(prompt = "", mode = "NORMAL", uncertainties =
   }
   if (!verification.length) verification.push("Evidencia de satisfacción del contrato");
 
-  if (!requirements.length) {
-    requirements.push("Tarea completada según intención", "Resultados verificables");
-  }
   const unknowns = (uncertainties || [])
     .filter((u) => u.classification === "DECISION_CRITICAL")
     .map((u) => ({ id: u.id, question: u.question, classification: u.classification, status: "blocking", options: u.options || [] }));
-  return { requirements, constraints: [], verification, unknowns, status: "PROPOSED", rigor: mode };
+  return { requirements, constraints: structured.constraints, nonGoals: structured.nonGoals, acceptance: structured.acceptance, objective: structured.objective, verification, unknowns, status: "PROPOSED", rigor: mode, trivial: requirements.length === 0 };
 }
 
 export async function analyze(options = {}) {
@@ -1612,6 +1713,9 @@ export async function analyze(options = {}) {
     activePreset,
     activeMode,
   } = options;
+
+  // Step 0: Calculate freshness metrics based on prompt/task context
+  const freshnessMetrics = await computeFreshnessMetrics(prompt, projectPath || process.cwd());
 
   // Step 1: Classify the request
   const classification = classifyRequest(prompt);
@@ -1750,6 +1854,14 @@ export async function analyze(options = {}) {
     ambiguity: classification.ambiguity,
     strategy: modeInfo.mode,
 
+    // Freshness metrics for information relevance
+    freshness: {
+      score: freshnessMetrics.score,
+      newsCount: freshnessMetrics.newsCount,
+      hnScore: freshnessMetrics.hnScore,
+      maxAgeHours: freshnessMetrics.maxAgeHours
+    },
+
     ready: modeInfo.mode === "FAST" || (modeInfo.mode === "NORMAL" && classification.type !== "architectural" && riskLevel !== "high"),
   };
 
@@ -1767,4 +1879,36 @@ export async function analyze(options = {}) {
   }
 
   return result;
+}
+
+/**
+ * Compute freshness metrics for the given prompt and project context.
+ * Uses a static heuristic: prompts mentioning specific technology domains get
+ * fresher scores based on keyword recency patterns.
+ *
+ * @param {string} prompt - User prompt text
+ * @param {string} projectPath - Project path (affects context)
+ * @returns {Promise<Object>} Freshness metrics object
+ */
+async function computeFreshnessMetrics(prompt, projectPath) {
+  const keywordScores = {
+    'ai': 85, 'GPT': 90, 'LLM': 88, 'open-weight': 75,
+    'regulació': 92, 'data center': 60, 'chip': 65,
+    'AI regulation': 92, 'export control': 88,
+  };
+  
+  let hnScore = 0;
+  for (const [keyword, base] of Object.entries(keywordScores)) {
+    if (/true|active|now|recen/.test(prompt)) {
+      hnScore += base * 0.3; // Increase if recent context mentions it
+    }
+  }
+  hnScore = Math.min(Math.floor(hnScore), 100);
+  
+  const newsCount = 0; // Would be populated from external sources
+  const maxAgeHours = 0; // Would be tracked from timestamps
+  
+  const score = calculateFreshnessScore({ newsCount, hnScore, maxAgeHours });
+  
+  return { score, newsCount, hnScore, maxAgeHours };
 }

@@ -6,8 +6,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
+// Use a parent outside os.tmpdir() so the WAM scratch-script guard
+// (which flags /tmp/... and /var/tmp/... paths) does not block edits
+// in these tests. The homedir path is NOT under any "tmp" segment.
+const TEST_PARENT = (() => {
+  const p = path.join(os.homedir(), '.wam-ledger-tests');
+  try { fs.mkdirSync(p, { recursive: true }); return p; } catch (_) {}
+  return os.tmpdir();
+})();
+
 test('Ledger dedup', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-test-'));
+    const tmpDir = fs.mkdtempSync(path.join(TEST_PARENT, 'ledger-test-'));
     const filePath = path.join(tmpDir, 'test.txt');
     fs.writeFileSync(filePath, 'hello');
     
@@ -19,7 +28,7 @@ test('Ledger dedup', () => {
 });
 
 test('Ledger stale detection', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-test-'));
+    const tmpDir = fs.mkdtempSync(path.join(TEST_PARENT, 'ledger-test-'));
     const filePath = path.join(tmpDir, 'test.txt');
     fs.writeFileSync(filePath, 'hello');
     
@@ -31,7 +40,7 @@ test('Ledger stale detection', () => {
 });
 
 test('Stale edit guard', async () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-test-'));
+    const tmpDir = fs.mkdtempSync(path.join(TEST_PARENT, 'ledger-test-'));
     const filePath = path.join(tmpDir, 'test.txt');
     fs.writeFileSync(filePath, 'version 1');
     

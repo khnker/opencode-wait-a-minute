@@ -16,6 +16,7 @@ import path from "node:path";
 import os from "node:os";
 import { synthesizeContract } from "../src/skills/engine.js";
 import { assembleContext } from "../src/context/assembly.js";
+import { nextActionFrom } from "../src/integration/orchestration.js";
 
 // --- Helpers ---
 
@@ -80,13 +81,13 @@ describe("synthesizeContract: caps y filtrado", () => {
 // --- nextActionFrom truncation ---
 
 describe("nextActionFrom: truncación de títulos", () => {
-  it("título >80 chars se trunca en nextAction", async () => {
-    // nextActionFrom is internal, but we can verify the behavior through
-    // the fact that synthesizeContract caps reqs, and assembly N2 truncates
-    // Let's verify the truncate function exists and works
-    const src = fs.readFileSync(path.join(process.cwd(), "index.js"), "utf-8");
-    assert.ok(src.includes("function truncate(text, max = 80)"), "truncate function should exist");
-    assert.ok(src.includes("Implementar ${truncate(pending.title)}"), "nextActionFrom should use truncate");
+  it("título >80 chars se trunca en nextAction", () => {
+    const longTitle = "x".repeat(200);
+    const action = nextActionFrom({
+      requirements: [{ id: "req-1", title: longTitle, status: "pending" }],
+    });
+    assert.ok(action.includes("..."), "long title must be truncated");
+    assert.ok(action.length < 120, `nextAction too long: ${action.length}`);
   });
 });
 

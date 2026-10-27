@@ -13,10 +13,12 @@ export const WAM_META = "wam";
  * @param {string} [options.phase]
  * @param {Function} [options.idFactory]
  */
-export function tagWamPart(part, { messageID, phase, idFactory } = {}) {
+export function tagWamPart(part, { messageID, sessionID, phase, idFactory, synthetic = true } = {}) {
   const tagged = {
     ...part,
-    synthetic: true,
+    ...(sessionID && !part.sessionID ? { sessionID } : {}),
+    ...(messageID && !part.messageID ? { messageID } : {}),
+    synthetic,
     metadata: {
       ...(part.metadata || {}),
       [WAM_META]: true,
@@ -34,7 +36,7 @@ export function tagWamPart(part, { messageID, phase, idFactory } = {}) {
  * Checks if a part was injected by WAM.
  */
 export function isWamSynthetic(part) {
-  return !!part && part.synthetic === true && part?.metadata?.[WAM_META] === true;
+  return !!part && part?.metadata?.[WAM_META] === true;
 }
 
 /**
@@ -45,16 +47,35 @@ export function hasWamMarkerFor(parts, messageID) {
 }
 
 /**
- * Injects WAM parts into a target sink (parts array or system array).
+ * Resolves the array that receives injected parts.
+ * Supports every shape OpenCode uses for the chat.message output:
+ *   { parts } | { system } | { message: { parts } } | { message: { system } }.
+ * Ponytail: without the nested shapes the injection was silently dropped and
+ * the warning/validation never reached the LLM.
+ * @param {Object} target
+ * @returns {Array|null}
  */
-export function injectWamParts(target, textsOrParts, { messageID, phase, idFactory, position = "prepend" } = {}) {
-  const sink = Array.isArray(target.parts) ? target.parts : (Array.isArray(target.system) ? target.system : null);
+export function resolveInjectionSink(target) {
+  if (!target) return null;
+  if (Array.isArray(target.parts)) return target.parts;
+  if (Array.isArray(target.system)) return target.system;
+  if (Array.isArray(target.message?.parts)) return target.message.parts;
+  if (Array.isArray(target.message?.system)) return target.message.system;
+  return null;
+}
+
+/**
+ * Injects WAM parts into a target sink (parts array, system array, or the
+ * nested message.parts / message.system shapes).
+ */
+export function injectWamParts(target, textsOrParts, { messageID, sessionID, phase, idFactory, position = "prepend", synthetic } = {}) {
+  const sink = resolveInjectionSink(target);
   if (!sink) return;
 
   const list = Array.isArray(textsOrParts) ? textsOrParts : [textsOrParts];
   const parts = list.map(item => {
     const part = typeof item === "string" ? { type: "text", text: item } : item;
-    return tagWamPart(part, { messageID, phase, idFactory });
+    return tagWamPart(part, { messageID, sessionID, phase, idFactory, synthetic });
   });
 
   if (position === "append") {

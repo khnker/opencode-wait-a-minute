@@ -553,6 +553,11 @@ export function selectContext(task, { budget = 8000, root, sessionId, log = true
     try {
        const logFile = path.join(root || process.cwd(), ".wam", "traces", "selection-log.jsonl");
       fs.mkdirSync(path.dirname(logFile), { recursive: true });
+      try {
+        if (fs.statSync(logFile).size > 5 * 1024 * 1024) {
+          fs.renameSync(logFile, `${logFile}.1`);
+        }
+      } catch {}
       fs.appendFileSync(logFile, JSON.stringify({ timestamp: nowIso(), task, selected_ids: pkg.selected_ids, budget_used: used, budget, sufficiency }) + "\n");
     } catch {}
   }
@@ -583,9 +588,16 @@ export async function selectContextWithCqe(task, opts = {}) {
         timedOut: cqeRes?.metadata?.timedOut ?? cqeRes?.timedOut ?? false,
         cqeError: cqeRes?.metadata?.cqeError || cqeRes?.cqeError || null,
       };
-    } catch {
+    } catch (err) {
       // Non-fatal: CQE es augmentación best-effort; el contexto nativo prevalece.
-      pkg.cqeMeta = { elapsedMs: Date.now() - t0, source: null, fallbackUsed: true, fallbackReason: "exception", timedOut: false, cqeError: "exception" };
+      pkg.cqeMeta = {
+        elapsedMs: Date.now() - t0,
+        source: null,
+        fallbackUsed: true,
+        fallbackReason: "exception",
+        timedOut: false,
+        cqeError: err?.message || "exception",
+      };
     }
   }
   return pkg;

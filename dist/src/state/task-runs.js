@@ -6,7 +6,7 @@
  *
  * Estructura:
  * .wam/tasks/<taskId>/
- * ├── state.yaml        (estado actual canónico)
+ * ├── task.json        (estado actual canónico)
  * └── runs/
  *     ├── <runId>.json
  *     └── <runId>.json

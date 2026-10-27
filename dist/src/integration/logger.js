@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const LOG_FILE = process.env.WAM_LOG_FILE || path.join(process.cwd(), '.wam', 'plugin.log');
+const MAX_LOG_BYTES = Number(process.env.WAM_LOG_MAX_BYTES || 5 * 1024 * 1024);
 
 let loggingEnabled = true;
 
@@ -29,6 +30,11 @@ export const logger = {
       if (!fs.existsSync(logDir)) {
         fs.mkdirSync(logDir, { recursive: true });
       }
+      try {
+        if (fs.statSync(LOG_FILE).size > MAX_LOG_BYTES) {
+          fs.renameSync(LOG_FILE, `${LOG_FILE}.1`);
+        }
+      } catch {}
       fs.appendFileSync(LOG_FILE, formattedMessage, 'utf8');
     } catch (err) {
       console.error(`[LOGGER-ERROR] Failed to write to log file: ${err.message}`);

@@ -135,6 +135,12 @@ Once installed, WAM intercepts requests before skill resolution and agent execut
 
 **Requirements:** Node `>=20` · OpenCode `>=1.18.0` — tested on Ubuntu 24.04, Node 24.16.0, OpenCode 1.18.33 ([docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md)).
 
+### Runtime controls
+
+- `/wam off` — bypass WAM for the current session (chat hooks, tool governance and tool-result persistence).
+- `/wam on` — restore WAM for the current session.
+- `/wam config get` — show effective config; set `WAM_GOVERNANCE=off` or `.wam/config.json` to disable globally.
+
 ## Debugging and diagnostics
 WAM emits structured, greppable traces when debug mode is on. They audit which WAM logic is loaded, which is skipped, and what runtime decisions were made — useful for benchmarking, regression detection and logic-gap analysis.
 

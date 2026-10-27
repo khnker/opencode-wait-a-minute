@@ -39,8 +39,10 @@ export function loadTaskState(root) {
   if (fs.existsSync(aggPath)) {
     try {
       fileState = JSON.parse(fs.readFileSync(aggPath, "utf-8")) || {};
-    } catch {
-      fileState = {};
+    } catch (err) {
+      throw new Error(
+        `Corrupt WAM task-state.json at ${aggPath}: ${err.message}`
+      );
     }
   }
 
@@ -68,11 +70,16 @@ export function loadTaskState(root) {
     const live = loadTask(taskId, root);
     if (!live) continue;
     const liveStatus = normalizeStatus(live.status);
-    if (!isValidStatus(liveStatus)) {
-      // Skip per-task files with an unrecognized status; the per-task file
-      // is the source of truth and we do not want to inject bad data into
-      // the aggregated view.
+    if (!live.status) {
+      // Live task-state files are phase-based (`phase`, `contract`) and have no
+      // top-level `status`. They belong to a different store; skip them instead
+      // of treating them as corrupt runner tasks.
       continue;
+    }
+    if (!isValidStatus(liveStatus)) {
+      throw new Error(
+        `Task ${taskId} has invalid status "${live.status}" in ${path.join(root, ".wam", "tasks", taskId, "task.json")}`
+      );
     }
     tasks[taskId] = {
       ...(tasks[taskId] || {}),
@@ -99,7 +106,17 @@ export function saveTaskState(root, fileState) {
   const normalized = normalizeStateFile(fileState);
   const aggPath = aggregatedStatePath(root);
   fs.mkdirSync(path.dirname(aggPath), { recursive: true });
-  fs.writeFileSync(aggPath, JSON.stringify(normalized, null, 2));
+  const tmpPath = path.join(
+    path.dirname(aggPath),
+    `.${path.basename(aggPath)}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
+  try {
+    fs.writeFileSync(tmpPath, JSON.stringify(normalized, null, 2));
+    fs.renameSync(tmpPath, aggPath);
+  } catch (err) {
+    try { fs.rmSync(tmpPath, { force: true }); } catch {}
+    throw err;
+  }
   return normalized;
 }
 
@@ -165,9 +182,6 @@ export function validateStateFile(fileState) {
     return { valid: false, error: "Missing tasks" };
   }
   const taskIds = Object.keys(tasks);
-  if (taskIds.length === 0) {
-    return { valid: false, error: "No tasks defined" };
-  }
   for (const taskId of taskIds) {
     const status = normalizeStatus(tasks[taskId]?.status);
     if (!status) {

@@ -90,7 +90,7 @@ test("no infiere skills para un prompt sin coincidencias", () => {
 });
 
 test("MINIMAL no incluye skills on-demand; RIGOROUS amplia el limite a 5", () => {
-  const many = Array.from({ length: 8 }, (_, i) => ({ id: `skill-${i}`, capabilities: ["alpha", "beta"], keywords: ["gamma"] }));
+  const many = Array.from({ length: 8 }, (_, i) => ({ id: `skill-${i}`, capabilities: [`alpha-${i}`, "beta"], keywords: ["gamma"] }));
   const registry = makeRegistry(many);
   const prompt = "alpha beta gamma";
 

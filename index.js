@@ -164,13 +164,14 @@ function genPartId() {
   return s;
 }
 
-// Inyecta texto visible al frente del mensaje de usuario; fallback a .system (API vieja).
+// Mantiene los mensajes de WAM ocultos del chat del usuario; se registran internamente y aparecen en el resumen final.
 function emitTextPart(output, text, meta = {}) {
   if (!output) return { status: "error", reason: "no-output" };
   let prefixedText = `[wam] ${text}`;
   if (meta.phase) {
     prefixedText += ` Etapa actual: ${meta.phase}.`;
   }
+  wamLog(prefixedText);
   const part = {
     id: genPartId(),
     type: "text",
@@ -178,22 +179,14 @@ function emitTextPart(output, text, meta = {}) {
     ...(meta.sessionID ? { sessionID: meta.sessionID } : {}),
     ...(meta.messageID ? { messageID: meta.messageID } : {}),
   };
-  // Support both shapes: output.parts/system or output.message.parts/system
-  let sink = null;
-  if (Array.isArray(output?.parts)) {
-    sink = output.parts;
-  } else if (Array.isArray(output?.system)) {
-    sink = output.system;
-  } else if (Array.isArray(output?.message?.parts)) {
-    sink = output.message.parts;
-  } else if (Array.isArray(output?.message?.system)) {
-    sink = output.message.system;
-  }
-  if (!sink) {
-    wamWarn(`[WAM] emitTextPart: no valid sink (parts/system) for injection`);
-    return { status: "unsupported-output-shape", reason: "missing-parts-or-system" };
-  }
-  injectWamParts(output, [part], { messageID: meta.messageID, phase: "emit", idFactory: genPartId, position: "prepend" });
+  injectWamParts(output, [part], {
+    messageID: meta.messageID,
+    sessionID: meta.sessionID,
+    phase: "emit",
+    idFactory: genPartId,
+    position: "prepend",
+    synthetic: false,
+  });
   return { status: "inserted" };
 }
 
@@ -206,7 +199,11 @@ function truncate(text, max = 80) {
 
 function nextActionFrom(state) {
   const pending = (state?.requirements || []).find((r) => !["done", "verified"].includes(r.status));
-  if (pending) return `Implementar ${truncate(pending.title)} (${pending.id} ${pending.status})`;
+  if (pending) {
+    const title = truncate(pending.title);
+    const label = /^[A-ZÁÉÍÓÚÑ]/.test(title) ? title : `Implementar ${title}`;
+    return `${label} (${pending.id} ${pending.status})`;
+  }
   const unverified = (state?.requirements || []).find((r) => r.status === "done");
   if (unverified) return `Verificar ${truncate(unverified.title)} — /wam progress ${unverified.id} verified <evidencia>`;
   if (state?.requirements?.length) return "Verificar requisitos completos antes de DONE";
@@ -413,19 +410,14 @@ function effectiveTaskId(input, sessionTasks, wamRoot, promptText) {
   const cached = sessionTasks?.get?.(input?.sessionID);
   if (cached) return { taskId: cached, fallbackKind: "cached" };
   
-  // Priority 3 (revised): Session-owned active task — only adopt if this
-  // sessionID already has a cached entry in sessionTasks (i.e. this is a
-  // continuation of an existing session, not a brand-new session). When
-  // sessionTasks has no record for sessionID, skip the active-task read so
-  // the session starts fresh and the welcome message appears.
-  const hasSessionEntry = sessionTasks?.has?.(input?.sessionID);
-  if (hasSessionEntry) {
-    const fresh = readActiveTaskIdFresh(wamRoot, {
-      sessionId: input?.sessionID,
-      projectRoot: wamRoot,
-    });
-    if (fresh) return { taskId: fresh, fallbackKind: "active" };
-  }
+  // Priority 3: Session-owned active task. A matching sessionId adopts the
+  // task without TTL (survives restarts); a legacy record without sessionId
+  // adopts only within the 60s TTL; another session's record is rejected.
+  const fresh = readActiveTaskIdFresh(wamRoot, {
+    sessionId: input?.sessionID,
+    projectRoot: wamRoot,
+  });
+  if (fresh) return { taskId: fresh, fallbackKind: "active" };
   
   // Priority 4: Derive slug ONLY for new task creation (not continuation)
   // Prompts NO continuación y con sustantivo descriptivo → derivar slug.
@@ -747,6 +739,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
 
   // Track if plugin is bypassed
   let bypassed = false;
+  const sessionBypasses = new Set();
 
   // Multi-repo: root real de cada sesión. La factory del plugin V1 es GLOBAL
   // al server (pluginInput.directory = cwd donde se lanzó opencode), pero cada
@@ -885,7 +878,7 @@ refresh();
     if (sessionRoots.has(sessionID)) return sessionRoots.get(sessionID);
     let base = projectDirectory;
     try {
-      const info = client?.session?.get && sessionID ? await client.session.get({ sessionID }) : null;
+      const info = client?.session?.get && sessionID ? await client.session.get({ sessionID, path: { id: sessionID } }) : null;
       if (info?.location?.directory) base = info.location.directory;
       const parent = info?.parentID || info?.parent_id || info?.parent?.id;
       if (parent) sessionParents.set(sessionID, parent);
@@ -930,8 +923,8 @@ refresh();
 async function postToolExecution(input, output) {
   const toolName = input?.tool || "";
   try {
-    if (bypassed) return;
     const sid = input?.sessionID;
+    if (bypassed || (sid && sessionBypasses.has(sid))) return;
     const taskRoot = await resolveSessionBase(sid);
     const taskId = sessionTasks.get(sid) || readActiveTaskIdFresh(taskRoot, { sessionId: sid, projectRoot: taskRoot }) || "default-task";
     const wamRoot = taskRoot;
@@ -991,6 +984,7 @@ async function postToolExecution(input, output) {
     "chat.message": (input, output) => {
       const pending = handleMessage(input, output, {
         bypassed,
+        sessionBypasses,
         sessionTasks,
         sessionStore,
         cfg,
@@ -1073,6 +1067,7 @@ async function postToolExecution(input, output) {
                 injectCanonicalProjectContext(output, {
                   root,
                   taskId,
+                  sessionID: sid,
                   messageID: output?.message?.id || input?.messageID,
                 });
               }
@@ -1091,8 +1086,11 @@ async function postToolExecution(input, output) {
       const argsArr = Array.isArray(input.arguments)
         ? input.arguments
         : (typeof input.arguments === "string" ? input.arguments.split(/\s+/) : []);
-      const wamText = await wamCli(argsArr, cfg, root, taskKey, sid);
-      emitTextPart(output, wamText, { sessionID: sid, messageID: output.message?.id || input.messageID });
+       const wamText = await wamCli(argsArr, cfg, root, taskKey, sid, sessionBypasses);
+      if (sid && argsArr[0] === "task" && argsArr[1] === "switch" && argsArr[2]) {
+        sessionTasks.set(sid, argsArr[2]);
+      }
+      emitTextPart(output, wamText, { sessionID: sid, messageID: output.message?.id || input.messageID, visible: true });
     },
 
     // Enforce Clarification Gate (spec change 4): en ASKING se bloquean las
@@ -1106,8 +1104,8 @@ async function postToolExecution(input, output) {
       let taskId;
       let st;
       try {
-        if (bypassed) return;
         sid = input?.sessionID;
+        if (bypassed || (sid && sessionBypasses.has(sid))) return;
         // Mismo root que chat.message (wamRootFor/ensureWamMemory): si el gate
         // leyera resolveSessionBase() y chat.message escribiera en otro root,
         // el estado leido no coincidiria con el escrito (misfire o bypass).
@@ -1342,8 +1340,17 @@ function classifyAskingMessage(text = "") {
  * /wam CLI — opencode 1.18.25 entrega comandos vía command.execute.before,
  * no vía ctx.command. Lógica extraída del handler antiguo.
  */
-async function wamCli(args, cfg = {}, root = process.cwd(), taskId = readActiveTaskId(root) || "default-task", sessionID = null) {
+async function wamCli(args, cfg = {}, root = process.cwd(), taskId = readActiveTaskId(root) || "default-task", sessionID = null, sessionBypasses = new Set()) {
   const [sub, action, ...rest] = args || [];
+
+  if (sub === "off") {
+    if (sessionID) sessionBypasses.add(sessionID);
+    return "WAM desactivado (bypassed) para esta sesión. Usa `/wam on` para reactivarlo.";
+  }
+  if (sub === "on") {
+    if (sessionID) sessionBypasses.delete(sessionID);
+    return "WAM activado nuevamente.";
+  }
 
   if (sub === "config") {
     if (action === "path") return path.join(root, ".wam", "config.json");
@@ -1963,6 +1970,7 @@ const waitAMinute = {
       status: "ACTIVE",
     };
     persistTaskState(taskId, state, root);
+    try { createSnapshot(taskId, state, root); } catch {}
     try {
       updateLiveContext(taskId, state, root);
     } catch {}

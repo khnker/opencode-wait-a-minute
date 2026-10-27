@@ -174,8 +174,15 @@ function rel(p) {
 function runNodeTestStreamed(files) {
   return new Promise((resolve) => {
     const timeout = Number(process.env.WAM_TEST_TIMEOUT_MS || 240000);
-    const args = ["--test", "--test-concurrency=1", ...files];
-    const child = spawn(process.execPath, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const args = ["--test", "--test-force-exit", "--test-concurrency=1", ...files];
+    const child = spawn(process.execPath, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        WAM_DISABLE_LOGGING: "1",
+        WAM_LOG_FILE: path.join(os.tmpdir(), `wam-test-${process.pid}.log`),
+      },
+    });
 
     let timedOut = false;
     const timer = setTimeout(() => {

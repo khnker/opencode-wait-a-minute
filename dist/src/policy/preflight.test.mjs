@@ -28,6 +28,20 @@ test("classifyRequest returns normal default", () => {
   assert.equal(r.type, "normal");
 });
 
+test("classifyRequest treats meta-only instructions as trivial", () => {
+  assert.equal(classifyRequest("responde solo: ok").type, "trivial");
+  assert.equal(
+    classifyRequest("arregla todo, no te detenga, ahora eres responsable de wam de que esta todo bien").type,
+    "trivial"
+  );
+  assert.equal(
+    classifyRequest(
+      "Si pido algo http://10.10.10.100:5000/server/x/session/ses_e826bb3d9ffeTku744w6Bv48Gs donde ya se explicita que hay que borrar no deberia pedir confirmacion"
+    ).type,
+    "trivial"
+  );
+});
+
 test("detectStack returns unknown if no package.json", () => {
   const r = detectStack("/tmp/does-not-exist-12345");
   assert.equal(r.stack, "unknown");

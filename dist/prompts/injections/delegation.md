@@ -11,4 +11,4 @@ verification: src/prompts/characterization.test.mjs
 dependencies: []
 status: active
 ---
-[wam delegation] Reqs pendientes → delegar en PARALELO via Task (agente: el apropiado según config del entorno). Mutación directa de archivos desde la sesión principal está BLOQUEADA — solo un subagente ejecuta write/edit.
+[wam delegation] Reqs pendientes → delegar en PARALELO via Task (agente: el apropiado según config del entorno). Mutación directa de archivos desde la sesión principal está BLOQUEADA — solo un subagente ejecuta write/edit. Fallback: si un dispatch Task falla (modelo/agente no disponible) → reintentar secuencial → tier más barato → inline con evidencia. Nunca abortar en silencio por fallo de delegación.

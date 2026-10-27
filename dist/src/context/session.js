@@ -1,2 +1,2 @@
-import { getSessionId } from "./context.js";
-export { getSessionId };
+import { getSessionId, sessionIdFromOpenCode, setActiveSession } from "./context.js";
+export { getSessionId, sessionIdFromOpenCode, setActiveSession };

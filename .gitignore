@@ -24,3 +24,7 @@ prompts/audit-report.*
 
 # Local benchmark secrets/credentials
 .env
+
+.playwright-mcp/
+
+vendor/context-query-core/src/*.ndjson

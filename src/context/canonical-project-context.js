@@ -328,7 +328,7 @@ export function loadCanonicalProjectContext(root) {
  * @param {{ root?: string, taskId?: string, messageID?: string, phase?: string, previousTaskId?: string }} [params]
  * @returns {{ injected: boolean, reason?: string, tokens?: number }}
  */
-export function injectCanonicalProjectContext(output, { root, taskId, messageID, phase, previousTaskId } = {}) {
+export function injectCanonicalProjectContext(output, { root, taskId, messageID, sessionID, phase, previousTaskId } = {}) {
   if (!taskId) return { injected: false, reason: "no active task" };
   if (previousTaskId && previousTaskId === taskId) {
     return { injected: false, reason: "continuation message" };
@@ -350,6 +350,6 @@ export function injectCanonicalProjectContext(output, { root, taskId, messageID,
   if (sink.some((p) => typeof p?.text === "string" && p.text.includes(CPC_MARKER))) {
     return { injected: false, reason: "already injected", tokens: prepared.tokens };
   }
-  injectWamParts(output, prepared.text, { messageID, phase: "cpc", position: "append" });
+  injectWamParts(output, prepared.text, { messageID, sessionID, phase: "cpc", position: "append" });
   return { injected: true, tokens: prepared.tokens };
 }

@@ -1,9 +1,0 @@
-{
-  "id": "notice.new_intent",
-  "vars": {},
-  "mustContain": [
-    "Nueva intención detectada",
-    "Abriendo tarea nueva"
-  ],
-  "mustNotContain": []
-}

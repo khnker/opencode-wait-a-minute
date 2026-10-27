@@ -117,9 +117,12 @@ export function estimateCandidates(predClass, store) {
 
 // D12 — telemetría: append NDJSON a engine/telemetry.ndjson (incluye predicate_class)
 export function recordExecution(queryType, tool, metrics = {}, predClass = queryType) {
-  fs.mkdirSync(path.dirname(TELEMETRY), { recursive: true });
   const rec = { ts: new Date().toISOString(), query_type: queryType, predicate_class: predClass, tool, ...metrics };
-  fs.appendFileSync(TELEMETRY, JSON.stringify(rec) + '\n');
+  // Telemetry is best-effort: a read-only store must never fail a query.
+  try {
+    fs.mkdirSync(path.dirname(TELEMETRY), { recursive: true });
+    fs.appendFileSync(TELEMETRY, JSON.stringify(rec) + '\n');
+  } catch {}
   return rec;
 }
 

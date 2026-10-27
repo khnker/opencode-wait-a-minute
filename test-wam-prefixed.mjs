@@ -6,7 +6,7 @@ import os from "node:os";
 
 import WaitAMinutePlugin from "./index.js";
 
-test("emitTextPart inyecta prefijo [wam] al frente del texto visible en partes sintéticas", async () => {
+test("emitTextPart mantiene mensajes ocultos del chat visible", async () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "wam-test-"));
 
   const plugin = await WaitAMinutePlugin({
@@ -32,18 +32,8 @@ test("emitTextPart inyecta prefijo [wam] al frente del texto visible en partes s
 
   await plugin["chat.message"](input, output);
 
-  const syntheticParts = output.parts.filter(p => p.synthetic === true);
-  assert.ok(syntheticParts.length > 0, "WAM debe inyectar al menos una parte sintética");
-
-  for (const part of syntheticParts) {
-    if (part.type === "text" && part.text) {
-      assert.ok(
-        part.text.startsWith("[wam] "),
-        `Parte sintética debe empezar con "[wam] ", recibió: "${part.text.slice(0, 40)}..."`,
-      );
-      assert.ok(part.metadata?.wam === true, "Parte sintética debe tener metadata.wam=true");
-    }
-  }
+  const syntheticParts = (output.parts || []).filter(p => p.synthetic === true);
+  assert.equal(syntheticParts.length, 0, "No debe inyectar partes sintéticas visibles en el chat");
 });
 
 test("no hay texto emitido sin prefijo [wam] en las partes sintéticas del flujo chat.message", async () => {
