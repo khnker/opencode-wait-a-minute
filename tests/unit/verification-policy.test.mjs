@@ -198,6 +198,8 @@ describe("confirmCompletion", () => {
   it("imprime el resumen de token savings cuando DONE está confirmado y projectRoot presente", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wam-confirm-"));
     const metricsDir = path.join(tmp, ".wam", "metrics");
+    const prevMetricsDir = process.env.WAM_METRICS_DIR;
+    process.env.WAM_METRICS_DIR = metricsDir;
     fs.mkdirSync(metricsDir, { recursive: true });
     fs.writeFileSync(
       path.join(metricsDir, "token-savings.json"),
@@ -205,6 +207,8 @@ describe("confirmCompletion", () => {
         {
           taskId: "final-task",
           timestamp: Date.now(),
+          claimable: true,
+          usageSource: "provider",
           actualTokens: 50,
           baselineTokens: 5000,
           savingsPct: 99,
@@ -227,19 +231,24 @@ describe("confirmCompletion", () => {
     };
 
     const captured = [];
-    const result = confirmCompletion(task, {
-      projectRoot: tmp,
-      logger: { log: (line) => captured.push(line) },
-    });
+    try {
+      const result = confirmCompletion(task, {
+        projectRoot: tmp,
+        logger: { log: (line) => captured.push(line) },
+      });
 
-    fs.rmSync(tmp, { recursive: true, force: true });
+      fs.rmSync(tmp, { recursive: true, force: true });
 
-    assert.equal(result.blocked, false);
-    assert.equal(captured.length, 1);
-    assert.equal(
-      captured[0],
-      "[WAM Token Savings] Task final-task saved 99% tokens: 4950 tokens saved vs baseline"
-    );
+      assert.equal(result.blocked, false);
+      assert.equal(captured.length, 1);
+      assert.equal(
+        captured[0],
+        "[WAM Token Savings] Task final-task saved 99% tokens: 4950 tokens saved vs measured baseline (provider usage)"
+      );
+    } finally {
+      if (prevMetricsDir === undefined) delete process.env.WAM_METRICS_DIR;
+      else process.env.WAM_METRICS_DIR = prevMetricsDir;
+    }
   });
 
   it("no imprime nada cuando la tarea sigue bloqueada", () => {

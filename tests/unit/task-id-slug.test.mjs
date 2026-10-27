@@ -285,3 +285,18 @@ test("session binding: otra sesión NO adopta el active-task ajeno", () => {
   assert.notStrictEqual(resolved.taskId, "task-ajena-sess-s9");
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+test("effectiveTaskId: subagent dispatch does NOT derive a slug task", () => {
+  const root = makeRoot();
+  const sessionTasks = new Map();
+  const resolved = effectiveTaskId(
+    { sessionID: "sub12345" },
+    sessionTasks,
+    root,
+    "You are @fast. Execute this dispatch yourself; investigate the router config",
+    true,
+  );
+  assert.strictEqual(resolved.taskId, "ses-sub12345");
+  assert.strictEqual(resolved.fallbackKind, "session");
+  fs.rmSync(root, { recursive: true, force: true });
+});

@@ -16,7 +16,7 @@ const tmpdir = os.tmpdir();
 import { classifyRequest, isMetaOnlyPrompt } from "../policy/request-classifier.js";
 import { classifyIntentLane } from "../policy/intent-router.js";
 import { detectStack } from "../policy/project-inspector.js";
-import { classifyUncertainty, buildUncertainties, buildAssumptions } from "../policy/uncertainty.js";
+import { classifyUncertainty, buildUncertainties, buildAssumptions, isExplicitInstruction } from "../policy/uncertainty.js";
 import { discoverSkills } from "../policy/skill-routing.js";
 import { loadPrompt } from "../prompts/loader.js";
 import { calculateFreshnessScore } from "../evidence/evidence-freshness.js";
@@ -850,6 +850,9 @@ function _routeSkillsV2Impl(prompt, projectInfo, registry, mode, options = {}) {
   const baseSkills = []; // always-selected skills (loadStrategy: "base")
   const idf = buildSkillIdf(registry);
   const outcomes = loadSkillOutcomes(options.projectRoot || process.cwd());
+  const minSkillScore = Number.isFinite(Number(options.minSkillScore))
+    ? Number(options.minSkillScore)
+    : 4;
 
   for (const [id, skill] of Object.entries(registry)) {
     if (!APPROVED_STATUSES.includes(skill.status)) {
@@ -876,7 +879,7 @@ function _routeSkillsV2Impl(prompt, projectInfo, registry, mode, options = {}) {
     }
 
     const score = scoreSkill(skill, lower, options.weights, idf, outcomes);
-    if (score > 0) {
+    if (score > 0 && score >= minSkillScore) {
       candidates.push({
         id,
         name: skill.name || id,
@@ -1175,7 +1178,7 @@ function auditAssumptions(prompt, projectInfo) {
   const lower = prompt.toLowerCase();
 
   // If user mentions "add X" without context
-  if (/agregar|add/.test(lower) && !/ya tiene|already has/.test(lower)) {
+  if (/agregar|add/.test(lower) && !isExplicitInstruction(prompt) && !/ya tiene|already has/.test(lower)) {
     assumptions.push("El usuario asume que se necesita agregar nueva funcionalidad");
   }
 
@@ -1420,7 +1423,7 @@ export function escalateAssumptions(state, taskText = "") {
 
   for (const a of assumptions) {
     if (a.status === "active" && a.classification === "NON_BLOCKING") {
-      const taskImpact = !!taskText && ASSUMPTION_IMPACT.test(taskText);
+      const taskImpact = !!taskText && ASSUMPTION_IMPACT.test(taskText) && !isExplicitInstruction(taskText);
       const genericAssumption = /funcionalidad|agregar nueva|nueva funcionalidad|add support|add.*support/i.test(a.statement);
       const cls =
         classifyAssumption(a.statement) === "DECISION_CRITICAL" ||
@@ -1634,12 +1637,19 @@ export function synthesizeContract(prompt = "", mode = "NORMAL", uncertainties =
   if ((prompt || "").length > 2000) {
     const isSpec = /\b(spec|specification|propuesta|propuesto|objetivo|alcance|requisitos?|criterios?|edge cases?|api|endpoint|flujo principal)\b/i.test(lower);
     if (isSpec) {
-      requirements.push("Implementar funcionalidad según la especificación");
-      if (/test|prueba|suite/i.test(lower)) {
+      for (const rawReq of contractToRequirements(extractContract(prompt))) {
+        if (requirements.length >= MAX_CONTRACT_REQUIREMENTS) break;
+        const req = rawReq.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim();
+        if (!req || req.length < 3) continue;
+        if (NON_ACTIONABLE_PATTERNS.some((p) => p.test(req))) continue;
+        requirements.push(req);
+      }
+      if (requirements.length === 0) requirements.push("Implementar funcionalidad según la especificación");
+      if (/test|prueba|suite/i.test(lower) && requirements.length < MAX_CONTRACT_REQUIREMENTS) {
         requirements.push("Agregar tests para el cambio");
         verification.push("Ejecutar suite de tests relevante");
       }
-      if (/security|seguridad|auth|oauth|token/i.test(lower)) {
+      if (/\b(security|seguridad|auth|oauth|jwt|api[_-]?key|secret|password)\b/i.test(lower) && requirements.length < MAX_CONTRACT_REQUIREMENTS) {
         requirements.push("Auditar seguridad del cambio");
         verification.push("Revisar superficie de autenticación/secretos");
       }
@@ -1689,7 +1699,7 @@ export function synthesizeContract(prompt = "", mode = "NORMAL", uncertainties =
     requirements.push("Invalidar/rotar credenciales anteriores");
     verification.push("Verificar integridad de datos post-migración");
   }
-  if (/security|seguridad|auth|oauth|token/i.test(lower) && requirements.length < MAX_CONTRACT_REQUIREMENTS) {
+  if (/\b(security|seguridad|auth|oauth|jwt|api[_-]?key|secret|password)\b/i.test(lower) && requirements.length < MAX_CONTRACT_REQUIREMENTS) {
     requirements.push("Auditar seguridad del cambio");
     verification.push("Revisar superficie de autenticación/secretos");
   }

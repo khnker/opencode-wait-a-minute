@@ -43,6 +43,22 @@ export function buildUncertainties(assumed = [], unknown = []) {
 const ASSUMPTION_IMPACT =
   /elim|delet|borr|actualiz|update|schema|esquema|migraci|endpoint|api|arquitectur|estructura|m[oó]dulo|seguridad|auth|token|compatib|breaking|alcance|scope|destructiv|data.?loss|aceptaci[oó]n|criterios/i;
 
+const EXPLICIT_PATH_RE = /(?:[\w.-]+\/)+[\w.-]+|[\w.-]+\.(?:js|mjs|cjs|ts|tsx|jsx|json|md|py|yml|yaml|sh)\b/;
+
+/**
+ * Una instrucción es explícita cuando trae destinatario, rutas o un plan
+ * accionable: en ese caso no hay que preguntar por supuestos genéricos.
+ * Determinista y deliberadamente conservador.
+ */
+export function isExplicitInstruction(text = "") {
+  const s = String(text || "").trim();
+  if (!s) return false;
+  if (/^\[router\]/i.test(s)) return true;
+  const hasPath = EXPLICIT_PATH_RE.test(s);
+  const planLines = (s.match(/^\s*(?:[-*]|\d+[.)])\s+/gm) || []).length;
+  return hasPath && (planLines >= 2 || s.length >= 200);
+}
+
 /** Clasifica una asunción: DECISION_CRITICAL si toca impacto material. */
 export function classifyAssumption(statement = "") {
   return ASSUMPTION_IMPACT.test(statement) ? "DECISION_CRITICAL" : "NON_BLOCKING";
@@ -77,7 +93,7 @@ export function escalateAssumptions(state, taskText = "") {
 
   for (const a of assumptions) {
     if (a.status === "active" && a.classification === "NON_BLOCKING") {
-      const taskImpact = !!taskText && ASSUMPTION_IMPACT.test(taskText);
+      const taskImpact = !!taskText && ASSUMPTION_IMPACT.test(taskText) && !isExplicitInstruction(taskText);
       const genericAssumption = /funcionalidad|agregar nueva|nueva funcionalidad|add support|add.*support/i.test(a.statement);
       const cls =
         classifyAssumption(a.statement) === "DECISION_CRITICAL" ||

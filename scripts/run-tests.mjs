@@ -181,6 +181,7 @@ function runNodeTestStreamed(files) {
         ...process.env,
         WAM_DISABLE_LOGGING: "1",
         WAM_LOG_FILE: path.join(os.tmpdir(), `wam-test-${process.pid}.log`),
+        WAM_METRICS_DIR: path.join(os.tmpdir(), `wam-metrics-${process.pid}`),
       },
     });
 

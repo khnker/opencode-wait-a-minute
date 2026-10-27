@@ -166,12 +166,12 @@ test("handleMessage: prompt vacío → no-op (no inyecta parts)", async () => {
 });
 
 test("handleMessage: gate.allDone → confirmCompletion token-savings summary inyectada en output", async () => {
-  // Pre-create a token-savings record so printTokenSavingsSummary has something to emit.
-  const metricsDir = path.join(ROOT, ".wam", "metrics");
-  fs.mkdirSync(metricsDir, { recursive: true });
+  const metricsDir = fs.mkdtempSync(path.join(os.tmpdir(), "wam-metrics-"));
+  const prevMetricsDir = process.env.WAM_METRICS_DIR;
+  process.env.WAM_METRICS_DIR = metricsDir;
   fs.writeFileSync(
     path.join(metricsDir, "token-savings.json"),
-    JSON.stringify([{ taskId: "t-done", savingsPct: 42, savingsTokens: 1234 }]),
+    JSON.stringify([{ taskId: "t-done", claimable: true, usageSource: "provider", savingsPct: 42, savingsTokens: 1234 }]),
     "utf-8",
   );
 
@@ -198,25 +198,31 @@ test("handleMessage: gate.allDone → confirmCompletion token-savings summary in
     };
   };
 
-  const out = { message: {}, parts: [] };
-  await handleMessage(
-    {
-      sessionID: "s-done",
-      messageID: "m-done",
-      message: { parts: [{ type: "text", text: "implementa X" }] },
-    },
-    out,
-    deps,
-  );
+  try {
+    const out = { message: {}, parts: [] };
+    await handleMessage(
+      {
+        sessionID: "s-done",
+        messageID: "m-done",
+        message: { parts: [{ type: "text", text: "implementa X" }] },
+      },
+      out,
+      deps,
+    );
 
-  const injected = out.parts.map((p) => p.text).join("\n");
-  assert.match(injected, /\[WAM Token Savings\] Task t-done saved 42% tokens/);
+    const injected = out.parts.map((p) => p.text).join("\n");
+    assert.match(injected, /\[WAM Token Savings\] Task t-done saved 42% tokens: 1234 tokens saved vs measured baseline \(provider usage\)/);
+  } finally {
+    if (prevMetricsDir === undefined) delete process.env.WAM_METRICS_DIR;
+    else process.env.WAM_METRICS_DIR = prevMetricsDir;
+  }
 });
 
 test("handleMessage: cqe file_context → actualiza cqeCalls y persiste estado", async () => {
   const deps = baseDeps();
   deps.selectContextWithCqe = async () => ({
     file_context: [{ path: "src/x.js", snippet: "const x = 1;" }],
+    cqeMeta: { elapsedMs: 1, source: "cqe" },
   });
   deps.detectFileSearchIntent = () => true;
   deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: false });
@@ -234,6 +240,53 @@ test("handleMessage: cqe file_context → actualiza cqeCalls y persiste estado",
 
   const state = getTaskState(deps.sessionTasks.get("s-cqe") || "t-cqe", ROOT);
   assert.equal(state.cqeCalls, 1);
+});
+
+test("handleMessage: cqe sin resultados → también cuenta la llamada", async () => {
+  const deps = baseDeps();
+  deps.selectContextWithCqe = async () => ({
+    file_context: [],
+    cqeMeta: { elapsedMs: 1, source: null, fallbackUsed: true, fallbackReason: "sin resultados" },
+  });
+  deps.detectFileSearchIntent = () => true;
+  deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: false });
+
+  const out = { message: {}, parts: [] };
+  await handleMessage(
+    {
+      sessionID: "s-cqe-empty",
+      messageID: "m-cqe-empty",
+      message: { parts: [{ type: "text", text: "search for parseConfig definitions" }] },
+    },
+    out,
+    deps,
+  );
+
+  const state = getTaskState(deps.sessionTasks.get("s-cqe-empty") || "t-cqe-empty", ROOT);
+  assert.equal(state.cqeCalls, 1);
+  assert.ok(out.parts.some((p) => String(p.text || "").includes("sin resultados")));
+});
+
+test("handleMessage: disableCqe → no incrementa cqeCalls", async () => {
+  const deps = baseDeps();
+  deps.cfg.disableCqe = true;
+  deps.selectContextWithCqe = async () => ({ file_context: [] });
+  deps.detectFileSearchIntent = () => true;
+  deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: false });
+
+  const out = { message: {}, parts: [] };
+  await handleMessage(
+    {
+      sessionID: "s-cqe-off",
+      messageID: "m-cqe-off",
+      message: { parts: [{ type: "text", text: "search for parseConfig definitions" }] },
+    },
+    out,
+    deps,
+  );
+
+  const state = getTaskState(deps.sessionTasks.get("s-cqe-off") || "t-cqe-off", ROOT);
+  assert.equal(state?.cqeCalls || 0, 0);
 });
 
 test("handleMessage: bypassed=true → no-op", async () => {
@@ -313,4 +366,79 @@ test("handleMessage: errors en deps se loggean sin propagar", async () => {
 
 test.after(() => {
   try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch {}
+});
+
+// ---------------------------------------------------------------------------
+// WAM injection block: delimiters, ordering and single prefix
+// ---------------------------------------------------------------------------
+
+test("handleMessage emits a delimited, ordered [wam][start]/[wam][end] block first", async () => {
+  const deps = baseDeps();
+  const emissions = [];
+  const baseEmit = deps.emitTextPart;
+  deps.emitTextPart = (output, text, meta = {}) => {
+    emissions.push(text);
+    baseEmit(output, text, meta);
+  };
+  deps.assembleContext = () => ({
+    lines: ["[wam N0 policy] respetar AGENTS.md", "[wam skills] usar node-test"],
+    budget_used: 20,
+    budget: 4000,
+    levels: {},
+  });
+  deps.delegationLines = () => ["[wam delegation] req-1 pendiente → delegar en subagente"];
+  deps.waitAMinute = {
+    ...waitAMinute,
+    analyze: async () => ({
+      intent: { classification: "task", confidence: 90 },
+      strategy: "NORMAL",
+      ambiguity: "low",
+      project: { detected_stack: "node", architecture: "unknown", known: [], inferred: [], assumed: [], unknown: [] },
+      known: [],
+      inferred: [],
+      assumed: [],
+      unknown: [],
+      skills: { candidates: [], selected: [] },
+      persistentPolicies: [],
+      skillRegistry: {},
+      completionContract: {
+        status: "APPROVED",
+        objective: "implementar bloque de inyección wam",
+        rigor: "NORMAL",
+        requirements: ["implementa X", "agrega tests"],
+        verification: [],
+        constraints: [],
+        unknowns: [],
+        assumptions: [],
+      },
+      _summary: "stub",
+    }),
+  };
+
+  const out = { message: {}, parts: [] };
+  const input = {
+    sessionID: "s-wam-block",
+    messageID: "m-wam-block",
+    message: { parts: [{ type: "text", text: "implementa el bloque wam" }] },
+  };
+
+  await handleMessage(input, out, deps);
+
+  assert.ok(emissions.length > 0, "handleMessage emitted at least one part");
+  const block = emissions[emissions.length - 1];
+
+  assert.ok(block.startsWith("[wam][start]"), `block must start with [wam][start]: ${block.slice(0, 60)}`);
+  assert.ok(block.trimEnd().endsWith("[wam][end]"), `block must end with [wam][end]: ${block.slice(-60)}`);
+  assert.equal(out.parts[0].text, block, "block is emitted last and prepended to index 0");
+
+  const n0 = block.indexOf("[wam N0");
+  const skills = block.indexOf("[wam skills]");
+  const delegation = block.indexOf("[wam delegation]");
+  assert.ok(n0 >= 0, "context pack line [wam N0 ...] is present");
+  assert.ok(skills > n0, "skills follow the context pack");
+  assert.ok(delegation > skills, "context/skills precede delegation directives");
+
+  const lines = block.split("\n").filter((line) => line.trim());
+  assert.equal(lines[lines.length - 1], "[wam][end]", "[wam][end] is the last non-empty line");
+  assert.ok(!block.startsWith("[wam] [wam][start]"), "the block must not be double-prefixed");
 });

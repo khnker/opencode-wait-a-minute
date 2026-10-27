@@ -16,11 +16,15 @@
  */
 
 import fs from 'fs';
-import path from 'path';
 import { retrieveContext } from './context-retrieval.js';
+import { canonicalRoot, validatePath } from './path-validator.js';
 import { wamLog, wamWarn, isDebugEnabled } from '../shared/wam-log.js';
 
 const VALID_MODES = new Set(['disabled', 'shadow', 'enabled']);
+const DEFAULT_TIMEOUT_MS = 10000;
+const MIN_TIMEOUT_MS = 100;
+const MAX_TIMEOUT_MS = 30000;
+const MAX_ENGINES = 8;
 
 /**
  * Diagnostic logger for CQE failures. Activated only when debug mode is on
@@ -33,8 +37,8 @@ function cqeDebugWarn(category, message, detail) {
   wamWarn(category, message, detail);
 }
 
-let defaultEngine = null;
-let defaultEngineKey = null;
+// ponytail: bounded engine cache; evict oldest root when a session spans many repos.
+const engineCache = new Map();
 
 function resolveMode(explicit) {
   if (explicit != null && explicit !== '') {
@@ -91,16 +95,30 @@ export async function createCqeEngine(config = {}) {
   });
 }
 
-async function getDefaultEngine(repoRoot) {
-  const root = repoRoot || process.cwd();
-  if (!defaultEngine || defaultEngineKey !== root) {
-    defaultEngine = await createCqeEngine({ repoRoot: root });
-    defaultEngineKey = root;
+function getEngine(repoRoot) {
+  const key = canonicalRoot(repoRoot || process.cwd()) || process.cwd();
+  if (engineCache.has(key)) return engineCache.get(key);
+  const engine = createCqeEngine({ repoRoot: key }).catch((err) => {
+    engineCache.delete(key);
+    throw err;
+  });
+  engineCache.set(key, engine);
+  if (engineCache.size > MAX_ENGINES) engineCache.delete(engineCache.keys().next().value);
+  return engine;
+}
+
+function resolveTimeout(explicit) {
+  let ms = Number(explicit);
+  if (explicit == null || explicit === '' || !Number.isFinite(ms)) {
+    const env = process.env.WAM_CQE_TIMEOUT_MS;
+    const envMs = Number(env);
+    ms = env != null && env !== '' && Number.isFinite(envMs) ? envMs : DEFAULT_TIMEOUT_MS;
   }
-  return defaultEngine;
+  return Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, ms));
 }
 
 function withTimeout(promise, timeoutMs) {
+  // ponytail: the vendored query accepts no AbortSignal; a timeout discards the late result instead of aborting.
   if (!timeoutMs || timeoutMs <= 0) return promise;
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -157,7 +175,8 @@ const MAX_SNIPPET_LINES = 3;
 export function materializeSnippet(item, repoRoot) {
   if (item.content && item.content.trim()) return item;
   if (!item.path) return item;
-  const abs = path.isAbsolute(item.path) ? item.path : path.join(repoRoot || process.cwd(), item.path);
+  const abs = validatePath(item.path, repoRoot || process.cwd());
+  if (!abs) return item;
   try {
     const lines = fs.readFileSync(abs, 'utf8').split('\n');
     const start = Math.max(1, item.startLine ?? 1);
@@ -189,14 +208,16 @@ export function materializeSnippet(item, repoRoot) {
  */
 export async function retrieveWithCqe(queryText, constraints = {}) {
   const mode = resolveMode(constraints.mode);
+  const repoRoot = canonicalRoot(constraints.repoRoot || constraints.root || process.cwd()) || process.cwd();
   const startTime = Date.now();
   let cqeResult = null;
   let cqeError = null;
   let timedOut = false;
 
-  if (mode !== 'disabled' && queryText != null) {
+  if (mode !== 'disabled' && queryText != null && String(queryText).trim() !== '') {
     try {
-      const engine = await getDefaultEngine(constraints.repoRoot);
+      if (!fs.existsSync(repoRoot)) throw new Error(`CQE_ROOT_NOT_FOUND: ${repoRoot}`);
+      const engine = await getEngine(repoRoot);
       if (!engine) throw new Error('CQE_ENGINE_UNAVAILABLE');
       cqeResult = await withTimeout(
         engine.query(queryText, {
@@ -204,7 +225,7 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
           limit: constraints.maxResults,
           scope: constraints.scope,
         }),
-        constraints.timeoutMs
+        resolveTimeout(constraints.timeoutMs)
       );
     } catch (err) {
       cqeError = err;
@@ -237,6 +258,7 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
   const elapsedMs = Date.now() - startTime;
   const metadata = {
     mode,
+    repoRoot,
     empty: false,
     timedOut,
     cqeError: cqeError ? cqeError.message : null,
@@ -246,7 +268,7 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
   const rawResults = (cqeResult && Array.isArray(cqeResult.results)) ? cqeResult.results : [];
   const normalized = dedupe(
     rawResults.map((r, i) => normalizeItem(r, i, queryText, elapsedMs))
-  ).map(it => materializeSnippet(it, constraints.repoRoot));
+  ).map(it => materializeSnippet(it, repoRoot));
 
   if (mode === 'shadow') {
     wamLog('cqe-adapter', 'Shadow comparison', {
@@ -254,6 +276,8 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
       nativeCount: nativeResult.items.length,
       cqeCount: normalized.length,
       cqeError: metadata.cqeError,
+      elapsedMs,
+      timedOut,
     });
   }
 
@@ -291,12 +315,19 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
   }
 
   // disabled or shadow -> native context
+  const shadowFailed = mode === 'shadow' && Boolean(cqeError);
+  const shadowEmpty = mode === 'shadow' && !cqeError && normalized.length === 0;
   return {
     ...nativeResult,
     source: 'wam-native',
     cqeResult,
     cqeError: metadata.cqeError,
-    fallbackUsed: false,
-    metadata: { ...metadata, totalItems: nativeResult.total },
+    fallbackUsed: shadowFailed,
+    metadata: {
+      ...metadata,
+      totalItems: nativeResult.total,
+      ...(shadowFailed ? { fallbackReason: 'error' } : {}),
+      ...(shadowEmpty ? { fallbackReason: 'empty', empty: true } : {}),
+    },
   };
 }

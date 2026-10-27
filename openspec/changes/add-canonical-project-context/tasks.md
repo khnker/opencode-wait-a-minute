@@ -55,3 +55,11 @@
     idempotencia, inyección best-effort y rechazo de datos de sesión.
 19. [ ] Suite completa (`npm test`) antes de archivar: el working tree tiene fallos preexistentes
     por trabajo sin commitear (no atribuibles a este change).
+
+## Correcciones post-validación
+
+20. [x] Acotar `cpcInjectedTasks` con evicción FIFO (`CPC_INJECTION_CACHE_LIMIT`) y exponer
+    `resetCanonicalProjectContextState` para pruebas.
+21. [x] Eliminar el parámetro muerto `previousTaskId` y registrar los fallos de inyección
+    con `wamDebug` en `index.js`.
+22. [x] Tests de evicción FIFO y de posición append/etiqueta sintética del CPC (11/11 ✔).

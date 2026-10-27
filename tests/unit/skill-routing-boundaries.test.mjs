@@ -63,8 +63,28 @@ test("IDF penalizes ubiquitous keywords", () => {
   };
   const selected = routeSkillsV2("arch log", {}, big, "STANDARD").selected;
   const log = selected.find((s) => s.name === "log-reader");
-  const arch = selected.find((s) => s.name === "arch-0");
+  const arch = selected.find((s) => s.name === "arch-0") || { relevance: 0 };
+  assert.ok(log, "rare keyword must be selected");
   assert.ok(log.relevance > arch.relevance, "rare keyword must outrank ubiquitous keyword");
+});
+
+test("minSkillScore drops weak keyword-only matches", () => {
+  const registry = {};
+  for (let i = 0; i < 10; i++) {
+    registry[`arch-${i}`] = {
+      id: `arch-${i}`,
+      status: "APPROVED",
+      name: `arch-${i}`,
+      keywords: ["arch"],
+      capabilities: [],
+      domain: [],
+    };
+  }
+  assert.equal(routeSkillsV2("arch", {}, registry, "STANDARD").selected.length, 0);
+  assert.ok(
+    routeSkillsV2("arch", {}, registry, "STANDARD", { minSkillScore: 3 }).selected.length > 0,
+    "minSkillScore must be configurable"
+  );
 });
 
 test("outcome feedback adds a small bonus", async () => {

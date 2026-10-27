@@ -38,3 +38,12 @@ node scripts/prune-wam-artifacts.mjs --apply  # archive one-use test tasks/snaps
 - Validate at trust boundaries; fail loud on corrupt state, fail soft on diagnostics.
 - Keep user prompts immutable; injected context is synthetic and tagged.
 - Prefer bounded structures (logs, recent changes, memory) over unbounded growth.
+
+## Delegation rules
+
+- Independent work runs in parallel subagents, never serialized in the orchestrator.
+- Search, exploration and any read-only lookup go to the fast tier.
+- Coding goes to the tier that matches the diff: trivial edits and file reads to the fast
+  tier, multi-file or logic changes to the medium tier; heavy only for architecture and
+  deep debugging.
+- Sequential only when a step depends on another step's output.

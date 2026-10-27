@@ -31,9 +31,9 @@ export const SUBAGENT_TIER_MAP = Object.freeze({
   medium: "medium",
   heavy: "heavy",
   planner: "medium",
-  "backend-exec": "medium",
-  "frontend-exec": "medium",
-  debugger: "medium",
+  "backend-exec": "fast",
+  "frontend-exec": "fast",
+  debugger: "fast",
   "arch-review": "medium",
 });
 

@@ -12,9 +12,9 @@ import {
 
 const registry = {
   tiers: {
-    fast: ["omni/free-stack"],
-    medium: ["omni2/coding"],
-    heavy: ["omni2/coding-pro"],
+    fast: ["omni/fastllm"],
+    medium: ["omni/mediumllm"],
+    heavy: ["omni/heavy-free"],
   },
   activePreset: "omni",
 };
@@ -28,17 +28,21 @@ test("SUBAGENT_TIER_MAP covers all subagent types", () => {
   assert.strictEqual(SUBAGENT_TIER_MAP.fast, "fast");
   assert.strictEqual(SUBAGENT_TIER_MAP.medium, "medium");
   assert.strictEqual(SUBAGENT_TIER_MAP.heavy, "heavy");
-  assert.strictEqual(SUBAGENT_TIER_MAP["backend-exec"], "medium");
-  assert.strictEqual(SUBAGENT_TIER_MAP["frontend-exec"], "medium");
+  assert.strictEqual(SUBAGENT_TIER_MAP["backend-exec"], "fast");
+  assert.strictEqual(SUBAGENT_TIER_MAP["frontend-exec"], "fast");
   assert.strictEqual(SUBAGENT_TIER_MAP.planner, "medium");
-  assert.strictEqual(SUBAGENT_TIER_MAP.debugger, "medium");
+  assert.strictEqual(SUBAGENT_TIER_MAP.debugger, "fast");
   assert.strictEqual(SUBAGENT_TIER_MAP["arch-review"], "medium");
 });
 
 test("tierForSubagentType maps known types", () => {
   assert.strictEqual(tierForSubagentType("fast"), "fast");
   assert.strictEqual(tierForSubagentType("heavy"), "heavy");
-  assert.strictEqual(tierForSubagentType("backend-exec"), "medium");
+  assert.strictEqual(tierForSubagentType("backend-exec"), "fast");
+  assert.strictEqual(tierForSubagentType("frontend-exec"), "fast");
+  assert.strictEqual(tierForSubagentType("debugger"), "fast");
+  assert.strictEqual(tierForSubagentType("planner"), "medium");
+  assert.strictEqual(tierForSubagentType("arch-review"), "medium");
 });
 
 test("tierForSubagentType falls back to medium for unknown", () => {
@@ -66,7 +70,7 @@ test("demoteTier walks down the ladder", () => {
 test("resolveSubagentModel finds model in tier", () => {
   const r = resolveSubagentModel("fast", { registry });
   assert.strictEqual(r.ok, true);
-  assert.strictEqual(r.model, "omni/free-stack");
+  assert.strictEqual(r.model, "omni/fastllm");
   assert.strictEqual(r.tier, "fast");
 });
 
@@ -84,7 +88,7 @@ test("guardSubagentDispatch allows non-task tools", () => {
 test("guardSubagentDispatch allows fast subagent at depth 0", () => {
   const r = guardSubagentDispatch("task", { subagent_type: "fast" }, { registry, maxDepth: 1, depth: 0 });
   assert.strictEqual(r.allowed, true);
-  assert.strictEqual(r.model, "omni/free-stack");
+  assert.strictEqual(r.model, "omni/fastllm");
   assert.strictEqual(r.tier, "fast");
   assert.strictEqual(r.escalated, false);
 });
@@ -106,7 +110,7 @@ test("guardSubagentDispatch escalates tier after 2 consecutive failures", () => 
   assert.strictEqual(r.escalated, true);
   assert.strictEqual(r.baseTier, "fast");
   assert.strictEqual(r.effectiveTier, "medium");
-  assert.strictEqual(r.model, "omni2/coding");
+  assert.strictEqual(r.model, "omni/mediumllm");
   assert.match(r.reason, /escalated from fast to medium/);
 });
 
@@ -118,7 +122,7 @@ test("guardSubagentDispatch escalates from medium to heavy after 2 failures", ()
   );
   assert.strictEqual(r.escalated, true);
   assert.strictEqual(r.effectiveTier, "heavy");
-  assert.strictEqual(r.model, "omni2/coding-pro");
+  assert.strictEqual(r.model, "omni/heavy-free");
 });
 
 test("guardSubagentDispatch does not escalate at top tier", () => {
@@ -151,12 +155,29 @@ test("guardSubagentDispatch can disable escalation", () => {
   assert.strictEqual(r.effectiveTier, "fast");
 });
 
-test("guardSubagentDispatch maps backend-exec to medium tier", () => {
+test("guardSubagentDispatch maps execution agents to fast tier", () => {
+  for (const type of ["backend-exec", "frontend-exec", "debugger"]) {
+    const r = guardSubagentDispatch("task", { subagent_type: type }, { registry, maxDepth: 1, depth: 0 });
+    assert.strictEqual(r.baseTier, "fast", `${type} base tier`);
+    assert.strictEqual(r.model, "omni/fastllm", `${type} model`);
+  }
+});
+
+test("guardSubagentDispatch maps analysis agents to medium tier", () => {
+  for (const type of ["planner", "arch-review"]) {
+    const r = guardSubagentDispatch("task", { subagent_type: type }, { registry, maxDepth: 1, depth: 0 });
+    assert.strictEqual(r.baseTier, "medium", `${type} base tier`);
+    assert.strictEqual(r.model, "omni/mediumllm", `${type} model`);
+  }
+});
+
+test("guardSubagentDispatch escalates backend-exec from fast to medium after 2 failures", () => {
   const r = guardSubagentDispatch(
     "task",
     { subagent_type: "backend-exec" },
     { registry, maxDepth: 1, depth: 0, consecutiveFailures: 2 }
   );
-  assert.strictEqual(r.baseTier, "medium");
-  assert.strictEqual(r.effectiveTier, "heavy");
+  assert.strictEqual(r.baseTier, "fast");
+  assert.strictEqual(r.effectiveTier, "medium");
+  assert.strictEqual(r.model, "omni/mediumllm");
 });

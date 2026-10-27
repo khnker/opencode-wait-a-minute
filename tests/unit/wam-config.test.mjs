@@ -13,6 +13,7 @@ const ENV_KEYS = [
   "WAM_LOGGING", "WAM_SILENT", "WAM_DISABLE_LOGGING",
   "WAM_ENFORCEMENT", "WAM_GOVERNANCE", "WAM_BYPASS",
   "WAM_DEBUG", "WAM_DISABLE_DEBUG", "WAM_LOG_LEVEL", "WAM_CONFIG",
+  "WAM_AUTO_LOOP", "WAM_DISABLE_AUTO_LOOP",
 ];
 let saved = {};
 
@@ -80,7 +81,7 @@ test("WAM_GOVERNANCE=off / WAM_BYPASS disable enforcement", () => {
 
 test("config file is honored", () => {
   const cfg = loadWamConfig(tmpProject({ skills: false, logging: false, enforcement: false }));
-  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false, debug: true });
+  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false, debug: true, autoLoop: true });
 });
 
 test("env overrides config file", () => {
@@ -167,4 +168,14 @@ test("setLoggingEnabled gates console output", () => {
   }
   assert.equal(seen.length, 1);
   assert.deepEqual(seen[0], ["shown"]);
+});
+
+test("autoLoop defaults to true and honors file/env overrides", () => {
+  assert.equal(loadWamConfig(tmpProject()).autoLoop, true);
+  assert.equal(loadWamConfig(tmpProject({ autoLoop: false })).autoLoop, false);
+  process.env.WAM_AUTO_LOOP = "0";
+  assert.equal(loadWamConfig(tmpProject()).autoLoop, false);
+  delete process.env.WAM_AUTO_LOOP;
+  process.env.WAM_DISABLE_AUTO_LOOP = "1";
+  assert.equal(loadWamConfig(tmpProject()).autoLoop, false);
 });

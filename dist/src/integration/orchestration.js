@@ -16,6 +16,9 @@
 import { evaluateRequirement as evaluateRequirementChecks } from "../verification/verification.js";
 import { truncate } from "../execution/formatting.js";
 import { evaluateOutcome, OUTCOME_STATUSES } from "../verification/outcome-evaluator.js";
+import { nextActionFrom } from "../state/next-action.js";
+
+export { nextActionFrom };
 
 // ═══════════════════════════════════════════════════════════════
 // Completion-intent detection
@@ -115,34 +118,7 @@ export function canTransitionPhase(from, to) {
  * @param {Object} state - Estado de la tarea
  * @returns {string}
  */
-export function nextActionFrom(state) {
-  const pending = (state?.requirements || []).find(
-    (r) => !["done", "verified"].includes(r.status)
-  );
-  if (pending) {
-    const title = truncate(pending.title);
-    const label = /^[A-ZÁÉÍÓÚÑ]/.test(title) ? title : `Implementar ${title}`;
-    return `${label} (${pending.id} ${pending.status})`;
-  }
-  const unverified = (state?.requirements || []).find(
-    (r) =>
-      r.status === "done" ||
-      (r.status === "verified" && !(r.evidence || []).length)
-  );
-  if (unverified)
-    return `Verificar ${truncate(unverified.title)} — /wam progress ${unverified.id} verified <evidencia>`;
-  if (state?.requirements?.length) {
-    // If all requirements are verified with evidence, we are done
-    const allVerified = (state.requirements || []).every(
-      (r) => r.status === "verified" && (r.evidence || []).length > 0
-    );
-    if (allVerified) {
-      return "Tarea completa — contrato verificado";
-    }
-    return "Verificar requisitos completos antes de DONE";
-  }
-  return "Continuar tarea";
-}
+
 
 // ═══════════════════════════════════════════════════════════════
 // Completion Gate — evaluación pura

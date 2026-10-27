@@ -5,11 +5,13 @@ import os from "node:os";
 import path from "node:path";
 import {
   CPC_TOKEN_BUDGET,
+  CPC_INJECTION_CACHE_LIMIT,
   buildCanonicalProjectContext,
   renderCanonicalProjectContext,
   validateCanonicalProjectContext,
   prepareCanonicalProjectContext,
   injectCanonicalProjectContext,
+  resetCanonicalProjectContextState,
 } from "./canonical-project-context.js";
 import { countTokens } from "./tokenizer.js";
 
@@ -150,4 +152,47 @@ test("injectCanonicalProjectContext no inyecta sin tarea activa", () => {
   assert.equal(result.injected, false);
   assert.equal(result.reason, "no active task");
   assert.equal(output.parts.length, 0);
+});
+
+test("injectCanonicalProjectContext acota el registro de inyecciones con evicción FIFO", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wam-cpc-"));
+  try {
+    fs.mkdirSync(path.join(tmp, ".wam", "context"), { recursive: true });
+    fs.writeFileSync(path.join(tmp, ".wam", "context", "project.md"), MEMO, "utf-8");
+    resetCanonicalProjectContextState();
+    for (let i = 0; i <= CPC_INJECTION_CACHE_LIMIT; i++) {
+      injectCanonicalProjectContext({ parts: [] }, { root: tmp, taskId: `t-${i}` });
+    }
+    const oldest = injectCanonicalProjectContext({ parts: [] }, { root: tmp, taskId: "t-0" });
+    assert.equal(oldest.injected, true, "la tarea más antigua fue desalojada y puede reinyectarse");
+    const recent = injectCanonicalProjectContext({ parts: [] }, {
+      root: tmp,
+      taskId: `t-${CPC_INJECTION_CACHE_LIMIT}`,
+    });
+    assert.equal(recent.injected, false, "la tarea reciente sigue registrada");
+    assert.equal(recent.reason, "already injected");
+  } finally {
+    resetCanonicalProjectContextState();
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("injectCanonicalProjectContext agrega el CPC después de las partes existentes", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wam-cpc-"));
+  try {
+    fs.mkdirSync(path.join(tmp, ".wam", "context"), { recursive: true });
+    fs.writeFileSync(path.join(tmp, ".wam", "context", "project.md"), MEMO, "utf-8");
+    resetCanonicalProjectContextState();
+    const output = { parts: [{ type: "text", text: "mensaje del usuario" }] };
+    injectCanonicalProjectContext(output, { root: tmp, taskId: "t-order", messageID: "m-order" });
+    assert.equal(output.parts.length, 2, "el CPC se agrega sin reemplazar las partes previas");
+    assert.equal(output.parts[0].text, "mensaje del usuario");
+    const last = output.parts.at(-1);
+    assert.ok(last.text.startsWith("[wam CPC]"), "el CPC va después de las partes existentes");
+    assert.equal(last.synthetic, true);
+    assert.equal(last.metadata?.wam, true);
+  } finally {
+    resetCanonicalProjectContextState();
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });

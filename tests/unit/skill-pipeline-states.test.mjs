@@ -109,6 +109,44 @@ describe("A. skillStates derivado del output del ensamblador", () => {
   });
 });
 
+describe("F. dedupe de skills por sesión", () => {
+  it("emite skill-ref en vez del cuerpo cuando ya fue inyectada", async () => {
+    const reg = {
+      demo: {
+        id: "demo",
+        name: "demo",
+        status: "APPROVED",
+        content: "# Demo\ncontenido largo que no debe repetirse",
+        loadStrategy: "on-demand",
+        capabilities: ["demo"],
+      },
+    };
+    const selected = [{
+      id: "demo",
+      name: "demo",
+      score: 8,
+      base: false,
+      reason: "keyword:demo",
+      matchingCapabilities: ["demo"],
+    }];
+    const pack = await assembleContext({
+      prompt: "demo",
+      classification: "normal",
+      mode: "STANDARD",
+      budget: 16000,
+      skillRegistry: reg,
+      selectedSkills: selected,
+      injectedSkills: new Set(["demo"]),
+    });
+    const text = pack.lines.join("\n");
+    assert.match(text, /\[wam N3 skill-ref\] demo/);
+    assert.doesNotMatch(text, /contenido largo que no debe repetirse/);
+    const state = pack.skillStates.find((s) => s.id === "demo");
+    assert.equal(state.state, "REFERENCED");
+    assert.equal(state.cause, "session-dedupe");
+  });
+});
+
 // -----------------------------------------------------------------------------
 // B — Politica explicita del primer mensaje
 // -----------------------------------------------------------------------------

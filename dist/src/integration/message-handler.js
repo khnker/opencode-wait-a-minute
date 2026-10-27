@@ -27,7 +27,34 @@ import { pruneCompletedTasks } from "../persistence/retention-manager.js";
 import { classifyIntentLane, INTENT_LANES } from "../policy/intent-router.js";
 import { loadHistoryEntries, retrieveIntentHistory } from "../context/intent-history.js";
 import { applyContextBudget } from "../context/context-budget.js";
+import { recordContextPack } from "../context/context-pack-evidence.js";
 import { loadConversationMemory, recordTurn, formatMemoryForContext } from "../persistence/conversation-memory.js";
+
+const SESSION_INJECTED_SKILLS = new Map();
+const MAX_TRACKED_SESSIONS = 200;
+
+const WAM_BLOCK_START = "[wam][start]";
+const WAM_BLOCK_END = "[wam][end]";
+
+function wrapWamBlock(text) {
+  const body = String(text || "").trim();
+  if (!body) return "";
+  if (body.startsWith(WAM_BLOCK_START) && body.endsWith(WAM_BLOCK_END)) return body;
+  return `${WAM_BLOCK_START}\n${body}\n${WAM_BLOCK_END}`;
+}
+
+function injectedSkillsFor(sessionID) {
+  if (!sessionID) return new Set();
+  let set = SESSION_INJECTED_SKILLS.get(sessionID);
+  if (!set) {
+    set = new Set();
+    SESSION_INJECTED_SKILLS.set(sessionID, set);
+    if (SESSION_INJECTED_SKILLS.size > MAX_TRACKED_SESSIONS) {
+      SESSION_INJECTED_SKILLS.delete(SESSION_INJECTED_SKILLS.keys().next().value);
+    }
+  }
+  return set;
+}
 
 // Idempotency guard: a chat.message invocation must be processed at most once
 // per message id + kind. The store is normally owned by the plugin instance
@@ -155,6 +182,8 @@ export async function handleMessage(input, output, deps) {
     wamRootFor,
     ensureWamMemory,
     effectiveTaskId,
+    isSubagentSession,
+    getRequestUsage,
     isContinuationPrompt,
     genPartId,
     emitTextPart,
@@ -214,7 +243,7 @@ export async function handleMessage(input, output, deps) {
     if (input?.tool && output?.result !== undefined) {
       const toolName = input.tool;
       const wamRoot = await ensureWamMemory(input.sessionID, promptText);
-      const resolved = effectiveTaskId(input, sessionTasks, wamRoot, promptText);
+      const resolved = effectiveTaskId(input, sessionTasks, wamRoot, promptText, typeof isSubagentSession === "function" ? isSubagentSession(input?.sessionID) : false);
       const taskId = resolved.taskId;
 
       try { migrateLegacyCognition(wamRoot, taskId); } catch (e) { console.log(`[wait-a-minute] migration error:`, e.message); }
@@ -237,7 +266,7 @@ export async function handleMessage(input, output, deps) {
     if (input?.tool && output?.error) {
       const toolName = input.tool;
       const wamRoot = await ensureWamMemory(input.sessionID, promptText);
-      const resolved = effectiveTaskId(input, sessionTasks, wamRoot, promptText);
+      const resolved = effectiveTaskId(input, sessionTasks, wamRoot, promptText, typeof isSubagentSession === "function" ? isSubagentSession(input?.sessionID) : false);
       const taskId = resolved.taskId;
 
       try { migrateLegacyCognition(wamRoot, taskId); } catch (e) { console.log(`[wait-a-minute] migration error:`, e.message); }
@@ -279,7 +308,7 @@ export async function handleMessage(input, output, deps) {
     // monolithic ses-<sessionID> / default-task namespaces.
     let taskId, fallbackKind;
     {
-      const resolved = effectiveTaskId(input, sessionTasks, wamRoot, promptText);
+      const resolved = effectiveTaskId(input, sessionTasks, wamRoot, promptText, typeof isSubagentSession === "function" ? isSubagentSession(input?.sessionID) : false);
       taskId = resolved.taskId;
       fallbackKind = resolved.fallbackKind;
     }
@@ -505,7 +534,10 @@ export async function handleMessage(input, output, deps) {
      sessionStore.set(`${input.sessionID}:skillRegistry`, analysis.skillRegistry || {});
 
     // Blocking questions → ASKING
-    const blockingUnknowns = (state.contract?.unknowns || []).filter((u) => u.status === "blocking");
+    // Router dispatches already carry an explicit plan from the orchestrator:
+    // they must never be parked in ASKING by inferred assumptions.
+    const delegatedDispatch = /^\s*\[router\]/i.test(promptText);
+    const blockingUnknowns = delegatedDispatch ? [] : (state.contract?.unknowns || []).filter((u) => u.status === "blocking");
     const finalQuestions = blockingUnknowns.filter((u) => {
       const decision = getDecision(u.id, wamRoot);
       if (decision) { console.log(`[wait-a-minute] Found existing decision for ${u.id}: ${decision.decision}`); return false; }
@@ -616,6 +648,7 @@ export async function handleMessage(input, output, deps) {
 
     // ---- Context Assembly ----
     const inject = [];
+    const contextInject = [];
     const auxInject = [];
 
     if ((intentLane.lane === INTENT_LANES.TASK_NEW || intentLane.lane === INTENT_LANES.CORRECTION) && !waitAMinute.isCompletionIntent(promptText)) {
@@ -660,6 +693,7 @@ export async function handleMessage(input, output, deps) {
 
     try { initMemory(wamRoot); } catch {}
     try { updateProjectMemo(analysis, wamRoot); } catch {}
+    const requestUsage = typeof getRequestUsage === "function" ? getRequestUsage(input?.sessionID) : null;
     try {
       const pack = await assembleContext({
         prompt: promptText,
@@ -671,10 +705,13 @@ export async function handleMessage(input, output, deps) {
         taskState: updatedState,
         skillRegistry: cfg.skills === false ? {} : (analysis.skillRegistryMap || waitAMinute.loadBundledRegistry()),
         selectedSkills: analysis.skills?.selected || [],
+        injectedSkills: cfg.skillDedupe === false ? null : injectedSkillsFor(input?.sessionID),
+        previousRequestTokens: requestUsage,
       });
       if (pack.lines.length) {
-        inject.push(pack.lines.join("\n") + "\n");
+        contextInject.push(pack.lines.join("\n") + "\n");
       }
+      try { recordContextPack({ taskId, prompt: promptText, pack, root: wamRoot }); } catch {}
       // Expone skillStates para trazabilidad / tests (A, E).
       try {
         sessionStore.set(`${input.sessionID}:skillStates`, pack.skillStates || []);
@@ -683,7 +720,7 @@ export async function handleMessage(input, output, deps) {
       if (detectCouplingIntent(promptText)) {
         const couplingPack = await traceCouplingForTask(promptText, { root: wamRoot });
         if (couplingPack.ok && couplingPack.lines.length > 0) {
-           inject.push(couplingPack.lines.join("\n") + "\n");
+           contextInject.push(couplingPack.lines.join("\n") + "\n");
         }
       }
 
@@ -705,16 +742,18 @@ export async function handleMessage(input, output, deps) {
             return `  - ${f?.path || "?"}${loc} (score ${score}, ~${toks} tok) ${snippet}`;
           });
           if (cqeFiles.length > 8) shown.push(`  ... (+${cqeFiles.length - 8} más)`);
-          inject.push(`\n[wam cqe file_context: ${cqeFiles.length} archivos en ${cqeMs}ms, fuente ${cqeMeta.source || "?"}]\n${shown.join("\n")}`);
+          contextInject.push(`\n[wam cqe file_context: ${cqeFiles.length} archivos en ${cqeMs}ms, fuente ${cqeMeta.source || "?"}]\n${shown.join("\n")}`);
           emitTextPart(output, `cqe: ${cqeFiles.length} archivos en ${cqeMs}ms (fuente ${cqeMeta.source || "?"}) — top: ${(cqeFiles.slice(0, 3).map((f) => f?.path || "?")).join(", ")}`, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+        } else {
+          const reason = cqeMeta.fallbackReason || (cqeMeta.cqeError ? `error: ${cqeMeta.cqeError}` : "sin resultados");
+          emitTextPart(output, `cqe: sin resultados (${reason}) en ${cqeMs}ms — contexto nativo prevalece`, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+        }
+        if (cqePack.cqeMeta) {
           const cqeTarget = updatedState || state;
           if (cqeTarget) {
             cqeTarget.cqeCalls = (cqeTarget.cqeCalls || 0) + 1;
             try { persistTaskState(taskId, cqeTarget, wamRoot); } catch {}
           }
-        } else {
-          const reason = cqeMeta.fallbackReason || (cqeMeta.cqeError ? `error: ${cqeMeta.cqeError}` : "sin resultados");
-          emitTextPart(output, `cqe: sin resultados (${reason}) en ${cqeMs}ms — contexto nativo prevalece`, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
         }
       }
     } catch {}
@@ -824,10 +863,8 @@ const { lines } = buildTaskInferenceDirective({
     const budgetedAux = applyContextBudget(auxInject, {
       state: updatedState.phase || intentLane.lane,
     });
-    const budgetedInject = [...inject, ...budgetedAux];
-    if (budgetedInject.length > 0) {
-      emitTextPart(output, budgetedInject.join("\n") + "\n", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
-    }
+    const budgetedInject = [...contextInject, ...inject, ...budgetedAux];
+    const wamBlockText = budgetedInject.length > 0 ? wrapWamBlock(budgetedInject.join("\n")) : "";
 
     if (updatedState.contract?.status !== "APPROVED" && updatedState.phase !== "DONE") {
       waitAMinute.presentValidation({
@@ -840,6 +877,10 @@ const { lines } = buildTaskInferenceDirective({
         ctx: output,
         meta: { sessionID: input.sessionID, messageID: output.message?.id || input.messageID },
       });
+    }
+
+    if (wamBlockText) {
+      emitTextPart(output, wamBlockText, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
     }
 
     input.waitAnalysis = analysis;

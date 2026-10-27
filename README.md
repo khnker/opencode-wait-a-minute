@@ -21,7 +21,7 @@ WAM adds deterministic control, task-state management, context reconstruction, s
 
 WAM ships a CQE adapter (`src/context/cqe-adapter.js`) that integrates [context-query-core](https://github.com/khnker/context-query-core), a fast, in-process code-evidence retriever using SQLite + trigram indexing for lexical and symbolic snippet matching.
 
-Modes: `disabled`, `shadow`, `enabled`. The adapter defaults to `enabled` when invoked directly; override with `WAM_CQE_MODE`, or disable with `WAM_CQE=0`. It is currently exercised through the retrieval A/B benchmark (`benchmarks/retrieval/`) and the CQE test suites — it is **not yet wired into WAM's runtime context-retrieval path**.
+Modes: `disabled`, `shadow`, `enabled`. The adapter defaults to `enabled` when invoked directly; override with `WAM_CQE_MODE`, or disable with `WAM_CQE=0`. It runs on file-search-intent prompts in the runtime context-retrieval path via `selectContextWithCqe`; opt out with `WAM_CQE_MODE=disabled` or `cfg.disableCqe`.
 
 Benchmark (fixture corpus, k=5, 10 queries): CQE retrieved **142 tokens vs. 302 for the baseline** ripgrep search — **52.98% fewer tokens** — with higher precision (0.617 vs 0.613) and MRR (0.700 vs 0.683), and comparable recall (0.70 vs 0.75). Reproduce with:
 
@@ -140,6 +140,7 @@ Once installed, WAM intercepts requests before skill resolution and agent execut
 - `/wam off` — bypass WAM for the current session (chat hooks, tool governance and tool-result persistence).
 - `/wam on` — restore WAM for the current session.
 - `/wam config get` — show effective config; set `WAM_GOVERNANCE=off` or `.wam/config.json` to disable globally.
+- Automatic post-DONE loop — when a DONE claim is rejected, WAM re-drives the session itself until the gate is clean. Bounded per pending set (3 attempts) and total (10). Disable with `"autoLoop": false` in `.wam/config.json` or `WAM_AUTO_LOOP=0`.
 
 ## Debugging and diagnostics
 WAM emits structured, greppable traces when debug mode is on. They audit which WAM logic is loaded, which is skipped, and what runtime decisions were made — useful for benchmarking, regression detection and logic-gap analysis.
@@ -165,7 +166,7 @@ Expected trace categories (each prefixed `[WAM-DEBUG <ISO-timestamp>] [<category
 
 | Category | What it reports |
 |----------|-----------------|
-| `logic-gate` | which WAM gates are loaded (`skills`, `logging`, `enforcement`, `debug`) and their source |
+| `logic-gate` | which WAM gates are loaded (`skills`, `logging`, `enforcement`, `debug`, `autoLoop`) and their source |
 | `risk-envelope` | `evaluateAction(tool)` outcome and reason |
 | `governance` | `enforceGovernance(tool)` ALLOWED vs BLOCKED, with phase and subagent flag |
 | `skills` | `routeSkillsV2` selection count and chosen skill names |

@@ -48,6 +48,22 @@ const CPC_INJECTABLE_PHASES = new Set(["PROPOSED"]);
  */
 const cpcInjectedTasks = new Map();
 
+/** Cota FIFO del registro de inyecciones (evita crecimiento sin límite). */
+export const CPC_INJECTION_CACHE_LIMIT = 500;
+
+/** Limpia el registro de inyecciones (pruebas). */
+export function resetCanonicalProjectContextState() {
+  cpcInjectedTasks.clear();
+}
+
+function rememberCpcInjection(taskId) {
+  if (!taskId) return;
+  cpcInjectedTasks.set(taskId, true);
+  while (cpcInjectedTasks.size > CPC_INJECTION_CACHE_LIMIT) {
+    cpcInjectedTasks.delete(cpcInjectedTasks.keys().next().value);
+  }
+}
+
 const HEADER = `${CPC_MARKER} canonical project context`;
 
 /** Secciones cuyo contenido es un hecho verificado del proyecto. */
@@ -316,8 +332,6 @@ export function loadCanonicalProjectContext(root) {
  * Inyecta el CPC en la salida del hook cuando la tarea NACE (fase PROPOSED).
  *
  * Inyección orgánica — el CPC no se repite en cada mensaje:
- *   - sólo en el mensaje donde la tarea nace (`previousTaskId` !== `taskId`);
- *   - nunca en mensajes de continuación de la misma tarea;
  *   - una sola vez por tarea (registro `cpcInjectedTasks`), aunque el llamador
  *     insista;
  *   - si se conoce la fase, sólo cuando la tarea está propuesta (PROPOSED).
@@ -325,14 +339,11 @@ export function loadCanonicalProjectContext(root) {
  * Idempotente: si el bloque ya está presente en la salida, no se duplica.
  *
  * @param {{ parts?: any[], system?: any[] }} output
- * @param {{ root?: string, taskId?: string, messageID?: string, phase?: string, previousTaskId?: string }} [params]
+ * @param {{ root?: string, taskId?: string, messageID?: string, phase?: string }} [params]
  * @returns {{ injected: boolean, reason?: string, tokens?: number }}
  */
-export function injectCanonicalProjectContext(output, { root, taskId, messageID, sessionID, phase, previousTaskId } = {}) {
+export function injectCanonicalProjectContext(output, { root, taskId, messageID, sessionID, phase } = {}) {
   if (!taskId) return { injected: false, reason: "no active task" };
-  if (previousTaskId && previousTaskId === taskId) {
-    return { injected: false, reason: "continuation message" };
-  }
   if (phase && !CPC_INJECTABLE_PHASES.has(String(phase).trim().toUpperCase())) {
     return { injected: false, reason: `task phase ${phase}` };
   }
@@ -348,8 +359,10 @@ export function injectCanonicalProjectContext(output, { root, taskId, messageID,
       : null;
   if (!sink) return { injected: false, reason: "no output sink" };
   if (sink.some((p) => typeof p?.text === "string" && p.text.includes(CPC_MARKER))) {
+    rememberCpcInjection(taskId);
     return { injected: false, reason: "already injected", tokens: prepared.tokens };
   }
   injectWamParts(output, prepared.text, { messageID, sessionID, phase: "cpc", position: "append" });
+  rememberCpcInjection(taskId);
   return { injected: true, tokens: prepared.tokens };
 }

@@ -1,5 +1,6 @@
 import { analyze, getTaskState, persistTaskState, routeSkillsV2, loadSkillOnDemand, cavemanify, estimateTokens, buildAssumptions, escalateAssumptions, formatBacklog, findDuplicateTask } from "./src/skills/engine.js";
 import { startExperiment, noteSuccess, noteFailure } from "./src/execution/execution-engine.js";
+import { planAutoContinuation } from "./src/execution/auto-continuation.js";
 import { migrateLegacyCognition } from "./src/cognition/cognition-store.js";
 import { handleMessage } from "./src/integration/message-handler.js";
 import { injectWamParts } from "./src/integration/part-provenance.js";
@@ -16,6 +17,8 @@ import { assembleContext } from "./src/context/assembly.js";
 import { injectCanonicalProjectContext } from "./src/context/canonical-project-context.js";
 import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./src/verification/verification.js";
 import { ContextDecisionTracer } from "./src/context/context-decision-audit.js";
+import { listContextEvidence, readContextEvidence } from "./src/context/context-pack-evidence.js";
+import { recordRequestUsage, getRequestUsage } from "./src/verification/request-usage.js";
 import { guardAction } from "./src/execution/runtime-guards.js";
 import { WamPolicyBlock, evaluateAction } from "./src/policy/risk-engine.js";
 import { enforceGovernance, enforceReadDelegation } from "./src/policy/governance-enforcement.js";
@@ -167,7 +170,7 @@ function genPartId() {
 // Mantiene los mensajes de WAM ocultos del chat del usuario; se registran internamente y aparecen en el resumen final.
 function emitTextPart(output, text, meta = {}) {
   if (!output) return { status: "error", reason: "no-output" };
-  let prefixedText = `[wam] ${text}`;
+  let prefixedText = String(text).startsWith("[wam]") ? String(text) : `[wam] ${text}`;
   if (meta.phase) {
     prefixedText += ` Etapa actual: ${meta.phase}.`;
   }
@@ -400,7 +403,7 @@ function readActiveTaskIdFresh(root, options = {}) {
  * (rechazo por ownership). Los registros legacy sin sessionId mantienen el
  * TTL de 60s para no adoptar tareas obsoletas de sesiones previas.
  */
-function effectiveTaskId(input, sessionTasks, wamRoot, promptText) {
+function effectiveTaskId(input, sessionTasks, wamRoot, promptText, isSubagent = false) {
   // Priority 1: Explicit taskId (must not be generic)
   if (input?.taskId && !GENERIC_TASK.test(input.taskId)) {
     return { taskId: input.taskId, fallbackKind: "explicit" };
@@ -423,7 +426,7 @@ function effectiveTaskId(input, sessionTasks, wamRoot, promptText) {
   // Prompts NO continuación y con sustantivo descriptivo → derivar slug.
   // Esto evita caer en default-task o ses-<id> cuando el usuario describió
   // claramente una tarea específica (ej: "Implementar X en módulo Z").
-  if (promptText && !isContinuationPrompt(promptText)) {
+  if (!isSubagent && promptText && !isContinuationPrompt(promptText)) {
     const slug = slugifyTaskPrompt(promptText);
     if (slug) {
       // For slug-based tasks, bind to session to prevent cross-session sharing.
@@ -730,12 +733,13 @@ const WaitAMinutePlugin = async (pluginInput) => {
   configureLogger({ enabled: wamConfig.logging });
   setLoggingEnabled(wamConfig.logging);
   setDebugEnabled(wamConfig.debug);
-  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement, debug: wamConfig.debug };
+  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement, debug: wamConfig.debug, autoLoop: wamConfig.autoLoop };
   // Audit which WAM logic gates are loaded so WAM_DEBUG=1 output is self-describing.
   registerLogicGate("skills", { loaded: wamConfig.skills, source: "wam-config", note: "skill discovery/routing/injection" });
   registerLogicGate("logging", { loaded: wamConfig.logging, source: "wam-config", note: "file + console log emission" });
   registerLogicGate("enforcement", { loaded: wamConfig.enforcement, source: "wam-config", note: "governance/mutating-tool blocking" });
   registerLogicGate("debug", { loaded: wamConfig.debug, source: "wam-config", note: "structured WAM-DEBUG traces" });
+  registerLogicGate("autoLoop", { loaded: wamConfig.autoLoop, source: "wam-config", note: "automatic post-DONE continuation" });
 
   // Track if plugin is bypassed
   let bypassed = false;
@@ -751,6 +755,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
   const sessionResolved = new Set(); // sessionIDs cuyo parentID se resolvió (distingue main de subagente)
   const processedMessages = new Map(); // messageID+kind → processed (chat.message idempotency)
   const sessionTasks = new Map(); // sessionID → taskId activo visto en chat.message
+  const autoContinueInFlight = new Set(); // sessionID → auto-loop prompt en vuelo
   const client = pluginInput?.client;
 
   try {
@@ -914,6 +919,67 @@ refresh();
     return root;
   };
 
+  // Automatic post-DONE loop: when the assistant claims completion and the
+  // gate still has pending work, send the validation back into the session
+  // instead of waiting for the user to type "Listo, continúa".
+  async function maybeAutoContinue(sessionID) {
+    try {
+      if (!sessionID || !cfg.autoLoop) return;
+      if (bypassed || sessionBypasses.has(sessionID)) return;
+      if (autoContinueInFlight.has(sessionID)) return;
+      if (sessionParents.get(sessionID)) return; // subagent sessions
+      const root = sessionWamRoots.get(sessionID) || sessionRoots.get(sessionID) || projectDirectory;
+      const taskId = sessionTasks.get(sessionID) || readActiveTaskIdFresh(root, { sessionId: sessionID, projectRoot: root });
+      if (!taskId) return;
+      const state = getTaskState(taskId, root);
+      if (!state || state.phase === "DONE") return;
+      const gate = evaluateCompletionGate(state, "");
+      if (!gate.blocked) return;
+      if (!client?.session?.messages || !client?.session?.prompt) return;
+
+      const response = await client.session.messages({
+        sessionID,
+        path: { id: sessionID },
+        query: { directory: root, limit: 2 },
+      });
+      const messages = Array.isArray(response) ? response : Array.isArray(response?.data) ? response.data : [];
+      const lastAssistant = [...messages].reverse().find((m) => m?.info?.role === "assistant");
+      if (!lastAssistant) return;
+      const text = (lastAssistant.parts || [])
+        .filter((p) => p?.type === "text" && !p.synthetic)
+        .map((p) => p.text || "")
+        .join("\n");
+
+      const plan = planAutoContinuation({
+        state,
+        gate,
+        assistantText: text,
+        messageID: lastAssistant.info?.id || null,
+      });
+      if (plan.nextAutoLoop) {
+        state.autoLoop = plan.nextAutoLoop;
+        try { persistTaskState(taskId, state, root); } catch {}
+      }
+      if (!plan.continue) {
+        if (plan.nextAutoLoop?.exhausted) wamWarn(`[wait-a-minute] auto-loop agotado (${plan.reason}) para ${taskId}`);
+        return;
+      }
+
+      autoContinueInFlight.add(sessionID);
+      wamDebug(`[wait-a-minute] auto-loop attempt ${plan.nextAutoLoop.attempts} for ${taskId} (${plan.nextAutoLoop.total} total)`);
+      Promise.resolve(client.session.prompt({
+        sessionID,
+        path: { id: sessionID },
+        query: { directory: root },
+        body: { parts: [{ type: "text", text: plan.prompt }] },
+      }))
+        .catch((e) => wamDebug("[wait-a-minute] auto-loop prompt failed:", e?.message))
+        .finally(() => autoContinueInFlight.delete(sessionID));
+    } catch (e) {
+      wamDebug("[wait-a-minute] auto-loop error:", e?.message);
+    }
+  }
+
 /**
  * Runs after tool.execute.before — persists success/failure to the
  * cognition store via noteSuccess/noteFailure, reading experiment IDs
@@ -979,6 +1045,51 @@ async function postToolExecution(input, output) {
     // NOT via a plugin config hook (removed: plugin config hook mutated config and
     // is incompatible with opencode 1.18.26+, causing `N.config` TypeError).
 
+    // Provider-reported usage: the only trustworthy input-token count.
+    "event": ({ event } = {}) => {
+      try {
+        const props = event?.properties || {};
+        if (event?.type === "session.idle") {
+          void maybeAutoContinue(props.sessionID);
+          return;
+        }
+        if (event?.type === "message.updated") {
+          const info = props.info;
+          if (!info || info.role !== "assistant" || !info.tokens) return;
+          if (!info.finish && !info.time?.completed) return;
+          const t = info.tokens;
+          const cacheRead = t.cache?.read || 0;
+          recordRequestUsage(info.sessionID, {
+            messageID: info.id,
+            input: t.input || 0,
+            output: t.output || 0,
+            reasoning: t.reasoning || 0,
+            cacheRead,
+            cacheWrite: t.cache?.write || 0,
+            requestTokens: (t.input || 0) + cacheRead,
+            cost: info.cost || 0,
+          });
+          return;
+        }
+        if (event?.type === "message.part.updated") {
+          const part = props.part;
+          if (part?.type !== "step-finish" || !part.tokens) return;
+          const t = part.tokens;
+          const cacheRead = t.cache?.read || 0;
+          recordRequestUsage(part.sessionID, {
+            messageID: part.messageID,
+            input: t.input || 0,
+            output: t.output || 0,
+            reasoning: t.reasoning || 0,
+            cacheRead,
+            cacheWrite: t.cache?.write || 0,
+            requestTokens: (t.input || 0) + cacheRead,
+            cost: part.cost || 0,
+          });
+        }
+      } catch {}
+    },
+
     // Chat message hook — Persistence & Progress Gate.
     // Slim adapter: delegates message processing to src/integration/message-handler.js.
     "chat.message": (input, output) => {
@@ -992,6 +1103,8 @@ async function postToolExecution(input, output) {
         wamRootFor,
         ensureWamMemory,
         effectiveTaskId,
+        isSubagentSession: (sid) => sessionParents.has(sid),
+        getRequestUsage,
         isContinuationPrompt,
         genPartId,
         emitTextPart,
@@ -1072,7 +1185,9 @@ async function postToolExecution(input, output) {
                 });
               }
             }
-          } catch {}
+          } catch (err) {
+            wamDebug("cpc", "injection failed", { error: err?.message });
+          }
         })
         .catch(() => {});
       return pending;
@@ -1573,6 +1688,30 @@ const sel = routeSkillsV2(prompt, {}, waitAMinute.getRegistry(), "STANDARD");
   }
 
   if (sub === "ctx") {
+    if (action === "evidence") {
+      const [kind, value] = rest;
+      if (!kind || kind === "list") {
+        const entries = listContextEvidence({ taskId, root });
+        if (!entries.length) return `Sin evidencia de contexto para ${taskId}`;
+        return entries
+          .map((e) => `#${String(e.seq).padStart(4, "0")} ${e.createdAt} lines=${e.lines} dropped=${e.dropped} candidates=${e.candidates ?? 0} tokens=${e.budget_used ?? "?"}${e.violation ? " VIOLATION" : ""} ${e.file}`)
+          .join("\n");
+      }
+      if (kind === "show") {
+        const rec = readContextEvidence({ taskId, seq: Number(value), root });
+        if (!rec) return `Sin registro ${value} para ${taskId}`;
+        return [
+          `#${rec.seq} ${rec.createdAt} task=${rec.taskId}`,
+          `budget=${rec.budget} used=${rec.budget_used} violation=${rec.budget_violation} source=${rec.source}`,
+          `levels=${JSON.stringify(rec.levels)} integrity=${JSON.stringify(rec.integrity)} candidates=${(rec.candidates || []).length}`,
+          `injected (${rec.injected.length}):`,
+          ...rec.injected,
+          `dropped (${rec.dropped.length}):`,
+          ...rec.dropped,
+        ].join("\n");
+      }
+      return "Uso: /wam ctx evidence [list|show <seq>]";
+    }
     if (action === "list") {
       const caps = listCapsules(root);
       if (!caps.length) return "Sin cápsulas (usa /wam ctx add o extracción en DONE)";

@@ -1,3 +1,4 @@
+delete process.env.WAM_METRICS_DIR;
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -9,6 +10,7 @@ import {
   recordTokenSavings,
 } from "./token-savings-meter.js";
 
+delete process.env.WAM_METRICS_DIR;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TMP_DIR = path.join(__dirname, "..", "..", "tmp", "test-token-savings-summary");
 
@@ -55,7 +57,7 @@ test("getLatestTokenSavings returns null for non-array file content", () => {
 test("printTokenSavingsSummary emits the expected summary line", () => {
   const root = freshDir();
   const records = [
-    { taskId: "task-final", actualTokens: 50, baselineTokens: 5000, savingsPct: 99, savingsTokens: 4950, timestamp: 9 },
+    { taskId: "task-final", actualTokens: 50, actualRequestTokens: 50, usageSource: "provider", baselineTokens: 5000, baselineSource: "measured", claimable: true, savingsPct: 99, savingsTokens: 4950, timestamp: 9 },
   ];
   seedMetrics(root, records);
 
@@ -67,7 +69,7 @@ test("printTokenSavingsSummary emits the expected summary line", () => {
   assert.equal(captured.length, 1);
   assert.equal(
     captured[0],
-    "[WAM Token Savings] Task task-final saved 99% tokens: 4950 tokens saved vs baseline"
+    "[WAM Token Savings] Task task-final saved 99% tokens: 4950 tokens saved vs measured baseline (provider usage)"
   );
 });
 
@@ -80,22 +82,51 @@ test("printTokenSavingsSummary returns false when there are no records", () => {
   assert.equal(captured.length, 0);
 });
 
-test("printTokenSavingsSummary works with a freshly recorded metric (round-trip)", () => {
+test("printTokenSavingsSummary does not claim synthetic savings", () => {
   const root = freshDir();
-  recordTokenSavings(root, "roundtrip", 120, 250, 0);
+  recordTokenSavings(root, "synthetic", 120, { promptTokens: 250 });
 
   const captured = [];
   const logger = { log: (line) => captured.push(line) };
   printTokenSavingsSummary(root, logger);
 
   assert.equal(captured.length, 1);
-  assert.match(captured[0], /^\[WAM Token Savings\] Task roundtrip saved \d+% tokens: \d+ tokens saved vs baseline$/);
+  assert.match(captured[0], /savings not claimed/);
+  assert.doesNotMatch(captured[0], /saved \d+%/);
+});
+
+test("printTokenSavingsSummary works with a freshly recorded metric (round-trip)", () => {
+  const root = freshDir();
+  recordTokenSavings(root, "roundtrip", 120, { promptTokens: 250, baselineTokens: 750, baselineSource: "measured", actualRequestTokens: 600, usageSource: "provider" });
+
+  const captured = [];
+  const logger = { log: (line) => captured.push(line) };
+  printTokenSavingsSummary(root, logger);
+
+  assert.equal(captured.length, 1);
+  assert.match(captured[0], /^\[WAM Token Savings\] Task roundtrip saved \d+% tokens: \d+ tokens saved vs measured baseline \(provider usage\)$/);
+});
+
+test("printTokenSavingsSummary reports the last claimable record when a synthetic turn follows", () => {
+  const root = freshDir();
+  const records = [
+    { taskId: "real", actualTokens: 120, actualRequestTokens: 600, usageSource: "provider", baselineTokens: 750, baselineSource: "measured", claimable: true, savingsPct: 20, savingsTokens: 150, timestamp: 1 },
+    { taskId: "synthetic-later", actualTokens: 130, usageSource: "none", baselineSource: "synthetic", claimable: false, savingsPct: null, savingsTokens: 0, timestamp: 2 },
+  ];
+  seedMetrics(root, records);
+
+  const captured = [];
+  printTokenSavingsSummary(root, { log: (line) => captured.push(line) });
+
+  assert.equal(captured.length, 1);
+  assert.match(captured[0], /Task real saved 20%/);
+  assert.doesNotMatch(captured[0], /not claimed/);
 });
 
 test("printTokenSavingsSummary falls back to stdout when logger lacks log", () => {
   const root = freshDir();
   const records = [
-    { taskId: "stdout-fallback", actualTokens: 10, baselineTokens: 1000, savingsPct: 99, savingsTokens: 990, timestamp: 1 },
+    { taskId: "stdout-fallback", actualTokens: 10, actualRequestTokens: 10, usageSource: "provider", baselineTokens: 1000, baselineSource: "measured", claimable: true, savingsPct: 99, savingsTokens: 990, timestamp: 1 },
   ];
   seedMetrics(root, records);
 

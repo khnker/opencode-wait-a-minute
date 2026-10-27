@@ -15,7 +15,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import pluginDefault from "../../index.js";
-import { getTaskState, buildAssumptions, classifyAssumption, escalateAssumptions } from "../../src/skills/engine.js";
+import { getTaskState, buildAssumptions, classifyAssumption, escalateAssumptions, synthesizeContract } from "../../src/skills/engine.js";
+import { isExplicitInstruction } from "../../src/policy/uncertainty.js";
 
 const CWD = process.cwd();
 const cleanup = (taskId) => {
@@ -164,4 +165,54 @@ test("escalateAssumptions unit: mirror a unknowns con assumptionId y dedupe", ()
   assert.equal(state.contract.unknowns[0].assumptionId, "A1");
   const again = escalateAssumptions(state, "delete más");
   assert.equal(again.changed, false, "dedupe: no re-escala ni duplica unknowns");
+});
+
+test("isExplicitInstruction: dispatch de router y plan con rutas no son ambiguos", () => {
+  assert.equal(isExplicitInstruction("[router] Implementar X en src/a.js"), true);
+  const plan = "Implementar el fix:\n- editar src/policy/uncertainty.js\n- agregar tests en tests/unit/x.test.mjs\n";
+  assert.equal(isExplicitInstruction(plan), true);
+  assert.equal(isExplicitInstruction("agregá algo"), false);
+  assert.equal(isExplicitInstruction(""), false);
+});
+
+test("escalateAssumptions no escala el supuesto genérico en instrucciones explícitas", () => {
+  const state = {
+    contract: {
+      assumptions: [
+        { id: "A1", statement: "El usuario asume que se necesita agregar nueva funcionalidad", classification: "NON_BLOCKING", status: "active" },
+      ],
+      unknowns: [],
+    },
+  };
+  const explicit = "[router] add tests para src/skills/engine.js\n- caso 1\n- caso 2";
+  assert.equal(isExplicitInstruction(explicit), true);
+  assert.equal(escalateAssumptions(state, explicit).changed, false);
+  assert.equal(state.contract.unknowns.length, 0);
+});
+
+test("gate: un dispatch de router con 'add' no entra en ASKING", async () => {
+  const hooks = await freshHooks();
+  const taskId = `ag-router-${Date.now()}`;
+  const prompt = "[router] add tests para src/skills/engine.js\n- caso uno\n- caso dos";
+  await send(hooks, prompt, taskId, `ag-router-${Date.now()}`);
+  const st = getTaskState(taskId);
+  assert.notEqual(st.phase, "ASKING", "un dispatch explícito nunca queda bloqueado");
+  cleanup(taskId);
+});
+
+test("synthesizeContract: spec largo extrae requisitos reales y no inventa auditoría por 'tokens'", () => {
+  const spec = [
+    "Objetivo: endurecer el ledger de métricas.",
+    "Requisitos:",
+    "- coalescer registros idénticos en src/verification/token-savings-meter.js",
+    "- exponer summarizeTokenSavings",
+    "Consideraciones sobre tokens y cache.",
+    "Criterios de aceptación: los tests pasan.",
+  ].join("\n") + "\n" + "relleno ".repeat(300);
+  const contract = synthesizeContract(spec, "NORMAL", []);
+  assert.ok(contract.requirements.length >= 1);
+  assert.ok(
+    !contract.requirements.some((r) => /Auditar seguridad/.test(r)),
+    "la palabra tokens no debe disparar una auditoría de seguridad"
+  );
 });

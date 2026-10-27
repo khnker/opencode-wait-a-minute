@@ -34,6 +34,7 @@ Context Packs is the subsystem responsible for context management, including cla
 - **Purpose**: Inyecta el grounding canónico del proyecto cuando arranca una tarea
 - **Mechanism**: Clasifica el memo de proyecto (`.wam/context/project.md`) en hechos verificados y supuestos, rechaza contenido de sesión y respeta un presupuesto duro de < 150 tokens
 - **Outputs**: Bloque `[wam CPC]` inyectado como parte sintética WAM en el hook `chat.message` (idempotente)
+- **Idempotencia**: registro FIFO acotado (`CPC_INJECTION_CACHE_LIMIT = 500`); los fallos de inyección se registran con `wamDebug`
 - **Integration**: Complementa N0-N3 del context pack; no los reemplaza ni escribe en el memo
 ### Context Builder
 - **File**: `src/context/context-builder.js`

@@ -10,13 +10,15 @@
  *   - skills:      discover, route and inject skills into context        (default true)
  *   - logging:     emit WAM logs (file + console)                       (default true)
  *   - enforcement: block mutating tools until the contract is approved   (default true)
- *   - debug:       emit structured WAM-DEBUG traces for auditing logic  (default false)
+ *   - debug:       emit structured WAM-DEBUG traces for auditing logic   (default false)
+ *   - autoLoop:    auto-continue after a rejected post-DONE review       (default true)
  *
  * Env overrides:
  *   - skills:      WAM_SKILLS=<bool>       | WAM_DISABLE_SKILLS=1
  *   - logging:     WAM_LOGGING=<bool>      | WAM_SILENT=1 | WAM_DISABLE_LOGGING=1
  *   - enforcement: WAM_ENFORCEMENT=<bool>  | WAM_GOVERNANCE=off | WAM_BYPASS=1
  *   - debug:       WAM_DEBUG=1 | WAM_DEBUG=true | WAM_LOG_LEVEL=debug | WAM_DISABLE_DEBUG=1
+ *   - autoLoop:    WAM_AUTO_LOOP=<bool> | WAM_DISABLE_AUTO_LOOP=1
  *
  * Config file path override: WAM_CONFIG=<absolute-path-to-config.json>
  *
@@ -31,6 +33,7 @@ export const DEFAULT_WAM_CONFIG = Object.freeze({
   logging: true,
   enforcement: true,
   debug: true,
+  autoLoop: true,
 });
 
 const TRUE_VALUES = new Set(["1", "true", "on", "yes", "enabled", "enable"]);
@@ -89,7 +92,7 @@ export function readConfigFile(baseDir) {
 /**
  * Resolve the effective WAM config for a project root.
  * @param {string} [baseDir]
- * @returns {{skills: boolean, logging: boolean, enforcement: boolean, debug: boolean}}
+ * @returns {{skills: boolean, logging: boolean, enforcement: boolean, debug: boolean, autoLoop: boolean}}
  */
 export function loadWamConfig(baseDir = process.cwd()) {
   const file = readConfigFile(baseDir);
@@ -124,5 +127,12 @@ export function loadWamConfig(baseDir = process.cwd()) {
     DEFAULT_WAM_CONFIG.debug,
   );
 
-  return { skills, logging, enforcement, debug };
+  const autoLoop = firstDefined(
+    parseBoolean(process.env.WAM_AUTO_LOOP),
+    invert(parseBoolean(process.env.WAM_DISABLE_AUTO_LOOP)),
+    parseBoolean(file.autoLoop),
+    DEFAULT_WAM_CONFIG.autoLoop,
+  );
+
+  return { skills, logging, enforcement, debug, autoLoop };
 }

@@ -37,6 +37,7 @@ import { buildRuntimeContextGraph } from "./runtime-context-graph.js";
 import { ADMISSION } from "./context-router.js";
 import { assembleDesignAxis } from "../design/design-integration.js";
 import { classifyDesignTask, loadDesignContext } from "./design-context.js";
+import { nextActionFrom } from "../state/next-action.js";
 
 /**
  * Admission classes are sourced from Context Router.
@@ -72,13 +73,18 @@ function overlap(aTokens, bTokens) {
 
 function estTokens(text) {
   const str = typeof text === "string" ? text : String(text || "");
-  return Math.ceil(str.length / 4);
+  const configured = Number(process.env.WAM_CHARS_PER_TOKEN);
+  const ratio = Number.isFinite(configured) && configured > 0 ? configured : 4;
+  return Math.ceil(str.length / ratio);
 }
 
-function extractRelevantSections(docName, body, taskTokens, { base = false } = {}) {
+function extractRelevantSections(docName, body, taskTokens, { base = false, maxSections = Infinity, maxCharsPerSection = Infinity } = {}) {
   const sections = (body || "").split(/^## /m).map((s) => s.trim()).filter(Boolean);
   if (base || !sections.length) return body || "";
-  const hits = sections.filter((s) => overlap(taskTokens, tokenize(s.split("\n")[0] + " " + s.slice(0, 200))) > 0);
+  const hits = sections
+    .filter((s) => overlap(taskTokens, tokenize(s.split("\n")[0] + " " + s.slice(0, 200))) > 0)
+    .slice(0, maxSections)
+    .map((s) => (s.length > maxCharsPerSection ? s.slice(0, maxCharsPerSection) : s));
   if (!hits.length) return "";
   return "# " + hits.join("\n\n# ");
 }
@@ -185,10 +191,13 @@ async function _assembleContextImpl({
   experiments = [],
   skillRegistry = null,
   selectedSkills = [],
+  injectedSkills = null,
+  previousRequestTokens = null,
   useLegacySelector = false,
   collector = null,
 } = {}) {
   const levels = { N0: [], N1: [], N2: [], N3: [] };
+  let candidates = [];
   const rationale = [];
   const taskTokens = tokenize(prompt);
   let routerSufficiency = null;
@@ -266,7 +275,10 @@ async function _assembleContextImpl({
   if (taskState) {
     const reqs = taskState.requirements || [];
     const pend = reqs.filter((r) => r.status !== "done" && r.status !== "verified").length;
-    const nextActionTruncated = (taskState.nextAction || "—").slice(0, 80);
+    const computedNext = (taskState.requirements || []).length
+      ? nextActionFrom(taskState)
+      : (taskState.nextAction || "—");
+    const nextActionTruncated = computedNext.slice(0, 80);
     liveBody = [
       `task: ${taskId} — ${taskState.phase} / ${taskState.contract?.status || "?"}`,
       `req: ${pend}/${reqs.length} pend | next: ${nextActionTruncated}`,
@@ -317,7 +329,8 @@ async function _assembleContextImpl({
       .map((s) => s.trim())
       .filter(Boolean)
       .filter((s) => taskTokens.length === 0 || overlap(taskTokens, tokenize(s)) > 0)
-      .slice(0, 3)
+      .slice(0, 2)
+      .map((s) => (s.length > 240 ? s.slice(0, 240) : s))
       .join("\n# ");
     if (!isTrivial) {
       // N1 solo si hay memoria operacional real — cero líneas vacías (rigor = ahorro de tokens)
@@ -338,8 +351,8 @@ async function _assembleContextImpl({
         const arch = extractRelevantSections("architecture", archDoc, taskTokens, { base: true });
         if (arch.trim()) spend("N1", `[wam N1 architecture] ${arch.slice(0, 600)}`, ADMISSION.CONDITIONAL, "architecture context");
       }
-      const projectDecisionsText = extractRelevantSections("decisions", ctx.decisions?.body || "", taskTokens, { base: false });
-      if (projectDecisionsText.trim()) spend("N1", `[wam N1 decisions] ${projectDecisionsText.slice(0, 600)}`, ADMISSION.CONDITIONAL, "decisions context");
+      const projectDecisionsText = extractRelevantSections("decisions", ctx.decisions?.body || "", taskTokens, { base: false, maxSections: 2, maxCharsPerSection: 240 });
+      if (projectDecisionsText.trim()) spend("N1", `[wam N1 decisions] ${projectDecisionsText.slice(0, 500)}`, ADMISSION.CONDITIONAL, "decisions context");
       const projectConstraintsText = extractRelevantSections("constraints", ctx.constraints?.body || "", taskTokens, { base: isArch });
       if (projectConstraintsText.trim()) spend("N1", `[wam N1 constraints] ${projectConstraintsText.slice(0, 400)}`, ADMISSION.CONDITIONAL, "constraints context");
     }
@@ -375,6 +388,12 @@ if (!isTrivial) {
         hypotheses,
         experiments,
       });
+      candidates = graph.getNodes().map((n) => ({
+        id: n.id,
+        type: n.type,
+        content: n.content,
+        verified: Boolean(n.verified),
+      }));
       const routerPkg = routeAndAdapt(graph, {
         taskId: effectiveTaskState?.taskId,
         budget: flex,
@@ -546,6 +565,22 @@ if (!isTrivial) {
             break;
           }
 
+          const alreadyInjected = injectedSkills
+            ? (typeof injectedSkills.has === "function"
+              ? injectedSkills.has(skill.id)
+              : Array.isArray(injectedSkills) && injectedSkills.includes(skill.id))
+            : false;
+          if (alreadyInjected) {
+            const refLine = `[wam N3 skill-ref] ${skill.id} — already injected this session`;
+            const refCost = spend("N3", refLine, ADMISSION.OPTIONAL, `skill-ref ${skill.id}`);
+            state.state = refCost === 0 ? "OMITTED" : "REFERENCED";
+            state.cause = refCost === 0 ? "flex-budget-exhausted" : "session-dedupe";
+            state.tokenCost = refCost;
+            rationale.push(`N3: ${skill.id} referenced (${refCost} tok, already injected)`);
+            if (refCost > 0) skillSpent += refCost;
+            continue;
+          }
+
           const skillData = skillRegistry[skill.id];
           if (!skillData) {
             state.state = "OMITTED";
@@ -590,6 +625,7 @@ if (!isTrivial) {
           state.tokenCost = cost;
           state.truncated = truncated;
           skillSpent += cost;
+          if (injectedSkills && typeof injectedSkills.add === "function") injectedSkills.add(skill.id);
           rationale.push(`N3: ${skill.id} ${state.state.toLowerCase()} (${cost} tok, reason: ${skill.reason})`);
         }
       }
@@ -603,15 +639,13 @@ if (!isTrivial) {
     const primaryCategory = designCategories[0];
     const selectedRefs = ["tokens.md", "components.md"];
     const excludedRefs = ["dashboard", "navigation"];
-    const designTokens = estTokens(designCtx.content || "") + 150;
-    if (designTokens <= flex) {
+    const designContent = String(designCtx.raw || designCtx.content || "");
+    const injectedContent = designContent.slice(0, 1500);
+    const designTokens = estTokens(injectedContent);
+    if (injectedContent.trim() && designTokens <= flex) {
       flex -= designTokens;
       designBudgetLine = `[wam design budget] selected=${selectedRefs.join(",")} excluded=${excludedRefs.join(",")} tokens=${designTokens} reason=${primaryCategory}`;
-      if (designCtx.content) {
-        levels.N3.push(`[wam design context]\n${designCtx.content.slice(0, 1500)}`);
-      }
-    } else {
-      designBudgetLine = `[wam design budget] selected=${selectedRefs.join(",")} excluded=${excludedRefs.join(",")} tokens=0 reason=${primaryCategory} (exceeded flex)`;
+      levels.N3.push(`[wam design context]\n${injectedContent}`);
     }
   }
 
@@ -624,8 +658,15 @@ if (!isTrivial) {
     const { recordTokenSavings } = await import("../verification/token-savings-meter.js");
     const promptTokens = estTokens(prompt || "");
     const actualTokens = lines.reduce((sum, line) => sum + estTokens(line), 0);
-    const historyTokens = estTokens(lines.join(""));
-    recordTokenSavings(projectPath, taskId || "unknown", actualTokens, promptTokens, historyTokens);
+    const measuredBaseline = Number(process.env.WAM_BASELINE_TOKENS);
+    const hasMeasuredBaseline = Number.isFinite(measuredBaseline) && measuredBaseline > 0;
+    recordTokenSavings(projectPath, taskId || "unknown", actualTokens, {
+      promptTokens,
+      baselineTokens: hasMeasuredBaseline ? measuredBaseline : undefined,
+      baselineSource: hasMeasuredBaseline ? "measured" : "synthetic",
+      actualRequestTokens: previousRequestTokens?.requestTokens,
+      usageSource: previousRequestTokens ? "provider" : "none",
+    });
   } catch {}
 
   // Admission report — Router is canonical authority for sufficiency when available.
@@ -720,6 +761,7 @@ if (!isTrivial) {
   return {
     levels: Object.fromEntries(Object.entries(levels).map(([k, v]) => [k, v.length])),
     lines,
+    candidates,
     budget_used: budget - flex,
     budget,
     budget_violation,
