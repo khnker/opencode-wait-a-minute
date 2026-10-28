@@ -16,6 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { hasWamMarkerFor, injectWamParts, isWamSynthetic } from "./part-provenance.js";
+import { ensurePermissionPlan, permissionPreflightLines } from "../policy/permission-preflight.js";
 import { buildTaskInferenceDirective } from "../cognition/task-inference-engine.js";
 import { buildRoleDirective } from "../cognition/task-role-engine.js";
 import { detectCouplingIntent, traceCouplingForTask } from "../context/selection.js";
@@ -27,7 +28,8 @@ import { pruneCompletedTasks } from "../persistence/retention-manager.js";
 import { classifyIntentLane, INTENT_LANES } from "../policy/intent-router.js";
 import { loadHistoryEntries, retrieveIntentHistory } from "../context/intent-history.js";
 import { applyContextBudget } from "../context/context-budget.js";
-import { recordContextPack } from "../context/context-pack-evidence.js";
+import { recordContextPack, recordDelegationEvidence, injectedSkillIds } from "../context/context-pack-evidence.js";
+import { activeTaskPath } from "../shared/wam-paths.js";
 import { loadConversationMemory, recordTurn, formatMemoryForContext } from "../persistence/conversation-memory.js";
 
 const SESSION_INJECTED_SKILLS = new Map();
@@ -132,9 +134,6 @@ const ASKING_CMD_RE = /^(answer|resolve|contract|progress|task|skills|assumption
  * @property {Function} readActiveTaskIdFresh
  * @property {Function} writeActiveTaskId
  * @property {Object}   waitAMinute
- * @property {Function} migrateLegacyCognition
- * @property {Function} noteSuccess
- * @property {Function} noteFailure
  * @property {Function} getTaskState
  * @property {Function} persistTaskState
  * @property {Function} findDuplicateTask
@@ -190,9 +189,6 @@ export async function handleMessage(input, output, deps) {
     readActiveTaskIdFresh,
     writeActiveTaskId,
     waitAMinute,
-    migrateLegacyCognition,
-    noteSuccess,
-    noteFailure,
     getTaskState,
     persistTaskState,
     findDuplicateTask,
@@ -237,54 +233,6 @@ export async function handleMessage(input, output, deps) {
     }
 
     const promptText = extractPrompt(input, output);
-    if (!promptText.trim()) return;
-
-    // --- Tool execution integration (passive state preservation) ---
-    if (input?.tool && output?.result !== undefined) {
-      const toolName = input.tool;
-      const wamRoot = await ensureWamMemory(input.sessionID, promptText);
-      const resolved = effectiveTaskId(input, sessionTasks, wamRoot, promptText, typeof isSubagentSession === "function" ? isSubagentSession(input?.sessionID) : false);
-      const taskId = resolved.taskId;
-
-      try { migrateLegacyCognition(wamRoot, taskId); } catch (e) { console.log(`[wait-a-minute] migration error:`, e.message); }
-
-      try {
-        await noteSuccess(wamRoot, taskId, {
-          hypothesisId: input._wamHypothesisId || input.hypothesisId,
-          experimentId: input._wamExperimentId || input.experimentId,
-          result: output.result,
-          actual: output.actual,
-          unexpected: output.unexpected,
-          provenance: `agent-tool-${toolName}-success`,
-          requirementId: input._wamRequirementId || input.requirementId,
-        });
-      } catch (e) {
-        console.log(`[wait-a-minute] noteSuccess integration error:`, e.message);
-      }
-    }
-
-    if (input?.tool && output?.error) {
-      const toolName = input.tool;
-      const wamRoot = await ensureWamMemory(input.sessionID, promptText);
-      const resolved = effectiveTaskId(input, sessionTasks, wamRoot, promptText, typeof isSubagentSession === "function" ? isSubagentSession(input?.sessionID) : false);
-      const taskId = resolved.taskId;
-
-      try { migrateLegacyCognition(wamRoot, taskId); } catch (e) { console.log(`[wait-a-minute] migration error:`, e.message); }
-
-      try {
-        await noteFailure(wamRoot, taskId, {
-          hypothesisId: input._wamHypothesisId || input.hypothesisId,
-          experimentId: input._wamExperimentId || input.experimentId,
-          reason: output.error || "tool execution failed",
-          actual: output.actual,
-          unexpected: output.unexpected,
-          provenance: `agent-tool-${toolName}-failure`,
-        });
-      } catch (e) {
-        console.log(`[wait-a-minute] noteFailure integration error:`, e.message);
-      }
-    }
-
     if (!promptText.trim()) return;
 
     // Ensure WAM memory for this session
@@ -447,7 +395,7 @@ export async function handleMessage(input, output, deps) {
         "project-switch",
       );
       persistTaskState(taskId, existingState, wamRoot);
-      try { fs.rmSync(path.join(wamRoot, ".wam", "active-task"), { force: true }); } catch {}
+      try { fs.rmSync(activeTaskPath(wamRoot), { force: true }); } catch {}
       taskId = `task-${Date.now()}`;
       input.taskId = taskId;
     }
@@ -478,7 +426,9 @@ export async function handleMessage(input, output, deps) {
               }) + "\n",
               loadPrompt("injection.n2_task", { live }) + "\n",
             ];
-            parts.push(...delegationLines(existingState).map((l) => l + "\n"));
+            const delegation = delegationLines(existingState);
+            parts.push(...delegation.map((l) => l + "\n"));
+            try { recordDelegationEvidence({ taskId, lines: delegation, root: wamRoot }); } catch {}
             emitTextPart(output, parts.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
           } catch {}
           return;
@@ -694,6 +644,10 @@ export async function handleMessage(input, output, deps) {
     try { initMemory(wamRoot); } catch {}
     try { updateProjectMemo(analysis, wamRoot); } catch {}
     const requestUsage = typeof getRequestUsage === "function" ? getRequestUsage(input?.sessionID) : null;
+    const injectedSkills = cfg.skillDedupe === false ? null : injectedSkillsFor(input?.sessionID);
+    if (injectedSkills && injectedSkills.size === 0) {
+      for (const id of injectedSkillIds({ taskId, root: wamRoot })) injectedSkills.add(id);
+    }
     try {
       const pack = await assembleContext({
         prompt: promptText,
@@ -705,7 +659,7 @@ export async function handleMessage(input, output, deps) {
         taskState: updatedState,
         skillRegistry: cfg.skills === false ? {} : (analysis.skillRegistryMap || waitAMinute.loadBundledRegistry()),
         selectedSkills: analysis.skills?.selected || [],
-        injectedSkills: cfg.skillDedupe === false ? null : injectedSkillsFor(input?.sessionID),
+        injectedSkills,
         previousRequestTokens: requestUsage,
       });
       if (pack.lines.length) {
@@ -857,7 +811,21 @@ const { lines } = buildTaskInferenceDirective({
     }
 
     if (updatedState.contract?.status === "APPROVED") {
-      inject.push(...delegationLines(updatedState));
+      const delegation = delegationLines(updatedState);
+      inject.push(...delegation);
+      try { recordDelegationEvidence({ taskId, lines: delegation, root: wamRoot }); } catch {}
+      const preflight = ensurePermissionPlan(updatedState, { promptText });
+      if (preflight) {
+        const lines = permissionPreflightLines(preflight);
+        if (lines.length > 0) {
+          inject.push(...lines);
+          if (!updatedState.permissionPreflightNotified) {
+            updatedState.permissionPreflightNotified = true;
+            emitTextPart(output, lines.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
+          }
+        }
+        try { persistTaskState(taskId, updatedState, wamRoot); } catch {}
+      }
     }
     try { recordTurn({ sessionID: input.sessionID, user: promptText }, wamRoot); } catch {}
     const budgetedAux = applyContextBudget(auxInject, {

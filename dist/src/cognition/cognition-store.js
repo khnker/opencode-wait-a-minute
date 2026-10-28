@@ -13,6 +13,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { taskDir as wamTaskDir } from "../shared/wam-paths.js";
 
 const COGNITION_DIR = "cognition";
 const FILES = {
@@ -42,7 +43,7 @@ export const EXPERIMENT_STATUS = Object.freeze({
 });
 
 export function migrateLegacyCognition(taskRoot, taskId) {
-  const legacyFile = path.join(taskRoot, ".wam", "tasks", taskId, "cognition.json");
+  const legacyFile = path.join(wamTaskDir(taskRoot, taskId), "cognition.json");
   if (!fs.existsSync(legacyFile)) return false;
 
   const data = JSON.parse(fs.readFileSync(legacyFile, "utf-8"));
@@ -85,7 +86,7 @@ export function hasRepetitiveFailure(taskRoot, taskId, { hypothesisId, actionDes
 }
 
 function cognitionRoot(taskRoot, taskId) {
-  return path.join(taskRoot, ".wam", "tasks", taskId, COGNITION_DIR);
+  return path.join(wamTaskDir(taskRoot, taskId), COGNITION_DIR);
 }
 
 function ensureDir(dir) {

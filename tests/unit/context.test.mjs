@@ -9,6 +9,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+
+delete process.env.WAM_SESSION_DIR;
 import {
   getSessionId,
   resetSessionCache,
@@ -202,6 +204,25 @@ test("resolveWamRoot: proyecto multi-repo → repo git objetivo del mensaje", ()
 test("extractPaths: rutas absolutas con extensión de código", () => {
   const paths = extractPaths('mira /home/user/app/src/index.ts y también /app/config.json:42');
   assert.deepEqual(paths, ["/home/user/app/src/index.ts", "/app/config.json"]);
+});
+
+test("WAM_SESSION_DIR redirects session identity files out of the project", () => {
+  const projectRoot = fs.mkdtempSync(path.join(fs.realpathSync("."), "tmp", "session-redirect-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wam-session-dir-"));
+  const previous = process.env.WAM_SESSION_DIR;
+  process.env.WAM_SESSION_DIR = dir;
+  try {
+    resetSessionCache();
+    getSessionId(projectRoot, "redirect-check");
+    assert.equal(fs.existsSync(path.join(dir, "session_redirect-check.json")), true);
+    assert.equal(fs.existsSync(path.join(projectRoot, ".wam", "session_redirect-check.json")), false);
+  } finally {
+    if (previous === undefined) delete process.env.WAM_SESSION_DIR;
+    else process.env.WAM_SESSION_DIR = previous;
+    resetSessionCache();
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(projectRoot, { recursive: true, force: true });
+  }
 });
 
 cleanup();

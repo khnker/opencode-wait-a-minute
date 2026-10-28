@@ -1,0 +1,178 @@
+#!/usr/bin/env node
+/**
+ * engine/index-layer/store.js — SQLite storage (node:sqlite, WAL, FTS5).
+ * Schema: meta / files (manifest) / symbols / deps / lex (FTS5).
+ * Sin deps nuevas. Persistencia en <repo>/.cqe/catalog.db (override: CQE_CATALOG_DB).
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+
+// node:sqlite no existe en todos los runtimes (p.ej. el Bun embebido de
+// opencode no lo resuelve). El import estático mataba la cadena completa del
+// vendor e inhabilitaba CQE por entero, aunque las rutas de búsqueda por
+// archivos (fallbackFileSearch) no necesitan sqlite. Carga perezosa: el error
+// queda localizado en openStore y los callers con try/catch degradan a fallback.
+let _DatabaseSync = null;
+let _sqliteFailed = false;
+function getDatabaseSync() {
+  if (_DatabaseSync) return _DatabaseSync;
+  if (_sqliteFailed) throw new Error('CQE_SQLITE_UNAVAILABLE: ni node:sqlite ni bun:sqlite disponibles en este runtime');
+  const req = createRequire(import.meta.url);
+  try {
+    _DatabaseSync = req('node:sqlite').DatabaseSync;
+    return _DatabaseSync;
+  } catch {}
+  try {
+    _DatabaseSync = bunAdapter(req('bun:sqlite').Database);
+    return _DatabaseSync;
+  } catch (err) {
+    _sqliteFailed = true;
+    throw new Error(`CQE_SQLITE_UNAVAILABLE: ${(err && err.message) || err}`);
+  }
+}
+
+// Adapta bun:sqlite (db.query + .get/.all/.run) a la superficie
+// node:sqlite (db.prepare + .get/.all/.run) que usa este módulo.
+function bunAdapter(BunDatabase) {
+  if (!BunDatabase) throw new Error('bun:sqlite sin export Database');
+  return class BunDatabaseCompat {
+    constructor(dbPath) {
+      this._db = new BunDatabase(dbPath);
+    }
+    exec(sql) {
+      return this._db.exec(sql);
+    }
+    prepare(sql) {
+      const stmt = this._db.query(sql);
+      return {
+        get: (...args) => stmt.get(...args) ?? undefined,
+        all: (...args) => stmt.all(...args),
+        run: (...args) => stmt.run(...args),
+      };
+    }
+    close() {
+      return this._db.close();
+    }
+  };
+}
+
+const SCHEMA_VERSION = 1;
+const LOCK_RETRY = { attempts: 12, delayMs: 250 };
+
+export function openStore(dbPath) {
+  const DatabaseSync = getDatabaseSync();
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  const db = new DatabaseSync(dbPath);
+  withLockRetry(() => {
+    db.exec('PRAGMA journal_mode=WAL');
+    db.exec('PRAGMA busy_timeout=8000');
+    db.exec('PRAGMA foreign_keys=ON');
+    migrate(db);
+  });
+  return db;
+}
+
+/** Retry boundedly on SQLite 'database is locked' (errcode 5) so concurrent
+ *  access degrades gracefully instead of throwing. Deterministic backoff. */
+function withLockRetry(fn) {
+  let lastErr;
+  for (let i = 0; i < LOCK_RETRY.attempts; i++) {
+    try { fn(); return; } catch (err) {
+      if (err?.code === 'ERR_SQLITE_ERROR' && err?.errcode === 5) {
+        lastErr = err;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, LOCK_RETRY.delayMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
+function migrate(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+    CREATE TABLE IF NOT EXISTS files (
+      path TEXT PRIMARY KEY,
+      size INTEGER NOT NULL,
+      mtime_ms INTEGER NOT NULL,
+      sha256 TEXT NOT NULL,
+      indexed_at_ms INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS symbols (
+      entity TEXT NOT NULL,
+      path TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      line_start INTEGER NOT NULL,
+      line_end INTEGER NOT NULL,
+      PRIMARY KEY (entity, path, line_start)
+    );
+    CREATE INDEX IF NOT EXISTS idx_symbols_path ON symbols(path);
+    CREATE TABLE IF NOT EXISTS deps (
+      path TEXT NOT NULL,
+      imported TEXT NOT NULL,
+      PRIMARY KEY (path, imported)
+    );
+    CREATE VIRTUAL TABLE IF NOT EXISTS lex USING fts5(path UNINDEXED, tok, tokenize='unicode61');
+  `);
+  if ((db.prepare('SELECT value FROM meta WHERE key=?').get('schema_version')?.value) !== String(SCHEMA_VERSION)) {
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('schema_version', String(SCHEMA_VERSION));
+  }
+}
+
+export function metaGet(db, key) {
+  return db.prepare('SELECT value FROM meta WHERE key=?').get(key)?.value ?? null;
+}
+export function metaSet(db, key, value) {
+  db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(key, String(value));
+}
+
+export function indexVersion(db) {
+  return Number(metaGet(db, 'index_version') ?? 0);
+}
+export function bumpIndexVersion(db) {
+  const v = indexVersion(db) + 1;
+  metaSet(db, 'index_version', String(v));
+  return v;
+}
+
+export function upsertFile(db, rec) {
+  db.prepare(`INSERT OR REPLACE INTO files (path, size, mtime_ms, sha256, indexed_at_ms)
+              VALUES (?, ?, ?, ?, ?)`)
+    .run(rec.path, rec.size, rec.mtimeMs, rec.sha256, Date.now());
+}
+
+export function getFiles(db) {
+  return db.prepare('SELECT path, size, mtime_ms AS mtimeMs, sha256 FROM files').all();
+}
+
+export function removeFile(db, path) {
+  db.prepare('DELETE FROM files WHERE path=?').run(path);
+  db.prepare('DELETE FROM symbols WHERE path=?').run(path);
+  db.prepare('DELETE FROM deps WHERE path=?').run(path);
+  db.prepare("DELETE FROM lex WHERE path=?").run(path);
+}
+
+export function replaceSymbols(db, path, symbols) {
+  db.prepare('DELETE FROM symbols WHERE path=?').run(path);
+  const ins = db.prepare('INSERT OR REPLACE INTO symbols (entity, path, kind, line_start, line_end) VALUES (?, ?, ?, ?, ?)');
+  for (const s of symbols) ins.run(s.entity, s.path, s.kind, s.lineStart, s.lineEnd);
+}
+
+export function replaceDeps(db, path, deps) {
+  db.prepare('DELETE FROM deps WHERE path=?').run(path);
+  const ins = db.prepare('INSERT OR REPLACE INTO deps (path, imported) VALUES (?, ?)');
+  for (const d of deps) ins.run(path, d);
+}
+
+export function replaceLex(db, path, content) {
+  db.prepare('DELETE FROM lex WHERE path=?').run(path);
+  // prepend del path: FTS por basename (query filename usa phrase del nombre completo)
+  if (content.trim()) db.prepare('INSERT INTO lex (path, tok) VALUES (?, ?)').run(path, `${path} ${content}`);
+}
+
+export function tableCounts(db) {
+  const c = (t) => db.prepare(`SELECT count(*) AS c FROM ${t}`).get().c;
+  return { files: c('files'), symbols: c('symbols'), deps: c('deps'), lex_rows: c('lex') };
+}

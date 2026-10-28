@@ -14,6 +14,7 @@ const ENV_KEYS = [
   "WAM_ENFORCEMENT", "WAM_GOVERNANCE", "WAM_BYPASS",
   "WAM_DEBUG", "WAM_DISABLE_DEBUG", "WAM_LOG_LEVEL", "WAM_CONFIG",
   "WAM_AUTO_LOOP", "WAM_DISABLE_AUTO_LOOP",
+  "WAM_PERMISSION_PREFLIGHT", "WAM_DISABLE_PERMISSION_PREFLIGHT",
 ];
 let saved = {};
 
@@ -81,7 +82,7 @@ test("WAM_GOVERNANCE=off / WAM_BYPASS disable enforcement", () => {
 
 test("config file is honored", () => {
   const cfg = loadWamConfig(tmpProject({ skills: false, logging: false, enforcement: false }));
-  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false, debug: true, autoLoop: true });
+  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false, debug: true, autoLoop: true, permissionPreflight: true });
 });
 
 test("env overrides config file", () => {
@@ -178,4 +179,14 @@ test("autoLoop defaults to true and honors file/env overrides", () => {
   delete process.env.WAM_AUTO_LOOP;
   process.env.WAM_DISABLE_AUTO_LOOP = "1";
   assert.equal(loadWamConfig(tmpProject()).autoLoop, false);
+});
+
+test("permissionPreflight defaults to true and honors file/env overrides", () => {
+  assert.equal(loadWamConfig(tmpProject()).permissionPreflight, true);
+  assert.equal(loadWamConfig(tmpProject({ permissionPreflight: false })).permissionPreflight, false);
+  process.env.WAM_PERMISSION_PREFLIGHT = "0";
+  assert.equal(loadWamConfig(tmpProject()).permissionPreflight, false);
+  delete process.env.WAM_PERMISSION_PREFLIGHT;
+  process.env.WAM_DISABLE_PERMISSION_PREFLIGHT = "1";
+  assert.equal(loadWamConfig(tmpProject()).permissionPreflight, false);
 });

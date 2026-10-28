@@ -1,0 +1,33 @@
+{
+  "name": "@repograph/core",
+  "version": "0.1.0",
+  "description": "RepoGraph by aayanlabs — Core indexing, graph, storage, traversal, and retrieval logic.",
+  "author": "aayanlabs <mdaayanmalik9291@gmail.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "ignore": "^7.0.9"
+  },
+  "optionalDependencies": {
+    "tree-sitter": "^0.25.1",
+    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-typescript": "^0.23.2"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

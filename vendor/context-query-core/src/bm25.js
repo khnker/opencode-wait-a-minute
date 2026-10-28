@@ -10,9 +10,9 @@
  * Emite paths RELATIVOS al dir indexado (mismo shape que rg/parseGrep).
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 
 const K1 = 1.5;
 const B = 0.75;
@@ -21,7 +21,7 @@ const SKIP_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.pdf', '.woff', '.wo
 // límites de indexación (repos enormes tipo dev=/home/nicolas/dev → OOM sin cap)
 const MAX_FILES = 1000;
 const MAX_FILE_BYTES = 256 * 1024;
-const INDEX_FILE = () => process.env.CF_BM25_INDEX_FILE || path.join(path.dirname(fileURLToPath(import.meta.url)), '.bm25-index.json');
+export const INDEX_FILE = () => process.env.CF_BM25_INDEX_FILE || path.join(os.homedir(), '.cache', 'cqe', 'bm25-index.json');
 const NO_PERSIST = process.env.CF_BM25_NO_PERSIST === '1';
 
 function tokenize(text) {
@@ -93,6 +93,7 @@ function persistIndex(key, index) {
       docLen: Object.fromEntries(index.docLen),
       tf: Object.fromEntries([...index.tf].map(([f, m2]) => [f, Object.fromEntries(m2)])),
     };
+    fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify(prev));
   } catch { /* best-effort */ }
 }

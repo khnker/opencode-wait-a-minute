@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { cavemanify } from "../skills/engine.js";
+import { taskDir as wamTaskDir } from "../shared/wam-paths.js";
 
 const StorageProvider = {
   read: (p) => fs.readFileSync(p, "utf-8"),
@@ -355,7 +356,7 @@ export function compactDecisions(root) {
 
 export function updateTaskMemory(taskId, { evidence = "", summary = "" } = {}, root) {
   if (!taskId) return { ok: false, reason: "taskId requerido" };
-  const dir = path.join(rootDir(root), ".wam", "tasks", taskId);
+  const dir = wamTaskDir(rootDir(root), taskId);
   StorageProvider.write(path.join(dir, ".gitkeep"), "");
   if (evidence) StorageProvider.write(path.join(dir, "evidence.md"), redact(evidence).trim() + "\n");
   if (summary) {
@@ -376,7 +377,7 @@ export function updateTaskMemory(taskId, { evidence = "", summary = "" } = {}, r
  * (project/architecture/decisions/constraints).
  */
 export function updateLiveContext(taskId, state = {}, root) {
-  const dir = path.join(rootDir(root), ".wam", "tasks", taskId);
+  const dir = wamTaskDir(rootDir(root), taskId);
   const reqs = state.requirements || [];
   const pend = reqs.filter((r) => r.status !== "done" && r.status !== "verified").length;
   const unverified = reqs.filter((r) => r.status === "done").length;

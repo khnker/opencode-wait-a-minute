@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { recordContextPack, listContextEvidence, readContextEvidence } from './context-pack-evidence.js';
+import { recordContextPack, recordDelegationEvidence, injectedSkillIds, listContextEvidence, readContextEvidence } from './context-pack-evidence.js';
 
 function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wam-pack-evidence-'));
@@ -137,4 +137,46 @@ test('records how many skill bodies were paid for versus deduped to refs', () =>
 
   const [entry] = listContextEvidence({ taskId: 'task-skill', root });
   assert.deepStrictEqual(entry.injection, { skills: 2, refs: 1 });
+});
+
+test('recovers injected skill ids from the persisted packs (restart-safe dedupe)', () => {
+  const root = tempRoot();
+  recordContextPack({
+    taskId: 'task-recover', prompt: 'p1', root,
+    pack: {
+      ...pack,
+      lines: [
+        '[wam N3 skill] codebase-design\nbody',
+        '[wam N3 skill] writing-for-agents\nbody',
+        '[wam N3 skill-ref] codebase-design — already injected this session',
+      ],
+    },
+  });
+  recordContextPack({ taskId: 'task-recover', prompt: 'p2', root, pack: { ...pack, lines: ['[wam N0 policy] x'] } });
+
+  const ids = injectedSkillIds({ taskId: 'task-recover', root });
+  assert.deepStrictEqual([...ids].sort(), ['codebase-design', 'writing-for-agents']);
+  assert.strictEqual(injectedSkillIds({ taskId: 'task-missing', root }).size, 0);
+});
+
+test('records which requirements were delegated to parallel subagents', () => {
+  const root = tempRoot();
+  const lines = [
+    '[wam delegation] Reqs pendientes → delegar en PARALELO via Task',
+    '  req-1 → Task(parallel) "arreglar gate"',
+    '  req-2 → Task(parallel) "agregar tests" [contexto: test]',
+    '  (...(+1 más))',
+  ];
+  const res = recordDelegationEvidence({ taskId: 'task-del', lines, root });
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.count, 2);
+
+  const file = path.join(root, '.wam', 'tasks', 'task-del', 'context', 'delegation.json');
+  const payload = JSON.parse(fs.readFileSync(file, 'utf-8'));
+  assert.deepStrictEqual(payload.requirements, ['req-1', 'req-2']);
+
+  recordDelegationEvidence({ taskId: 'task-del', lines: [], root });
+  const cleared = JSON.parse(fs.readFileSync(file, 'utf-8'));
+  assert.strictEqual(cleared.count, 0);
+  assert.ok(cleared.updatedAt);
 });

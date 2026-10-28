@@ -5,10 +5,12 @@ import { migrateLegacyCognition } from "./src/cognition/cognition-store.js";
 import { handleMessage } from "./src/integration/message-handler.js";
 import { injectWamParts } from "./src/integration/part-provenance.js";
 import { loadWamConfig } from "./src/config/wam-config.js";
+import { ensurePermissionPlan, permissionPreflightLines, grantPermissionPlan, denyPermissionPlan, decidePermission, delegationBlocked } from "./src/policy/permission-preflight.js";
 import { configureLogger } from "./src/integration/logger.js";
 import { setLoggingEnabled, setDebugEnabled, registerLogicGate, wamDebug, wamLog, wamWarn, wamError } from "./src/shared/wam-log.js";
 import { evaluateCompletionGate, applyPhaseTransition, isCompletionIntent, COMPLETION_INTENT_REGEX } from "./src/integration/orchestration.js";
 import { loadPrompt } from "./src/prompts/loader.js";
+import { activeTaskPath, tasksDir as wamTasksDir, taskDir as wamTaskDir } from "./src/shared/wam-paths.js";
 
 import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
 import { purgeTasks } from "./src/persistence/retention-manager.js";
@@ -241,7 +243,7 @@ function targetFilesOf(input) {
   return p ? [String(p)] : [];
 }
 
-const ACTIVE_FILE = (root) => path.join(root || process.cwd(), ".wam", "active-task");
+const ACTIVE_FILE = (root) => activeTaskPath(root);
 
 function readActiveTaskId(root) {
   try {
@@ -293,7 +295,7 @@ function writeActiveTaskId(id, root, options = {}) {
 }
 
 function listTaskIds(root) {
-  const dir = path.join(root || process.cwd(), ".wam", "tasks");
+  const dir = wamTasksDir(root);
   try {
     return fs
       .readdirSync(dir, { withFileTypes: true })
@@ -474,7 +476,7 @@ function isContinuationPrompt(text) {
 }
 
 function taskDir(root, taskId) {
-  return path.join(root || process.cwd(), ".wam", "tasks", taskId);
+  return wamTaskDir(root, taskId);
 }
 
 function liveFileFor(root, taskId) {
@@ -552,7 +554,7 @@ function writeCavemanSummary(taskId, state, root, extra = "") {
   ];
   const cav = cavemanify([...base, extra].filter(Boolean).join("\n"));
   try {
-    const dir = path.join(root || process.cwd(), ".wam", "tasks", taskId);
+    const dir = wamTaskDir(root, taskId);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "caveman-summary.md"), cav + "\n");
   } catch {}
@@ -733,13 +735,14 @@ const WaitAMinutePlugin = async (pluginInput) => {
   configureLogger({ enabled: wamConfig.logging });
   setLoggingEnabled(wamConfig.logging);
   setDebugEnabled(wamConfig.debug);
-  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement, debug: wamConfig.debug, autoLoop: wamConfig.autoLoop };
+  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement, debug: wamConfig.debug, autoLoop: wamConfig.autoLoop, permissionPreflight: wamConfig.permissionPreflight };
   // Audit which WAM logic gates are loaded so WAM_DEBUG=1 output is self-describing.
   registerLogicGate("skills", { loaded: wamConfig.skills, source: "wam-config", note: "skill discovery/routing/injection" });
   registerLogicGate("logging", { loaded: wamConfig.logging, source: "wam-config", note: "file + console log emission" });
   registerLogicGate("enforcement", { loaded: wamConfig.enforcement, source: "wam-config", note: "governance/mutating-tool blocking" });
   registerLogicGate("debug", { loaded: wamConfig.debug, source: "wam-config", note: "structured WAM-DEBUG traces" });
   registerLogicGate("autoLoop", { loaded: wamConfig.autoLoop, source: "wam-config", note: "automatic post-DONE continuation" });
+  registerLogicGate("permissionPreflight", { loaded: wamConfig.permissionPreflight, source: "wam-config", note: "upfront access permission plan before delegation" });
 
   // Track if plugin is bypassed
   let bypassed = false;
@@ -754,6 +757,19 @@ const WaitAMinutePlugin = async (pluginInput) => {
   const sessionParents = new Map(); // sessionID → parentID (subagentes Task tienen parent)
   const sessionResolved = new Set(); // sessionIDs cuyo parentID se resolvió (distingue main de subagente)
   const processedMessages = new Map(); // messageID+kind → processed (chat.message idempotency)
+  // tool.execute.before no puede escribir al modelo: encola la directiva por
+  // callID y tool.execute.after la adjunta al resultado real.
+  const PENDING_TOOL_DIRECTIVES = new Map();
+  const MAX_PENDING_TOOL_DIRECTIVES = 200;
+  function queueToolDirective(input, directive) {
+    const callID = input?.callID;
+    if (!callID || directive == null || directive === "") return;
+    const prev = PENDING_TOOL_DIRECTIVES.get(callID);
+    PENDING_TOOL_DIRECTIVES.set(callID, prev ? `${prev}\n\n${directive}` : String(directive));
+    if (PENDING_TOOL_DIRECTIVES.size > MAX_PENDING_TOOL_DIRECTIVES) {
+      PENDING_TOOL_DIRECTIVES.delete(PENDING_TOOL_DIRECTIVES.keys().next().value);
+    }
+  }
   const sessionTasks = new Map(); // sessionID → taskId activo visto en chat.message
   const autoContinueInFlight = new Set(); // sessionID → auto-loop prompt en vuelo
   const client = pluginInput?.client;
@@ -988,6 +1004,27 @@ refresh();
  */
 async function postToolExecution(input, output) {
   const toolName = input?.tool || "";
+  // ponytail: opencode exposes exit codes in metadata.exit, not output.error; tools that omit a code/status still register as success.
+  const meta = output?.metadata || {};
+  const exitCode = meta.exit ?? meta.exitCode;
+  let failureSignal = output?.error ?? meta.error ?? null;
+  if (failureSignal == null && meta.isError) {
+    failureSignal = meta.message || output?.output || "tool reported an error";
+  }
+  if (failureSignal == null && typeof exitCode === "number" && exitCode !== 0) {
+    failureSignal = `tool exited with code ${exitCode}`;
+  }
+  if (failureSignal == null && (meta.status === "error" || meta.status === "failed")) {
+    failureSignal = String(output?.output ?? "tool failed");
+  }
+  const hasCompletionSignal =
+    typeof output?.output === "string" ||
+    meta.exit === 0 || meta.exitCode === 0 ||
+    ["ok", "success", "completed", "complete", "done"].includes(String(meta.status || "").toLowerCase()) ||
+    (typeof output?.title === "string" && output.title.trim() !== "");
+  const rawResult = typeof output?.result === "string" ? output.result : (typeof output?.output === "string" ? output.output : null);
+  const MAX_FACT_CHARS = 400;
+  const resultExcerpt = rawResult == null ? undefined : (rawResult.length > MAX_FACT_CHARS ? `${rawResult.slice(0, MAX_FACT_CHARS - 3)}...` : rawResult);
   try {
     const sid = input?.sessionID;
     if (bypassed || (sid && sessionBypasses.has(sid))) return;
@@ -997,13 +1034,13 @@ async function postToolExecution(input, output) {
     const key = input._wamCallID || input?.callID || `${sid}:${toolName}`;
     const mapping = sessionExecutions.get(key) || {};
 
-    if (input?.tool && output?.error) {
+    if (input?.tool && failureSignal != null) {
       try {
         await noteFailure(wamRoot, taskId, {
           hypothesisId: input._wamHypothesisId || mapping.hypothesisId || input.hypothesisId,
           experimentId: input._wamExperimentId || mapping.experimentId || input.experimentId,
           requirementId: input._wamRequirementId || mapping.requirementId || input.requirementId,
-          reason: output.error || "tool execution failed",
+          reason: String(failureSignal) || "tool execution failed",
           actual: output.actual,
           unexpected: output.unexpected,
           provenance: `agent-tool-${toolName}-failure`,
@@ -1011,13 +1048,13 @@ async function postToolExecution(input, output) {
       } catch (e) {
         wamLog(`[wait-a-minute] postToolExecution noteFailure error:`, e.message);
       }
-    } else if (input?.tool) {
+    } else if (input?.tool && hasCompletionSignal) {
       try {
         await noteSuccess(wamRoot, taskId, {
           hypothesisId: input._wamHypothesisId || mapping.hypothesisId || input.hypothesisId,
           experimentId: input._wamExperimentId || mapping.experimentId || input.experimentId,
           requirementId: input._wamRequirementId || mapping.requirementId || input.requirementId,
-          result: output.result,
+          result: resultExcerpt,
           actual: output.actual,
           unexpected: output.unexpected,
           provenance: `agent-tool-${toolName}-success`,
@@ -1025,6 +1062,8 @@ async function postToolExecution(input, output) {
       } catch (e) {
         wamLog(`[wait-a-minute] postToolExecution noteSuccess error:`, e.message);
       }
+    } else if (input?.tool) {
+      wamLog(`[wait-a-minute] postToolExecution: no completion signal for ${toolName}; success not recorded`);
     }
   } catch (err) {
     wamError("[wait-a-minute] postToolExecution error:", err);
@@ -1192,6 +1231,29 @@ async function postToolExecution(input, output) {
         .catch(() => {});
       return pending;
     },
+    "permission.ask": async (input, output) => {
+      try {
+        if (!cfg.permissionPreflight) return;
+        const sid = input?.sessionID;
+        if (!sid) return;
+        // Subagent permissions inherit the parent's preflight grant.
+        let mainSid = sessionParents.get(sid);
+        if (!mainSid) {
+          try { await resolveSessionBase(sid); } catch {}
+          mainSid = sessionParents.get(sid) || sid;
+        }
+        const root = sessionWamRoots.get(mainSid) || sessionWamRoots.get(sid) || sessionRoots.get(mainSid) || sessionRoots.get(sid) || projectDirectory;
+        const taskId = sessionTasks.get(mainSid) || (mainSid === sid ? sessionTasks.get(sid) : null) || readActiveTaskIdFresh(root, { sessionId: mainSid, projectRoot: root });
+        const state = taskId ? getTaskState(taskId, root) : null;
+        if (!state) return;
+        if (decidePermission({ permission: input, plan: state.permissionPreflight }) === "allow") {
+          output.status = "allow";
+          wamDebug(`[wait-a-minute] permission preflight allowed ${input?.type} for ${taskId}`);
+        }
+      } catch (e) {
+        wamDebug("[wait-a-minute] permission.ask error:", e?.message);
+      }
+    },
     // Handle /wam CLI (opencode 1.18.25: commands arrive via command.execute.before)
     "command.execute.before": async (input, output) => {
       if (input.command !== "wam") return;
@@ -1262,7 +1324,7 @@ async function postToolExecution(input, output) {
             } else if (stratCheck.covered === false) {
             // Acción prohibida explícitamente por la estrategia → bloquear.
             const directive = `[wait-a-minute] STRATEGY VIOLATION: ${stratCheck.reason}. La estrategia aprobada "${st.approvedStrategy.strategy}" no autoriza esta acción.`;
-            input.output = directive;
+            queueToolDirective(input, directive);
             // Soft mode: log warning and allow execution to continue unless strict mode
             if (process.env.WAM_STRICT_BLOCK === "1") {
               throw new WamPolicyBlock(directive, {
@@ -1287,7 +1349,7 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
           wamDebug("risk-envelope", `evaluateAction(${tool}) -> level=${risk.level}`, { reason: risk.reason, tool, enforcement: cfg.enforcement });
           if (risk.level === "BLOCKED") {
           const directive = `[wait-a-minute] RISK BLOCK (${tool}): ${risk.reason || "acción fuera del envelope de riesgo"}. Requiere autorización explícita del usuario.`;
-          input.output = directive;
+          queueToolDirective(input, directive);
           // Soft mode: log warning and allow execution to continue unless strict mode
           if (process.env.WAM_STRICT_BLOCK === "1") {
             throw new WamPolicyBlock(directive, { tool, reason: risk.reason, level: risk.level });
@@ -1333,7 +1395,7 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
           } catch (err) {
             wamDebug("governance", `enforceGovernance(${tool}) -> BLOCKED`, { isSubagent, phase: st?.phase, reason: err?.message });
             if (err?.wamPolicyBlock) {
-              input.output = err.message;
+              queueToolDirective(input, err.message);
               // Soft mode: log warning and allow execution to continue unless strict mode
               if (process.env.WAM_STRICT_BLOCK !== "1") {
                 wamLog(`[wait-a-minute] SOFT GOVERNANCE BLOCK (${tool}): ${err.message}`);
@@ -1344,7 +1406,7 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
             throw err;
           }
          } catch (err) {
-           if (err?.wamPolicyBlock) input.output = err.message;
+           if (err?.wamPolicyBlock) queueToolDirective(input, err.message);
            throw err;
          }
 
@@ -1352,8 +1414,8 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
          const readDel = enforceReadDelegation(tool, { isSubagent, enforcementEnabled: cfg.enforcement !== false });
          if (!readDel.allowed) {
            const mode = process.env.WAM_READ_DELEGATION || "off";
-           if (mode === "warn") {
-             input.output = readDel.directive;
+            if (mode === "warn") {
+              queueToolDirective(input, readDel.directive);
              wamLog(`[wait-a-minute] SOFT READ DELEGATION (${tool}): ${readDel.directive}`);
             } else if (mode === "enforce") {
               throw new WamPolicyBlock(readDel.directive, {
@@ -1376,7 +1438,7 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
                     tool, reason: "cqe-first-discovery", level: "BLOCKED", source: "discovery-classifier",
                   });
                 } else if (mode === "warn") {
-                  input.output = disc.nudge;
+                  queueToolDirective(input, disc.nudge);
                   wamLog(`[wait-a-minute] CQE-FIRST NUDGE (${tool}): ${disc.nudge}`);
                 }
               }
@@ -1385,6 +1447,17 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
               // Fail open: clasificación rota nunca bloquea la herramienta.
             }
           }
+
+        if (tool === "task" && cfg.permissionPreflight && st && !sessionParents.has(sid)) {
+          const plan = ensurePermissionPlan(st, { promptText: input?.description || input?.args?.description || "" });
+          if (plan) { try { persistTaskState(taskId, st, taskRoot); } catch {} }
+          const verdict = delegationBlocked(st);
+          if (verdict.blocked) {
+            const directive = `[wait-a-minute] PERMISSION PREFLIGHT — delegación bloqueada: aprueba los permisos antes de delegar. ${permissionPreflightLines(verdict.plan).join(" ")}`;
+            queueToolDirective(input, directive);
+            throw new WamPolicyBlock(directive, { tool, reason: "permission-preflight-pending", level: "high" });
+          }
+        }
 
         if (st?.phase !== "ASKING") return;
         // git read-only (status/diff/log) es investigación: permitido aun en ASKING.
@@ -1395,7 +1468,7 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
           const u = (st.contract?.unknowns || []).find((x) => x.status === "blocking");
           const question = u ? `${u.id}: ${u.question}` : "pregunta bloqueante pendiente";
           const directive = `[wait-a-minute] ENFORCED BLOCK — tarea en ASKING (${question}). Herramienta ${tool} bloqueada. Responder: /wam answer ${u?.id || "U1"} <respuesta>`;
-          input.output = directive;
+          queueToolDirective(input, directive);
           throw new Error(directive);
         }
       } catch (err) {
@@ -1427,6 +1500,15 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
     },
 
     "tool.execute.after": async (input, output) => {
+      const directive = input?.callID ? PENDING_TOOL_DIRECTIVES.get(input.callID) : null;
+      if (directive) {
+        PENDING_TOOL_DIRECTIVES.delete(input.callID);
+        if (typeof output?.output === "string") {
+          output.output = `${output.output}\n\n${directive}`.trim();
+        } else if (output && output.output == null) {
+          output.output = directive;
+        }
+      }
       try {
         await postToolExecution(input, output);
       } catch (e) {
@@ -1549,6 +1631,16 @@ const sel = routeSkillsV2(prompt, {}, waitAMinute.getRegistry(), "STANDARD");
     return "Uso: /wam skills <list|search|inspect|explain> [args]";
   }
 
+  if (sub === "permissions") {
+    const st = getTaskState(taskId, root);
+    if (!st) return "Sin estado de tarea";
+    const plan = ensurePermissionPlan(st, { promptText: "" });
+    if (!plan) return "Sin plan de permisos (contrato no APPROVED)";
+    if (action === "approve") { grantPermissionPlan(st); persistTaskState(taskId, st, root); return `Permisos aprobados: ${plan.granted.join(", ")}`; }
+    if (action === "deny") { denyPermissionPlan(st); persistTaskState(taskId, st, root); return "Permisos denegados: la delegación queda bloqueada."; }
+    const lines = permissionPreflightLines(plan);
+    return lines.length ? lines.join("\n") : `Permisos ya aprobados: ${(plan.granted || []).join(", ")}`;
+  }
   if (sub === "contract") {
     if (action === "approve") return JSON.stringify(waitAMinute.approveContract(taskId, root));
     if (action === "reject") return JSON.stringify(waitAMinute.rejectContract(taskId, root));

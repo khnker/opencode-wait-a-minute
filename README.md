@@ -141,6 +141,7 @@ Once installed, WAM intercepts requests before skill resolution and agent execut
 - `/wam on` — restore WAM for the current session.
 - `/wam config get` — show effective config; set `WAM_GOVERNANCE=off` or `.wam/config.json` to disable globally.
 - Automatic post-DONE loop — when a DONE claim is rejected, WAM re-drives the session itself until the gate is clean. Bounded per pending set (3 attempts) and total (10). Disable with `"autoLoop": false` in `.wam/config.json` or `WAM_AUTO_LOOP=0`.
+- Permission preflight — before delegating to a subagent, WAM derives the access permissions the approved task needs and blocks delegation until they are granted (`/wam permissions approve` / `deny`). Disable with `"permissionPreflight": false` in `.wam/config.json` or `WAM_DISABLE_PERMISSION_PREFLIGHT=1`.
 
 ## Debugging and diagnostics
 WAM emits structured, greppable traces when debug mode is on. They audit which WAM logic is loaded, which is skipped, and what runtime decisions were made — useful for benchmarking, regression detection and logic-gap analysis.
@@ -166,7 +167,7 @@ Expected trace categories (each prefixed `[WAM-DEBUG <ISO-timestamp>] [<category
 
 | Category | What it reports |
 |----------|-----------------|
-| `logic-gate` | which WAM gates are loaded (`skills`, `logging`, `enforcement`, `debug`, `autoLoop`) and their source |
+| `logic-gate` | which WAM gates are loaded (`skills`, `logging`, `enforcement`, `debug`, `autoLoop`, `permissionPreflight`) and their source |
 | `risk-envelope` | `evaluateAction(tool)` outcome and reason |
 | `governance` | `enforceGovernance(tool)` ALLOWED vs BLOCKED, with phase and subagent flag |
 | `skills` | `routeSkillsV2` selection count and chosen skill names |

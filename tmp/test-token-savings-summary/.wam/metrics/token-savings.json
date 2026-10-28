@@ -2,7 +2,11 @@
   {
     "taskId": "stdout-fallback",
     "actualTokens": 10,
+    "actualRequestTokens": 10,
+    "usageSource": "provider",
     "baselineTokens": 1000,
+    "baselineSource": "measured",
+    "claimable": true,
     "savingsPct": 99,
     "savingsTokens": 990,
     "timestamp": 1

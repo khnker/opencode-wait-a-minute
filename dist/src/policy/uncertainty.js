@@ -1,3 +1,5 @@
+import { loadPrompt } from "../prompts/loader.js";
+
 /**
  * Clasifica la incertidumbre de una tarea.
  * Rule-based, determinista (sin LLM). Prioridad de seguridad: critical > resolvable > non-blocking.
@@ -112,7 +114,7 @@ export function escalateAssumptions(state, taskText = "") {
             {
               id: `U${unknowns.length + 1}`,
               kind: "ASSUMED",
-              question: `¿${a.statement}?`,
+              question: loadPrompt("question.escalation", { statement: a.statement }),
               status: "blocking",
               assumptionId: a.id,
             },

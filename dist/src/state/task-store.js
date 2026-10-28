@@ -5,11 +5,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { reconcileFromDisk } from "./task-state-file.js";
+import { taskDir as wamTaskDir, tasksDir as wamTasksDir } from "../shared/wam-paths.js";
 
 const TASK_FILE = "task.json";
 
 export function taskFilePath(taskId, root) {
-  return path.join(root || process.cwd(), ".wam", "tasks", taskId, TASK_FILE);
+  return path.join(wamTaskDir(root, taskId), TASK_FILE);
 }
 
 export function loadTask(taskId, root) {
@@ -23,7 +24,7 @@ export function loadTask(taskId, root) {
 }
 
 export function saveTask(taskId, state, root) {
-  const dir = path.join(root || process.cwd(), ".wam", "tasks", taskId);
+  const dir = wamTaskDir(root, taskId);
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, TASK_FILE);
   fs.writeFileSync(file, JSON.stringify(state, null, 2));
@@ -48,7 +49,7 @@ export function taskExists(taskId, root) {
 }
 
 export function listTasks(root) {
-  const dir = path.join(root || process.cwd(), ".wam", "tasks");
+  const dir = wamTasksDir(root);
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true })
     .filter(d => d.isDirectory())
@@ -57,7 +58,7 @@ export function listTasks(root) {
 }
 
 export function deleteTask(taskId, root) {
-  const dir = path.join(root || process.cwd(), ".wam", "tasks", taskId);
+  const dir = wamTaskDir(root, taskId);
   if (fs.existsSync(dir)) {
     fs.rmSync(dir, { recursive: true, force: true });
   }

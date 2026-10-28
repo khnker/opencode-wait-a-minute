@@ -10,8 +10,8 @@
 
 ### [T-02] Implementar límites de ejecución y timeouts
 - Revisar y completar `src/context/cqe-adapter.js`:
-  - [x] Configurar `Promise.race` con timeout configurable (mín 100ms, máx 30000ms)
-  - [ ] Implementar cancelación mediante `AbortController` si el entorno lo permite
+  - [x] Configurar `Promise.race` con timeout configurable (mín 1ms, máx 30000ms)
+  - [x] Implementar cancelación: el engine síncrono solo se interrumpe fuera del hilo principal (`worker.terminate()`); `useWorker:false` degrada a timeout descartable
   - [x] Limpiar recursos (clearTimeout, AbortSignal) al cerrar sesión
   - [ ] Métricas: tiempo real vs. timeout, resultado descartado vs. devuelto
 

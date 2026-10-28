@@ -52,3 +52,24 @@ summary SHALL be mirrored in `index.json`.
 - **WHEN** a pack emits two full skill bodies and one ref line
 - **THEN** the record and the index entry both have `{skills: 2, refs: 1}`
 
+### Requirement: Delegation directive is auditable
+When WAM emits the parallel-delegation directive for a task, it SHALL persist
+`.wam/tasks/<taskId>/context/delegation.json` with `{updatedAt, count, requirements[]}`,
+derived from the emitted `req → Task(parallel)` lines. The file SHALL be
+overwritten (bounded), never appended.
+
+#### Scenario: Two pending requirements
+- **WHEN** the directive lists `req-1` and `req-2`
+- **THEN** the file has `count: 2` and `requirements: ["req-1", "req-2"]`
+
+### Requirement: Tests do not write session identity into the project
+Session identity files SHALL honor `WAM_SESSION_DIR` whenever it is set, so a
+test run can redirect them out of the project. Tests that assert per-root
+session files SHALL unset the variable.
+
+#### Scenario: Test runner
+- **WHEN** `WAM_SESSION_DIR` points to a temp dir
+- **THEN** `session_<id>.json` is written to the temp dir, not to `<root>/.wam`
+
+
+

@@ -16,13 +16,14 @@
  */
 
 import fs from 'fs';
+import { Worker } from 'node:worker_threads';
 import { retrieveContext } from './context-retrieval.js';
 import { canonicalRoot, validatePath } from './path-validator.js';
 import { wamLog, wamWarn, isDebugEnabled } from '../shared/wam-log.js';
 
 const VALID_MODES = new Set(['disabled', 'shadow', 'enabled']);
 const DEFAULT_TIMEOUT_MS = 10000;
-const MIN_TIMEOUT_MS = 100;
+const MIN_TIMEOUT_MS = 1;
 const MAX_TIMEOUT_MS = 30000;
 const MAX_ENGINES = 8;
 
@@ -37,8 +38,9 @@ function cqeDebugWarn(category, message, detail) {
   wamWarn(category, message, detail);
 }
 
-// ponytail: bounded engine cache; evict oldest root when a session spans many repos.
-const engineCache = new Map();
+// ponytail: bounded per-root handle cache (LRU); one worker or inline engine per repo.
+const handleCache = new Map();
+let workerUnavailable = false;
 
 function resolveMode(explicit) {
   if (explicit != null && explicit !== '') {
@@ -95,16 +97,190 @@ export async function createCqeEngine(config = {}) {
   });
 }
 
-function getEngine(repoRoot) {
+function resolveUseWorker(constraints = {}) {
+  if (constraints.useWorker === false) return false;
+  if (process.env.WAM_CQE_WORKER === '0') return false;
+  return !workerUnavailable;
+}
+
+function touchHandle(key, handle) {
+  // LRU: re-insert on use so the hottest root sits at the end of the Map.
+  handleCache.delete(key);
+  handleCache.set(key, handle);
+}
+
+function storeHandle(key, handle) {
+  touchHandle(key, handle);
+  while (handleCache.size > MAX_ENGINES) {
+    const [oldKey, old] = handleCache.entries().next().value;
+    handleCache.delete(oldKey);
+    if (old.kind === 'worker') old.worker.terminate();
+  }
+}
+
+function getInlineHandle(repoRoot) {
   const key = canonicalRoot(repoRoot || process.cwd()) || process.cwd();
-  if (engineCache.has(key)) return engineCache.get(key);
-  const engine = createCqeEngine({ repoRoot: key }).catch((err) => {
-    engineCache.delete(key);
-    throw err;
+  const existing = handleCache.get(key);
+  if (existing && existing.kind === 'inline') {
+    touchHandle(key, existing);
+    return existing;
+  }
+  if (existing) {
+    handleCache.delete(key);
+    if (existing.kind === 'worker') existing.worker.terminate();
+  }
+  const handle = { kind: 'inline', key, enginePromise: createCqeEngine({ repoRoot: key }) };
+  handle.enginePromise.catch(() => {
+    if (handleCache.get(key) === handle) handleCache.delete(key);
   });
-  engineCache.set(key, engine);
-  if (engineCache.size > MAX_ENGINES) engineCache.delete(engineCache.keys().next().value);
-  return engine;
+  storeHandle(key, handle);
+  return handle;
+}
+
+function getWorkerHandle(repoRoot) {
+  const key = canonicalRoot(repoRoot || process.cwd()) || process.cwd();
+  const existing = handleCache.get(key);
+  if (existing && existing.kind === 'worker') {
+    touchHandle(key, existing);
+    return existing;
+  }
+  if (existing) handleCache.delete(key);
+
+  let worker;
+  try {
+    const workerOpts = { workerData: { repoRoot: key } };
+    // --input-type only applies to `node -e`; inheriting it breaks file workers.
+    if (process.execArgv.some((arg) => arg.startsWith('--input-type'))) {
+      workerOpts.execArgv = process.execArgv.filter((arg) => !arg.startsWith('--input-type'));
+    }
+    worker = new Worker(new URL('./cqe-worker.mjs', import.meta.url), workerOpts);
+  } catch (err) {
+    // Fail soft: keep serving inline for the rest of the process.
+    workerUnavailable = true;
+    cqeDebugWarn('cqe-adapter.worker', 'worker spawn failed; using inline CQE', {
+      error: err && err.message ? err.message : String(err),
+    });
+    return null;
+  }
+
+  // An idle worker must never keep the host process (CLI/script) alive; queries
+  // ref() it for the duration of the in-flight request (see sendWorkerQuery).
+  worker.unref();
+
+  const handle = {
+    kind: 'worker',
+    key,
+    worker,
+    ready: false,
+    busy: false,
+    seq: 0,
+    warmingTimedOut: false,
+    readyPromise: null,
+  };
+  handle.readyPromise = new Promise((resolve, reject) => {
+    let settled = false;
+    const fail = (err) => {
+      if (handleCache.get(key) === handle) handleCache.delete(key);
+      if (!settled) {
+        settled = true;
+        reject(err);
+      }
+    };
+    worker.on('message', (msg) => {
+      if (!msg) return;
+      if (msg.type === 'ready') {
+        handle.ready = true;
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      } else if (msg.type === 'fatal') {
+        if (handleCache.get(key) === handle) handleCache.delete(key);
+        try { worker.terminate(); } catch { /* best-effort */ }
+        if (!settled) {
+          settled = true;
+          reject(new Error(`CQE_WORKER_FATAL: ${msg.error}`));
+        }
+      }
+    });
+    worker.on('error', (err) => fail(err));
+    worker.on('exit', (code) => fail(new Error(`CQE_WORKER_EXIT: ${code}`)));
+  });
+  // Queries attach later; swallow early rejections so a cold-start crash is not unhandled.
+  handle.readyPromise.catch(() => {});
+  storeHandle(key, handle);
+  return handle;
+}
+
+/**
+ * Post a query and resolve/reject on its matching result. Returns the cleanup
+ * so a timeout can detach listeners instead of leaking them until exit.
+ */
+function sendWorkerQuery(handle, queryText, constraints) {
+  const id = ++handle.seq;
+  let cleanup;
+  const promise = new Promise((resolve, reject) => {
+    const onMessage = (msg) => {
+      if (!msg || msg.type !== 'result' || msg.id !== id) return;
+      cleanup();
+      if (msg.ok) resolve(msg.result);
+      else reject(new Error(msg.error || 'CQE_WORKER_QUERY_FAILED'));
+    };
+    const onError = (err) => {
+      cleanup();
+      reject(err);
+    };
+    const onExit = (code) => {
+      cleanup();
+      reject(new Error(`CQE_WORKER_EXIT: ${code}`));
+    };
+    cleanup = () => {
+      handle.worker.off('message', onMessage);
+      handle.worker.off('error', onError);
+      handle.worker.off('exit', onExit);
+      handle.worker.unref();
+    };
+    handle.worker.on('message', onMessage);
+    handle.worker.on('error', onError);
+    handle.worker.on('exit', onExit);
+  });
+  // Keep the loop alive only while this request is pending.
+  handle.worker.ref();
+  handle.worker.postMessage({
+    type: 'query',
+    id,
+    query: queryText,
+    opts: { limit: constraints.maxResults, scope: constraints.scope },
+  });
+  return { promise, cleanup };
+}
+
+function timeoutError(timeoutMs) {
+  return new Error(`CQE_TIMEOUT after ${timeoutMs}ms`);
+}
+
+/**
+ * Run one query on a ready worker. On timeout the worker is terminated: the
+ * vendored engine cannot be interrupted from the host any other way.
+ */
+async function queryWorker(handle, queryText, constraints, timeoutMs) {
+  const { promise, cleanup } = sendWorkerQuery(handle, queryText, constraints);
+  let timer;
+  try {
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(timeoutError(timeoutMs)), timeoutMs);
+    });
+    return await Promise.race([promise, timeout]);
+  } catch (err) {
+    cleanup();
+    if (err && /CQE_TIMEOUT/.test(err.message)) {
+      handle.worker.terminate();
+      if (handleCache.get(handle.key) === handle) handleCache.delete(handle.key);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function resolveTimeout(explicit) {
@@ -118,7 +294,9 @@ function resolveTimeout(explicit) {
 }
 
 function withTimeout(promise, timeoutMs) {
-  // ponytail: the vendored query accepts no AbortSignal; a timeout discards the late result instead of aborting.
+  // Inline path only. The vendored engine is synchronous inside query(), so this
+  // races a timer against an already-blocking call: it discards the late result
+  // but cannot preempt the work. The worker path uses terminate() for a real abort.
   if (!timeoutMs || timeoutMs <= 0) return promise;
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -213,20 +391,59 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
   let cqeResult = null;
   let cqeError = null;
   let timedOut = false;
+  let fallbackReason = null;
+  let usedWorker = false;
 
   if (mode !== 'disabled' && queryText != null && String(queryText).trim() !== '') {
     try {
       if (!fs.existsSync(repoRoot)) throw new Error(`CQE_ROOT_NOT_FOUND: ${repoRoot}`);
-      const engine = await getEngine(repoRoot);
-      if (!engine) throw new Error('CQE_ENGINE_UNAVAILABLE');
-      cqeResult = await withTimeout(
-        engine.query(queryText, {
-          budget: constraints.budget,
-          limit: constraints.maxResults,
-          scope: constraints.scope,
-        }),
-        resolveTimeout(constraints.timeoutMs)
-      );
+      const timeoutMs = resolveTimeout(constraints.timeoutMs);
+      const workerHandle = resolveUseWorker(constraints) ? getWorkerHandle(repoRoot) : null;
+      if (workerHandle) {
+        usedWorker = true;
+        if (workerHandle.busy) {
+          // A concurrent prompt owns the worker: never queue, fall back now.
+          fallbackReason = 'busy';
+        } else if (workerHandle.warmingTimedOut && !workerHandle.ready) {
+          fallbackReason = 'warming';
+        } else {
+          workerHandle.busy = true;
+          try {
+            if (!workerHandle.ready) {
+              let timer;
+              try {
+                await Promise.race([
+                  workerHandle.readyPromise,
+                  new Promise((_, reject) => {
+                    timer = setTimeout(() => reject(timeoutError(timeoutMs)), timeoutMs);
+                  }),
+                ]);
+              } catch (err) {
+                // Still building: let it finish off-thread, just stop waiting on it.
+                if (err && /CQE_TIMEOUT/.test(err.message)) workerHandle.warmingTimedOut = true;
+                throw err;
+              } finally {
+                clearTimeout(timer);
+              }
+            }
+            cqeResult = await queryWorker(workerHandle, queryText, constraints, timeoutMs);
+          } finally {
+            workerHandle.busy = false;
+          }
+        }
+      } else {
+        const handle = getInlineHandle(repoRoot);
+        const engine = await handle.enginePromise;
+        if (!engine) throw new Error('CQE_ENGINE_UNAVAILABLE');
+        cqeResult = await withTimeout(
+          engine.query(queryText, {
+            budget: constraints.budget,
+            limit: constraints.maxResults,
+            scope: constraints.scope,
+          }),
+          timeoutMs
+        );
+      }
     } catch (err) {
       cqeError = err;
       timedOut = err && /CQE_TIMEOUT/.test(err.message);
@@ -259,6 +476,7 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
   const metadata = {
     mode,
     repoRoot,
+    worker: usedWorker,
     empty: false,
     timedOut,
     cqeError: cqeError ? cqeError.message : null,
@@ -298,7 +516,7 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
         source: 'wam-native',
         cqeResult,
         fallbackUsed: true,
-        metadata: { ...metadata, totalItems: nativeResult.total, empty: true, fallbackReason: 'empty' },
+        metadata: { ...metadata, totalItems: nativeResult.total, empty: fallbackReason == null, fallbackReason: fallbackReason || 'empty' },
       };
     }
     const limited = constraints.maxResults > 0 ? normalized.slice(0, constraints.maxResults) : normalized;

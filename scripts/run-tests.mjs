@@ -37,6 +37,7 @@ function cleanupLeftoverTempDirs() {
      path.join(os.tmpdir(), 'wam-state-test-*'),
      path.join(os.tmpdir(), 'wam-cfg-*'),
      path.join(os.tmpdir(), 'wam-invariants-*'),
+     path.join(os.tmpdir(), 'wam-sessions-*'),
      // Also check home directory for test_tmp patterns that might have been used
      path.join(os.homedir(), 'test_tmp*'),
    ];
@@ -182,6 +183,7 @@ function runNodeTestStreamed(files) {
         WAM_DISABLE_LOGGING: "1",
         WAM_LOG_FILE: path.join(os.tmpdir(), `wam-test-${process.pid}.log`),
         WAM_METRICS_DIR: path.join(os.tmpdir(), `wam-metrics-${process.pid}`),
+        WAM_SESSION_DIR: path.join(os.tmpdir(), `wam-sessions-${process.pid}`),
       },
     });
 

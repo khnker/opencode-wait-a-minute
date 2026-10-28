@@ -37,7 +37,10 @@ input under OpenCode 1.19, so no event subscription is performed.
 - `"command.execute.before"` (returned hook map)
   Handles the `/wam` CLI commands delivered by OpenCode 1.18.25+.
 
-`permission.ask` and `event` are **not** registered by the plugin.
+- `"permission.ask"` (returned hook map)
+  Auto-allows access permissions already granted by the task's permission preflight plan.
+
+`event` is **not** registered by the plugin.
 
 ### Plugin export signature
 The module exports a default async factory function matching OpenCode's plugin loader contract:

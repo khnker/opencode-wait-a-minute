@@ -72,18 +72,24 @@ function sanitizeSessionKey(sessionID) {
   return String(sessionID || DEFAULT_SESSION_KEY).replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
+function sessionStateDir(root) {
+  const override = process.env.WAM_SESSION_DIR;
+  if (override) return path.resolve(override);
+  return path.join(root || process.cwd(), ".wam");
+}
+
 function sessionFile(root, sessionID) {
-  return path.join(root || process.cwd(), ".wam", `session_${sanitizeSessionKey(sessionID)}.json`);
+  return path.join(sessionStateDir(root), `session_${sanitizeSessionKey(sessionID)}.json`);
 }
 
 // Legacy identity file: used when no OpenCode session is in scope (one per root).
 function legacySessionFile(root) {
-  return path.join(root || process.cwd(), ".wam", "session.json");
+  return path.join(sessionStateDir(root), "session.json");
 }
 
 // Pointer to the OpenCode session that is currently active in a root.
 function activeSessionFile(root) {
-  return path.join(root || process.cwd(), ".wam", "active_session.json");
+  return path.join(sessionStateDir(root), "active_session.json");
 }
 
 /**

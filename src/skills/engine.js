@@ -19,6 +19,7 @@ import { detectStack } from "../policy/project-inspector.js";
 import { classifyUncertainty, buildUncertainties, buildAssumptions, isExplicitInstruction } from "../policy/uncertainty.js";
 import { discoverSkills } from "../policy/skill-routing.js";
 import { loadPrompt } from "../prompts/loader.js";
+import { taskDir as wamTaskDir, tasksDir as wamTasksDir } from "../shared/wam-paths.js";
 import { calculateFreshnessScore } from "../evidence/evidence-freshness.js";
 import { extractContract, contractToRequirements } from "../cognition/contract-extractor.js";
 import { decideClarification, CLARIFICATION } from "../policy/clarification-policy.js";
@@ -62,7 +63,7 @@ export function estimateTokens(text = "") {
  */
 export function findDuplicateTask(summary, root) {
   if (!summary || summary.length < 10) return null;
-  const tasksDir = path.join(root || process.cwd(), ".wam", "tasks");
+  const tasksDir = wamTasksDir(root);
   try {
     const entries = fs.readdirSync(tasksDir, { withFileTypes: true });
     for (const entry of entries) {
@@ -100,7 +101,7 @@ export async function archiveTaskSession(taskId, root) {
   const fs = await import("node:fs/promises");
   const path = await import("node:path");
 
-  const taskDir = path.join(root, ".wam", "tasks", taskId);
+  const taskDir = wamTaskDir(root, taskId);
   const date = new Date().toISOString().split("T")[0];
   const historyDir = path.join(root, ".wam", "history", date);
   const destDir = path.join(historyDir, taskId);
@@ -189,7 +190,7 @@ export function persistTaskState(taskId, state, root) {
     delete state.progress;
   }
 
-  const dir = path.join(root || process.cwd(), ".wam", "tasks", taskId);
+  const dir = wamTaskDir(root, taskId);
   if (!fileExists(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "task.json"), JSON.stringify(state, null, 2));
 }
@@ -199,8 +200,8 @@ export function persistTaskState(taskId, state, root) {
  */
 export function getTaskState(taskId, root) {
   // Try task.json first (new format), then fall back to state.yaml (legacy)
-  const taskJsonFile = path.join(root || process.cwd(), ".wam", "tasks", taskId, "task.json");
-  const stateYamlFile = path.join(root || process.cwd(), ".wam", "tasks", taskId, "state.yaml");
+  const taskJsonFile = path.join(wamTaskDir(root, taskId), "task.json");
+  const stateYamlFile = path.join(wamTaskDir(root, taskId), "state.yaml");
   
   let file = null;
   if (fileExists(taskJsonFile)) {
@@ -1397,71 +1398,7 @@ export function extractPromptCriticalUncertainties(prompt = "") {
   return found;
 }
 
-const ASSUMPTION_IMPACT =
-  /elim|delet|borr|actualiz|update|schema|esquema|migraci|endpoint|api|arquitectur|estructura|m[oó]dulo|seguridad|auth|token|compatib|breaking|alcance|scope|destructiv|data.?loss|aceptaci[oó]n|criterios/i;
-
-/**
- * Clasifica una asunción (rule-based): DECISION_CRITICAL si toca impacto
- * material (data mutation, API, arquitectura, seguridad, compat, alcance,
- * destructivo, aceptación); si no, NON_BLOCKING.
- */
-export function classifyAssumption(statement = "") {
-  return ASSUMPTION_IMPACT.test(statement) ? "DECISION_CRITICAL" : "NON_BLOCKING";
-}/**
- * Convierte asunciones textuales del análisis en objetos de estado
- * {id, statement, classification, status} (spec assumption-gate R1).
- */
-/**
- * DECISION_CRITICAL/blocking, y las mirroriza a contract.unknowns (blocking,
- * con assumptionId) para reutilizar la fase ASKING (spec R2/R3).
- */
-export function escalateAssumptions(state, taskText = "") {
-  const contract = state?.contract || {};
-  const escalated = [];
-  const assumptions = contract.assumptions || [];
-  let unknowns = contract.unknowns || [];
-  let changed = false;
-
-  for (const a of assumptions) {
-    if (a.status === "active" && a.classification === "NON_BLOCKING") {
-      const taskImpact = !!taskText && ASSUMPTION_IMPACT.test(taskText) && !isExplicitInstruction(taskText);
-      const genericAssumption = /funcionalidad|agregar nueva|nueva funcionalidad|add support|add.*support/i.test(a.statement);
-      const cls =
-        classifyAssumption(a.statement) === "DECISION_CRITICAL" ||
-        (taskImpact && genericAssumption)
-          ? "DECISION_CRITICAL"
-          : "NON_BLOCKING";
-      if (cls === "DECISION_CRITICAL") {
-        a.classification = cls;
-        a.status = "blocking";
-        const existing = unknowns.find((u) => u.status === "blocking" && !u.assumptionId);
-        if (existing) {
-          existing.assumptionId = a.id; // reuso: la pregunta existente cubre esta asunción (sin duplicar)
-        } else if (!unknowns.some((u) => u.assumptionId === a.id)) {
-          unknowns = [
-            ...unknowns,
-            {
-              id: `U${unknowns.length + 1}`,
-              kind: "ASSUMED",
-              question: loadPrompt("question.escalation", { statement: a.statement }),
-              status: "blocking",
-              assumptionId: a.id,
-            },
-          ];
-        }
-        escalated.push(a);
-        changed = true;
-      }
-    }
-  }
-
-  if (changed) {
-    contract.assumptions = assumptions;
-    contract.unknowns = unknowns;
-    state.contract = contract;
-  }
-  return { escalated, changed };
-}
+export { classifyAssumption, escalateAssumptions } from "../policy/uncertainty.js";
 
 // ---------------------------------------------------------------------------
 // Topic Scope Classifier — Determinista, sin LLM

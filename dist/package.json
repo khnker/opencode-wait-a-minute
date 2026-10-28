@@ -45,6 +45,7 @@
     "prompts:calibrate": "node scripts/prompts-calibrate.mjs",
     "benchmark:calibrate": "node scripts/prompts-calibrate.mjs",
     "validate": "node scripts/release-gate.mjs",
+    "smoke:bun": "bun scripts/cqe-bun-smoke.mjs",
     "production:gate": "node scripts/release-gate.mjs",
     "release:check": "node scripts/release-gate.mjs",
     "bench:validation": "node benchmarks/run-validation.mjs",

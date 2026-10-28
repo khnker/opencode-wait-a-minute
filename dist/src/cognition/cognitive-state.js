@@ -1,5 +1,6 @@
 
 import fs from "node:fs";
+import { tasksDir as wamTasksDir } from "../shared/wam-paths.js";
 import {
   createHypothesis,
   listHypotheses,
@@ -31,7 +32,7 @@ const DEFAULT_STATE = {
 function resolveTaskId(taskRoot, explicitTaskId) {
   if (explicitTaskId) return explicitTaskId;
   // Convención: el primer directorio bajo .wam/tasks/
-  const tasksRoot = `${taskRoot}/.wam/tasks`;
+  const tasksRoot = wamTasksDir(taskRoot);
   try {
     const entries = fs.readdirSync(tasksRoot, { withFileTypes: true });
     const dir = entries.find((e) => e.isDirectory());

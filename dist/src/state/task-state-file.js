@@ -18,11 +18,12 @@ import {
   isValidStatus,
 } from "./task-status.js";
 import { listTasks, loadTask } from "./task-store.js";
+import { wamStateDir } from "../shared/wam-paths.js";
 
 const AGGREGATED_FILENAME = "task-state.json";
 
 export function aggregatedStatePath(root) {
-  return path.join(root || process.cwd(), ".wam", AGGREGATED_FILENAME);
+  return path.join(wamStateDir(root), AGGREGATED_FILENAME);
 }
 
 /**

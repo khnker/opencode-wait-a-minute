@@ -450,7 +450,7 @@
       "status": "active",
       "responsibility": "Owns the blocking question raised when an assumption needs user confirmation.",
       "consumers": [
-        "src/skills/engine.js#escalateAssumptions"
+        "src/policy/uncertainty.js#escalateAssumptions"
       ],
       "testRefs": [
         "src/prompts/characterization.test.mjs"

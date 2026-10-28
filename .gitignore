@@ -28,3 +28,8 @@ prompts/audit-report.*
 .playwright-mcp/
 
 vendor/context-query-core/src/*.ndjson
+
+# Generated CQE indexes/telemetry in the dist mirror of vendor/context-query-core/src
+/dist/vendor/context-query-core/src/*.ndjson
+/dist/vendor/context-query-core/src/.cache.json
+/dist/vendor/context-query-core/src/.bm25-index.json

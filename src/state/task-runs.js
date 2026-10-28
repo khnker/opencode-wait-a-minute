@@ -17,10 +17,11 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { taskDir as wamTaskDir } from "../shared/wam-paths.js";
 import { getTaskState, persistTaskState } from "../skills/engine.js";
 
 function getRunsDir(taskId, root) {
-  return path.join(root || process.cwd(), ".wam", "tasks", taskId, "runs");
+  return path.join(wamTaskDir(root, taskId), "runs");
 }
 
 function ensureRunsDir(taskId, root) {

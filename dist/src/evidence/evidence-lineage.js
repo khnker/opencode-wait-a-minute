@@ -24,7 +24,7 @@ import { getRun } from "../state/task-runs.js";
 import { getTaskState } from "../skills/engine.js";
 
 function getLineageDir(taskId, root) {
-  return path.join(root || process.cwd(), ".wam", "tasks", taskId, "lineage");
+  return path.join(wamTaskDir(root, taskId), "lineage");
 }
 
 function ensureLineageDir(taskId, root) {
@@ -37,6 +37,7 @@ function ensureLineageDir(taskId, root) {
 
 import fs from "node:fs";
 import path from "node:path";
+import { taskDir as wamTaskDir } from "../shared/wam-paths.js";
 import crypto from "node:crypto";
 
 /**

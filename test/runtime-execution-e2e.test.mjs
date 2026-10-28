@@ -188,3 +188,70 @@ test("chromium contradiction: noteFailure leaves hypothesis not SUPPORTED and re
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test("real hook: bash metadata.exit !== 0 takes the failure branch (no success evidence)", async () => {
+  const { tmp, taskId } = setupTmp();
+  const sid = "rt-e2e-fail-session";
+  try {
+    const hooks = await pluginDefault({ directory: tmp, client: {}, project: {}, $: {} });
+    pluginDefault.writeActiveTaskId(taskId, tmp, { sessionId: sid });
+
+    await hooks["tool.execute.after"](
+      { tool: "bash", sessionID: sid, callID: "call-fail-1", args: { command: "false" } },
+      { title: "bash", output: "", metadata: { exit: 1 } }
+    );
+
+    assert.equal(getAllEvidence(taskId, tmp).length, 0, "failed tool creates no success evidence");
+    const observations = listObservations(tmp, taskId);
+    assert.equal(observations.length, 1, "failed tool records one failure observation");
+    assert.match(JSON.stringify(observations[0]), /tool exited with code 1/);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("real hook: success stores a bounded result excerpt, not the generic 'ok'", async () => {
+  const { tmp, taskId } = setupTmp();
+  const sid = "rt-e2e-success-session";
+  try {
+    const hooks = await pluginDefault({ directory: tmp, client: {}, project: {}, $: {} });
+    pluginDefault.writeActiveTaskId(taskId, tmp, { sessionId: sid });
+
+    const longOutput = "x".repeat(1000);
+    await hooks["tool.execute.after"](
+      { tool: "bash", sessionID: sid, callID: "call-success-1", args: { command: "echo hi" } },
+      { title: "bash", output: longOutput, metadata: { exit: 0 } }
+    );
+
+    const observations = listObservations(tmp, taskId);
+    assert.equal(observations.length, 1, "exactly one observation");
+    const evidence = getAllEvidence(taskId, tmp);
+    assert.equal(evidence.length, 1, "exactly one evidence record");
+    const stored = evidence[0].content;
+    assert.equal(typeof stored, "string", "evidence content holds the excerpt");
+    assert.ok(stored.length <= 400, `stored result <= 400 chars (got ${stored.length})`);
+    assert.notEqual(stored, "ok", "generic 'ok' is not stored");
+    assert.equal(stored, `${"x".repeat(397)}...`, "excerpt is the truncated output");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("real hook: no completion signal records no success observation", async () => {
+  const { tmp, taskId } = setupTmp();
+  const sid = "rt-e2e-nosignal-session";
+  try {
+    const hooks = await pluginDefault({ directory: tmp, client: {}, project: {}, $: {} });
+    pluginDefault.writeActiveTaskId(taskId, tmp, { sessionId: sid });
+
+    await hooks["tool.execute.after"](
+      { tool: "bash", sessionID: sid, callID: "call-nosignal-1", args: { command: "true" } },
+      {}
+    );
+
+    assert.equal(listObservations(tmp, taskId).length, 0, "no observation for an ambiguous completion");
+    assert.equal(getAllEvidence(taskId, tmp).length, 0, "no success evidence for an ambiguous completion");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

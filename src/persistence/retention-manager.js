@@ -25,6 +25,7 @@ import path from "node:path";
 import { listTasks, loadTask } from "../state/task-store.js";
 import { reconcileFromDisk } from "../state/task-state-file.js";
 import { TASK_STATUS } from "../state/task-status.js";
+import { taskDir as wamTaskDir } from "../shared/wam-paths.js";
 
 export const WAM_RETENTION_TTL_DAYS = 15;
 export const WAM_ARCHIVE_DIRNAME = "archive";
@@ -201,7 +202,7 @@ export async function pruneCompletedTasks(root, options = {}) {
       continue;
     }
 
-    const taskDir = path.join(root || process.cwd(), ".wam", "tasks", taskId);
+    const taskDir = wamTaskDir(root, taskId);
     try {
       await fsp.rm(taskDir, { recursive: true, force: true });
       report.pruned.push({ taskId, archiveDir, ageMs: decision.ageMs });
@@ -265,7 +266,7 @@ export async function archiveAndPruneSingleTask(taskId, root) {
     // Best-effort: do not block pruning on a failed archive.
   }
 
-  const taskDir = path.join(root || process.cwd(), ".wam", "tasks", taskId);
+  const taskDir = wamTaskDir(root, taskId);
   try {
     await fsp.rm(taskDir, { recursive: true, force: true });
     result.pruned = true;

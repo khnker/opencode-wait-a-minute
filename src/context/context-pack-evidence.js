@@ -9,6 +9,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { taskDir as wamTaskDir } from "../shared/wam-paths.js";
 
 const SEQ_WIDTH = 4;
 const DEFAULT_MAX_RECORDS = 500;
@@ -18,7 +19,7 @@ function sha(value) {
 }
 
 function evidenceDir(root, taskId) {
-  return path.join(root, ".wam", "tasks", taskId, "context");
+  return path.join(wamTaskDir(root, taskId), "context");
 }
 
 function readIndex(indexFile) {
@@ -126,6 +127,29 @@ export function recordContextPack({ taskId, prompt = "", pack = {}, root = proce
   }
 }
 
+/**
+ * Durable record of the delegation directive emitted for a task: which
+ * requirements were sent to parallel subagents. One bounded file per task.
+ */
+export function recordDelegationEvidence({ taskId, lines = [], root = process.cwd() } = {}) {
+  if (!taskId) return { ok: false, reason: "taskId required" };
+  try {
+    const dir = evidenceDir(root, taskId);
+    fs.mkdirSync(dir, { recursive: true });
+    const requirements = [];
+    for (const line of lines) {
+      const match = /^\s*(\S+)\s+→\s+Task\(parallel\)/.exec(String(line ?? ""));
+      if (match) requirements.push(match[1]);
+    }
+    const file = path.join(dir, "delegation.json");
+    const payload = { updatedAt: new Date().toISOString(), count: requirements.length, requirements };
+    fs.writeFileSync(file, JSON.stringify(payload, null, 2), "utf-8");
+    return { ok: true, file, count: requirements.length };
+  } catch (err) {
+    return { ok: false, reason: err.message };
+  }
+}
+
 export function listContextEvidence({ taskId, root = process.cwd() } = {}) {
   if (!taskId) return [];
   return readIndex(path.join(evidenceDir(root, taskId), "index.json")).entries;
@@ -139,4 +163,22 @@ export function readContextEvidence({ taskId, seq, root = process.cwd() } = {}) 
   } catch {
     return null;
   }
+}
+
+/**
+ * Skill ids already injected for a task, recovered from the last persisted
+ * pack. Lets the per-session dedupe survive a plugin restart.
+ */
+export function injectedSkillIds({ taskId, root = process.cwd() } = {}) {
+  const entries = listContextEvidence({ taskId, root });
+  const ids = new Set();
+  // Bounded lookback: enough to cover a session's last few turns after a restart.
+  for (const entry of entries.slice(-5)) {
+    const record = readContextEvidence({ taskId, seq: entry.seq, root });
+    for (const line of record?.injected || []) {
+      const match = /^\[wam N3 skill(?:-ref)?\]\s+([\w-]+)/.exec(String(line ?? ""));
+      if (match) ids.add(match[1]);
+    }
+  }
+  return ids;
 }

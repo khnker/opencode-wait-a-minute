@@ -8,6 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { taskDir as wamTaskDir } from "../shared/wam-paths.js";
 
 export const FRESHNESS_CONFIG = {
   MAX_AGE_HOURS: 72,
@@ -39,7 +40,7 @@ function sha256(value) {
 }
 
 function taskDir(taskId, root) {
-  return path.join(root || process.cwd(), ".wam", "tasks", taskId);
+  return wamTaskDir(root, taskId);
 }
 
 function lineageDir(taskId, root) {

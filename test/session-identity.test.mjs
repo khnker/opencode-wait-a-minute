@@ -17,6 +17,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+delete process.env.WAM_SESSION_DIR;
+
 import {
   createCapsule,
   getSessionId,

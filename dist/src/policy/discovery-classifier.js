@@ -49,6 +49,29 @@ export function classifyBash(command) {
 
   const allowedDiscoveryTools = new Set(["grep", "rg", "find", "cat", "head", "tail", "ls", "tree", "wc"]);
 
+  // Variantes mutantes de herramientas read-only: escriben o ejecutan → justified.
+  for (const stage of parts) {
+    const stageCmd = stage.split(/\s+/)[0].split("/").pop();
+    const tokens = stage.split(/\s+/).filter(Boolean);
+    // Quoted flags (`"-i"`, `"--pre"`) are the same flag to the shell: dequote for checks.
+    const bare = tokens.map((t) => t.replace(/^["']|["']$/g, ""));
+    if (stageCmd === "find" && !isReadOnlyFind(stage)) {
+      return { kind: "justified", primary, reason: "find -delete/-fprint* writes or -exec runs a non-read-only program" };
+    }
+    if (stageCmd === "sed" && bare.some((t) => /^-[a-zA-Z]*i/.test(t) || t.startsWith("--in-place"))) {
+      return { kind: "justified", primary, reason: "sed -i edits files in place" };
+    }
+    if (stageCmd === "sort" && bare.some((t) => t.startsWith("-o") || /^--output(?:=|$)/.test(t))) {
+      return { kind: "justified", primary, reason: "sort -o writes its output to a file" };
+    }
+    if (stageCmd === "awk" && (/\bsystem\s*\(/.test(stage) || /\bprintf?\s*>{1,2}/.test(stage))) {
+      return { kind: "justified", primary, reason: "awk system() or print redirection writes" };
+    }
+    if (stageCmd === "rg" && bare.some((t) => /^--pre(?:=|$)/.test(t))) {
+      return { kind: "justified", primary, reason: "rg --pre executes an external program" };
+    }
+  }
+
   if (!allowedDiscoveryTools.has(primary)) {
     return { kind: "justified", primary, reason: `primary command '${primary}' is not a discovery tool` };
   }
@@ -74,6 +97,24 @@ export function classifyBash(command) {
   }
 
   return { kind: "read-only", primary, reason: "pure read-only discovery or filtering pipeline" };
+}
+
+const READ_ONLY_EXEC_PROGRAMS = new Set(["grep", "rg", "cat", "head", "tail", "ls", "wc", "sort", "uniq", "awk", "sed", "find", "echo", "true", "printf"]);
+
+// find sigue siendo discovery solo si no escribe ni ejecuta un programa mutante.
+function isReadOnlyFind(stage) {
+  // Dequote first so `"-delete"` and `-exec "sh"` are seen like their bare forms.
+  const bare = stage.replace(/["']/g, "");
+  if (/(?:^|\s)-(?:delete|fprint0|fprint|fprintf|fls)(?=\s|$)/.test(bare)) return false;
+  const tokens = bare.split(/\s+/).filter(Boolean);
+  for (let i = 0; i < tokens.length; i++) {
+    if (!/^-(?:exec|execdir|ok|okdir)$/.test(tokens[i])) continue;
+    let j = i + 1;
+    while (j < tokens.length && tokens[j].startsWith("-")) j++; // saltar flags del programa ejecutado
+    const program = (tokens[j] || "").split("/").pop();
+    if (!READ_ONLY_EXEC_PROGRAMS.has(program)) return false;
+  }
+  return true;
 }
 
 function splitPipeline(clean) {

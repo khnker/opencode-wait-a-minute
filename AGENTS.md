@@ -29,7 +29,9 @@ node scripts/prune-wam-artifacts.mjs --apply  # archive one-use test tasks/snaps
 - Logging is opt-in for this repo: `.wam/config.json` sets `"logging": false`.
 - `WAM_LOGGING=true` enables logs; `plugin.log` rotates at 5 MB.
 - Tests must not write to the project `.wam`; the test runner disables logging and
-  redirects `WAM_LOG_FILE` to the OS temp directory.
+  redirects `WAM_LOG_FILE`, `WAM_METRICS_DIR` and `WAM_SESSION_DIR` to the OS temp directory.
+- To run the suite while a live WAM session uses the project, use
+  `node scripts/run-tests-isolated.mjs` (throwaway copy with its own `.wam`).
 - `/wam off` bypasses WAM for the current session; `/wam on` restores it.
 
 ## Design rules

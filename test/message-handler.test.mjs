@@ -88,9 +88,6 @@ const baseDeps = () => ({
   readActiveTaskIdFresh: () => null,
   writeActiveTaskId: noop,
   waitAMinute,
-  migrateLegacyCognition: noop,
-  noteSuccess: async () => undefined,
-  noteFailure: async () => undefined,
   getTaskState,
   persistTaskState,
   findDuplicateTask: () => null,
@@ -317,38 +314,6 @@ test("handleMessage: prompt con prompt simple invoca handleMessage sin lanzar", 
       baseDeps(),
     ),
   );
-});
-
-test("handleMessage: tool execution path llama noteSuccess sin lanzar", async () => {
-  let successCalled = false;
-  const deps = baseDeps();
-  deps.noteSuccess = async () => { successCalled = true; };
-  await handleMessage(
-    {
-      sessionID: "s1",
-      message: { parts: [{ type: "text", text: "hola" }] },
-      tool: "read",
-    },
-    { message: {}, parts: [], result: { ok: true } },
-    deps,
-  );
-  assert.equal(successCalled, true, "noteSuccess debe invocarse cuando hay result");
-});
-
-test("handleMessage: tool execution error llama noteFailure", async () => {
-  let failureCalled = false;
-  const deps = baseDeps();
-  deps.noteFailure = async () => { failureCalled = true; };
-  await handleMessage(
-    {
-      sessionID: "s1",
-      message: { parts: [{ type: "text", text: "hola" }] },
-      tool: "read",
-    },
-    { message: {}, parts: [], error: "boom" },
-    deps,
-  );
-  assert.equal(failureCalled, true, "noteFailure debe invocarse cuando hay error");
 });
 
 test("handleMessage: errors en deps se loggean sin propagar", async () => {
