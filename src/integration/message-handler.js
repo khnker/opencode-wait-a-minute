@@ -26,6 +26,8 @@ import { validateState } from "../state/task-state.js";
 import { buildCompletionValidation } from "./orchestration.js";
 import { pruneCompletedTasks } from "../persistence/retention-manager.js";
 import { classifyIntentLane, INTENT_LANES } from "../policy/intent-router.js";
+import { observeDialogueTurn } from "../dialogue/index.js";
+import { getIntentDictionary, saveIntentDictionary } from "../dialogue/intent-dictionary.js";
 import { loadHistoryEntries, retrieveIntentHistory } from "../context/intent-history.js";
 import { applyContextBudget } from "../context/context-budget.js";
 import { filterNewContext } from "../context/context-dedupe.js";
@@ -244,9 +246,9 @@ export async function handleMessage(input, output, deps) {
       const active = sessionTasks.get(input.sessionID) || readActiveTaskIdFresh(wamRoot);
       const st = active ? getTaskState(active, wamRoot) : null;
       if (st && st.phase !== "DONE") {
-        emitTextPart(output, loadPrompt("notice.pending_task", { active, phase: st.phase }), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
+        emitTextPart(output, loadPrompt("notice.pending_task", { active, phase: st.phase }), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
       } else {
-        emitTextPart(output, loadPrompt("notice.no_active_task"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
+        emitTextPart(output, loadPrompt("notice.no_active_task"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
       }
       return;
     }
@@ -314,7 +316,6 @@ export async function handleMessage(input, output, deps) {
       const result = emitTextPart(output, greeting, {
         sessionID: input.sessionID,
         messageID: output.message?.id || input.messageID,
-        visible: true,
       });
       if (result && result.status === "inserted") {
         greetedSessions.add(input.sessionID);
@@ -332,7 +333,7 @@ export async function handleMessage(input, output, deps) {
         const directive = u
           ? loadPrompt("notice.blocked_question", { id: u.id, question: u.question })
           : loadPrompt("notice.blocked_generic");
-        emitTextPart(output, directive, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
+        emitTextPart(output, directive, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
         // Rewrite the original prompt so the implementation attempt is NOT
         // consumed downstream as an instruction (AC5).
         const rewrite = loadPrompt("notice.blocked_prefix", { directive });
@@ -357,7 +358,7 @@ export async function handleMessage(input, output, deps) {
         return;
       }
       if (kind === "new-intent") {
-        emitTextPart(output, loadPrompt("notice.new_intent"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
+        emitTextPart(output, loadPrompt("notice.new_intent"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
         // Override the explicit taskId so subsequent analysis creates a fresh
         // task (task-<ts>) without contaminating unknowns from the previous task.
         const newTaskId = `task-${Date.now()}`;
@@ -381,7 +382,7 @@ export async function handleMessage(input, output, deps) {
             answer: u?.answer || trimmed,
             question: u?.question || "pregunta resuelta",
           }),
-          { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true },
+          { sessionID: input.sessionID, messageID: output.message?.id || input.messageID },
         );
         // After resolving, fall through to re-analysis so contract is rebuilt.
       }
@@ -462,6 +463,24 @@ export async function handleMessage(input, output, deps) {
       hasActiveTask: Boolean(existingState?.requirements?.length || state.requirements?.length),
     });
 
+    let dialogueTurn = null;
+    try {
+      const dictionary = getIntentDictionary(wamRoot);
+      dialogueTurn = await observeDialogueTurn({
+        message: promptText,
+        taskState: state,
+        dictionary,
+        complete: deps.dialogueComplete || null,
+      });
+      state.dialogue = dialogueTurn.state;
+      if (dialogueTurn.learned) saveIntentDictionary(wamRoot, dictionary);
+      if (state.requirements?.length) persistTaskState(taskId, state, wamRoot);
+    } catch (err) {
+      if (typeof deps.wamWarn === "function") {
+        deps.wamWarn(`[WAM] dialogue observer failed: ${err.message}`);
+      }
+    }
+
     // Task Dedup - CANDIDATE ONLY: never overrides taskId implicitly.
     // - If input.taskId is explicit → NEVER override; do NOT even consult findDuplicateTask
     // - If taskId is generic/new → findDuplicateTask may return a candidate
@@ -472,7 +491,7 @@ export async function handleMessage(input, output, deps) {
       if (existingTaskId && existingTaskId !== taskId) {
         // Candidate-only: report, do not reassign. The session continues with
         // the freshly-initialized taskId; the user can reuse via /wam task switch.
-        emitTextPart(output, loadPrompt("notice.similar_task", { taskId: existingTaskId }), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
+        emitTextPart(output, loadPrompt("notice.similar_task", { taskId: existingTaskId }), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
       }
     }
 
@@ -509,7 +528,7 @@ export async function handleMessage(input, output, deps) {
       for (const u of finalQuestions) {
         questions.push(`⛔ [wait-a-minute] ASKING — ${u.id}: ${u.question}\nNo implementar hasta responder. Responder: /wam answer ${u.id} <respuesta>`);
       }
-      emitTextPart(output, questions.join("\n\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
+      emitTextPart(output, questions.join("\n\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
       return;
     }
 
@@ -529,7 +548,7 @@ export async function handleMessage(input, output, deps) {
 
     if (state.contract?.status === "PROPOSED" && state.phase === "PROPOSED" && userRejects) {
       waitAMinute.rejectContract(taskId, wamRoot);
-      emitTextPart(output, "Contrato rechazado — dime cómo ajustarlo (edita requisitos o describe de nuevo la tarea).", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
+      emitTextPart(output, "Contrato rechazado — dime cómo ajustarlo (edita requisitos o describe de nuevo la tarea).", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
       try {
         const fresh = getTaskState(taskId, wamRoot);
         if (fresh) {
@@ -549,7 +568,7 @@ export async function handleMessage(input, output, deps) {
       emitTextPart(
         output,
         `Contrato aprobado — estrategia activada. Skills en uso: ${skillsLine}. Próximo paso: ${state.nextAction || "continuar"}`,
-        { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true }
+        { sessionID: input.sessionID, messageID: output.message?.id || input.messageID }
       );
       try {
         recordDecision({
@@ -573,15 +592,20 @@ export async function handleMessage(input, output, deps) {
       !state.contractPrompted &&
       intentLane.lane === INTENT_LANES.TASK_NEW
     ) {
-      emitTextPart(output, "¿Apruebo este contrato? Responde sí para aprobar o no para rechazar. (o /wam contract approve)", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
+      emitTextPart(output, "¿Apruebo este contrato? Responde sí para aprobar o no para rechazar. (o /wam contract approve)", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
       state.contractPrompted = true;
       try { persistTaskState(taskId, state, wamRoot); } catch {}
     }
 
+    const isCompletionClaim = waitAMinute.isCompletionIntent(promptText);
+    const dialogueIntent = dialogueTurn?.observation?.intent;
     const isTrivialAnalysis =
-      intentLane.lane === INTENT_LANES.CONVERSATION ||
-      analysis.intent?.classification === "trivial" ||
-      analysis.strategy === "FAST";
+      !isCompletionClaim &&
+      (intentLane.lane === INTENT_LANES.CONVERSATION ||
+        dialogueIntent === "META" ||
+        dialogueIntent === "CLARIFY" ||
+        analysis.intent?.classification === "trivial" ||
+        analysis.strategy === "FAST");
     const gate = isTrivialAnalysis
       ? { blocked: false, allDone: false }
       : waitAMinute.evaluateCompletionGate(state, promptText);
@@ -596,6 +620,33 @@ export async function handleMessage(input, output, deps) {
     }
 
     const updatedState = getTaskState(taskId, wamRoot) || state;
+
+    // Final completion message: emit once when the gate allows DONE.
+    if (
+      !isTrivialAnalysis &&
+      gate.allDone &&
+      updatedState.phase === "DONE" &&
+      !updatedState.completionNotified &&
+      waitAMinute.isCompletionIntent(promptText)
+    ) {
+      const verified = (updatedState.requirements || []).filter((r) => r.status === "verified");
+      const evidence = verified
+        .flatMap((r) => (r.evidence || []).map((e) => (typeof e === "string" ? e : e?.description || e?.summary || "")))
+        .filter(Boolean)
+        .slice(0, 5);
+      const notice = loadPrompt("notice.task_complete", {
+        objective: updatedState.contract?.objective || state.contract?.objective || "—",
+        count: verified.length,
+        evidence: evidence.join("; ") || "—",
+        artifacts: `.wam/tasks/${taskId}/summary.md, recent-changes.md`,
+      });
+      emitTextPart(output, notice, {
+        sessionID: input.sessionID,
+        messageID: output.message?.id || input.messageID,
+      });
+      updatedState.completionNotified = true;
+      try { persistTaskState(taskId, updatedState, wamRoot); } catch {}
+    }
 
     // Snapshot the persisted state so the next continuation can use the fast-path.
     try { createSnapshot(taskId, updatedState, wamRoot); } catch {}
@@ -750,29 +801,34 @@ const { lines } = buildTaskInferenceDirective({
     }
 
 
-    if (gate.blocked) {
+    if (isCompletionClaim && gate.blocked) {
       const maxGateReqs = 5;
       const pendingItems = gate.pending || [];
-      const visiblePending = pendingItems.slice(0, maxGateReqs);
-      const overflowPending = pendingItems.length - maxGateReqs;
-      const pendingList = visiblePending.length > 0
-        ? "Requisitos pendientes:\n" + visiblePending.map((p) => `- ${truncate(p, 150)}`).join("\n") + (overflowPending > 0 ? `\n(...(+${overflowPending} más))` : "")
-        : "";
-      const gateHold = loadPrompt("notice.completion_gate", { count: gate.pending.length, pendingList, nextAction: updatedState.nextAction });
-      emitTextPart(output, gateHold, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
-      // La validación viaja al LLM como parte propia (no como reescritura del
-      // mensaje del usuario): el modelo debe continuar con la acción
-      // solicitada ("Listo, continúa") en vez de re-declarar DONE.
-      const validation = buildCompletionValidation(gate, updatedState);
-      injectWamParts(
-        output,
-        [{ id: genPartId(), type: "text", text: validation.text }],
-        { messageID: output.message?.id || input.messageID, sessionID: input.sessionID, phase: "gate-validation", idFactory: genPartId, position: "append" },
-      );
-      // SDK 1.19: rewrite the non-synthetic text part on output.parts too.
-      // Eliminada la mutación destructiva de input/output.parts para evitar inyección y contaminación de mensajes del usuario.
+      const gateKey = pendingItems.join("|");
+      const repeat = gateKey && updatedState.completionGateKey === gateKey;
+      if (!repeat) {
+        const visiblePending = pendingItems.slice(0, maxGateReqs);
+        const overflowPending = pendingItems.length - maxGateReqs;
+        const pendingList = visiblePending.length > 0
+          ? "Requisitos pendientes:\n" + visiblePending.map((p) => `- ${truncate(p, 150)}`).join("\n") + (overflowPending > 0 ? `\n(...(+${overflowPending} más))` : "")
+          : "";
+        const gateHold = loadPrompt("notice.completion_gate", { count: gate.pending.length, pendingList, nextAction: updatedState.nextAction });
+        emitTextPart(output, gateHold, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+        // La validación viaja al LLM como parte propia (no como reescritura del
+        // mensaje del usuario): el modelo debe continuar con el objetivo del
+        // contrato en vez de re-declarar DONE.
+        const validation = buildCompletionValidation(gate, updatedState);
+        injectWamParts(
+          output,
+          [{ id: genPartId(), type: "text", text: validation.text }],
+          { messageID: output.message?.id || input.messageID, sessionID: input.sessionID, phase: "gate-validation", idFactory: genPartId, position: "append" },
+        );
+        updatedState.completionGateKey = gateKey;
+        persistTaskState(taskId, updatedState, wamRoot);
+      }
+      // Mismo set de pendientes que el turno anterior: no repetir el aviso.
       // -------------------------------------------------------------
-    } else if (gate.allDone) {
+    } else if (isCompletionClaim && gate.allDone) {
       try {
         confirmCompletion(updatedState, {
           projectRoot: wamRoot,
@@ -828,7 +884,7 @@ const { lines } = buildTaskInferenceDirective({
           inject.push(...lines);
           if (!updatedState.permissionPreflightNotified) {
             updatedState.permissionPreflightNotified = true;
-            emitTextPart(output, lines.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID, visible: true });
+            emitTextPart(output, lines.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
           }
         }
         try { persistTaskState(taskId, updatedState, wamRoot); } catch {}

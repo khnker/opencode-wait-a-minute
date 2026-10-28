@@ -17,6 +17,7 @@ import { evaluateRequirement as evaluateRequirementChecks } from "../verificatio
 import { truncate } from "../execution/formatting.js";
 import { evaluateOutcome, OUTCOME_STATUSES } from "../verification/outcome-evaluator.js";
 import { nextActionFrom } from "../state/next-action.js";
+import { isContinuationInstruction } from "../policy/request-classifier.js";
 
 export { nextActionFrom };
 
@@ -33,7 +34,7 @@ export { nextActionFrom };
 export const COMPLETION_INTENT_REGEX = new RegExp(
   [
     // 0a. Imperative "done"/"listo"/"terminado" at start
-    "^(done|listo|terminado|terminada|completado|completada|finalizado|finalizada)\\b",
+    "^(done|listo|terminado|terminada|completado|completada|completed|finished|finalizado|finalizada)\\b",
     // 0b. Verb at sentence boundary followed by task/object pronoun
     "(^|[.!?\\n,;]\\s*)(done|finish|finished|complete|completed|terminate|terminated|termino|listo|finalizado|finalizada|completado|completada)\\s+(the|my|this|that|task|tarea|it|all|everything|with\\s+this|ya)\\b",
     // 0c. "I'm done" / "we are done" / "we're done"
@@ -69,6 +70,8 @@ export function isCompletionIntent(promptText) {
   const text = promptText.toLowerCase().trim();
   // Una pregunta no es un claim de completitud ("¿ya está?", "is it complete?").
   if (text.endsWith("?")) return false;
+  // "listo sigue" / "ok, continúa" son instrucciones de continuación, no claims.
+  if (isContinuationInstruction(text)) return false;
   return COMPLETION_INTENT_REGEX.test(text);
 }
 
@@ -286,12 +289,6 @@ export function evaluateCompletionGate(state, promptText) {
  * @returns {{ phase: string, nextAction: string }}
  */
 /**
- * Acción que el usuario solicita al LLM cuando el completion gate rechaza
- * un claim de completitud: seguir implementando lo que falta.
- */
-export const COMPLETION_GATE_REQUESTED_ACTION = "Listo, continúa";
-
-/**
  * Construye la validación que se envía al LLM cuando el completion gate
  * rechaza un claim de completitud (el LLM dijo DONE pero faltan requisitos).
  * PURE: (gate, state) → payload con el texto de validación dirigido al LLM.
@@ -302,6 +299,15 @@ export const COMPLETION_GATE_REQUESTED_ACTION = "Listo, continúa";
 export function buildCompletionValidation(gate, state = {}) {
   const pending = Array.isArray(gate?.pending) ? gate.pending : [];
   const nextAction = state?.nextAction || nextActionFrom(state);
+  const requestedAction = truncate(
+    (
+      state?.contract?.objective ||
+      state?.intent?.goal ||
+      state?.requirements?.[0]?.title ||
+      "continuar la tarea"
+    ).split("\n")[0],
+    120,
+  );
   const lines = [
     "⛔ [wait-a-minute] VALIDACIÓN — la afirmación de completitud fue rechazada: el LLM declaró DONE pero el contrato todavía tiene requisitos pendientes.",
   ];
@@ -310,14 +316,14 @@ export function buildCompletionValidation(gate, state = {}) {
     for (const item of pending) lines.push(`- ${truncate(item, 150)}`);
   }
   lines.push(
-    `Acción solicitada por el usuario: "${COMPLETION_GATE_REQUESTED_ACTION}" → implementa los requisitos pendientes y vuelve a verificarlos. No declares DONE.`,
+    `Objetivo del contrato: "${requestedAction}" → implementa los requisitos pendientes y vuelve a verificarlos. No declares DONE.`,
   );
   lines.push(`Continuar con: ${nextAction}`);
   return {
     text: lines.join("\n"),
     pending,
     nextAction,
-    requestedAction: COMPLETION_GATE_REQUESTED_ACTION,
+    requestedAction,
   };
 }
 

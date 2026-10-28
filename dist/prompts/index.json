@@ -229,6 +229,18 @@
       ]
     },
     {
+      "id": "notice.task_complete",
+      "path": "notices/task-complete.md",
+      "status": "active",
+      "responsibility": "Owns the visible final completion summary with objective, verified requirements, evidence and artifacts.",
+      "consumers": [
+        "src/integration/message-handler.js"
+      ],
+      "testRefs": [
+        "tests/unit/task-complete-message.test.mjs"
+      ]
+    },
+    {
       "id": "warning.contradiction.unresolved",
       "path": "notices/contradiction-unresolved.md",
       "status": "active",

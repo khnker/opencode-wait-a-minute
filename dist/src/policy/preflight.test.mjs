@@ -30,6 +30,12 @@ test("classifyRequest returns normal default", () => {
 
 test("classifyRequest treats meta-only instructions as trivial", () => {
   assert.equal(classifyRequest("responde solo: ok").type, "trivial");
+  assert.equal(classifyRequest("falta algo ?").type, "trivial");
+  assert.equal(classifyRequest("¿qué falta?").type, "trivial");
+  assert.equal(classifyRequest("algo más?").type, "trivial");
+  assert.equal(classifyRequest("¿está listo?").type, "trivial");
+  assert.equal(classifyRequest("reiniciado ve si esta ok").type, "trivial");
+  assert.equal(classifyRequest("ya reinicié, ve si está ok").type, "trivial");
   assert.equal(
     classifyRequest("arregla todo, no te detenga, ahora eres responsable de wam de que esta todo bien").type,
     "trivial"

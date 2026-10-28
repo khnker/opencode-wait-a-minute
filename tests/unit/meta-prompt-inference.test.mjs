@@ -15,8 +15,15 @@ test("meta prompt yields no fabricated requirements", () => {
   assert.deepEqual(contract.requirements, []);
 });
 
-test("FAST mode never synthesizes a contract", () => {
-  const contract = synthesizeContract(META, "FAST");
+test("continuation instruction yields no fabricated requirements", () => {
+  for (const prompt of ["listo sigue", "listo, continúa", "ok seguí", "dale, procede"]) {
+    const contract = synthesizeContract(prompt, "NORMAL");
+    assert.equal(contract.trivial, true, prompt);
+    assert.deepEqual(contract.requirements, [], prompt);
+  }
+});
+
+test("FAST mode never synthesizes a contract", () => {  const contract = synthesizeContract(META, "FAST");
   assert.equal(contract.trivial, true);
   assert.deepEqual(contract.requirements, []);
 });

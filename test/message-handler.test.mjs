@@ -201,7 +201,7 @@ test("handleMessage: gate.allDone → confirmCompletion token-savings summary in
       {
         sessionID: "s-done",
         messageID: "m-done",
-        message: { parts: [{ type: "text", text: "implementa X" }] },
+        message: { parts: [{ type: "text", text: "listo, terminado" }] },
       },
       out,
       deps,

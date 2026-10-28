@@ -88,7 +88,7 @@ export function planAutoContinuation({
   const nextTotal = total + 1;
   const pending = Array.isArray(gate.pending) ? gate.pending : [];
   const lines = [
-    "Listo, continúa. [auto-loop] La revisión post-DONE encontró trabajo pendiente. Seguí hasta que el gate no encuentre nada más para corregir.",
+    "[wam auto-loop] La revisión post-DONE encontró trabajo pendiente. Continuá hasta que el gate no encuentre nada más para corregir.",
     `Intento automático ${nextAttempt}/${cap} para este conjunto de pendientes.`,
     ...pending.map((p) => `- ${p}`),
   ];
@@ -104,4 +104,13 @@ export function planAutoContinuation({
       exhausted: false,
     },
   };
+}
+
+/**
+ * Payload for the auto-loop turn. The directive is WAM's, not the user's, so
+ * the part is synthetic: OpenCode keeps it for the model but does not render
+ * it as a user message.
+ */
+export function buildAutoLoopPrompt(plan) {
+  return { parts: [{ type: "text", text: plan.prompt, synthetic: true }] };
 }

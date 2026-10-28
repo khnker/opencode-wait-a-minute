@@ -16,9 +16,9 @@ Completion is the subsystem responsible for task completion, including completio
 ### Completion Gate Validation
 - **Files**: `src/integration/orchestration.js` (gate + validation), `src/integration/message-handler.js` (delivery)
 - **Purpose**: Reject a completion claim while requirements are pending and send the validation back to the LLM
-- **Mechanism**: `evaluateCompletionGate(state, promptText)` classifies the claim (`isCompletionIntent`) and returns the pending items; `buildCompletionValidation(gate, state)` builds the validation text with the action requested by the user (`Listo, continúa`)
-- **Delivery**: the validation is injected as its own part (`injectWamParts` → `output.parts` / `output.message.parts`) so the model continues the pending work instead of re-declaring DONE
-- **User notice**: `notice.completion_gate` (`prompts/notices/completion-gate.md`) states what is missing
+- **Mechanism**: `evaluateCompletionGate(state, promptText)` classifies the claim (`isCompletionIntent`) and returns the pending items; `buildCompletionValidation(gate, state)` quotes the contract objective. The gate is emitted only for completion claims; evaluation still runs per turn.
+- **Delivery**: the validation is injected as a synthetic part (`injectWamParts` → `output.parts` / `output.message.parts`) so the model continues the pending work without the text being attributed to the user.
+- **User notice**: `notice.completion_gate` (`prompts/notices/completion-gate.md`) states what is missing. The same pending set is not notified twice in a row (`completionGateKey`), so a blocked claim cannot loop.
 
 ### Verification Policy
 - **File**: `src/verification/verification-policy.js`

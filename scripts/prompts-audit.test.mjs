@@ -10,7 +10,7 @@ test("audit is deterministic and read-only", () => {
 
 test("audit reports the registered prompt count and assembly raw literals", () => {
   const a = runAudit();
-  assert.equal(a.summary.registeredPrompts, 43, "catalog must expose 43 registered prompts");
+  assert.equal(a.summary.registeredPrompts, 44, "catalog must expose 43 registered prompts");
 
   const assembly = a.candidateSites.filter((s) => s.file === "src/context/assembly.js");
   assert.ok(

@@ -1,0 +1,16 @@
+{
+  "id": "notice.task_complete",
+  "vars": {
+    "objective": "OAuth2 endpoint",
+    "count": "2",
+    "evidence": "tests pass",
+    "artifacts": ".wam/tasks/t1/summary.md, recent-changes.md"
+  },
+  "mustContain": [
+    "Tarea completada",
+    "Objetivo: OAuth2 endpoint",
+    "Requisitos verificados: 2",
+    "Evidencia: tests pass"
+  ],
+  "mustNotContain": []
+}

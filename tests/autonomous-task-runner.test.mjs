@@ -7,6 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -16,61 +17,38 @@ import { normalizeStatus, countByStatus, getNextPendingTask } from "../src/state
 import { normalizeStateFile, validateStateFile } from "../src/state/task-state-file.js";
 
 const ROOT = process.cwd();
-const STATE_PATH = path.join(ROOT, ".wam", "task-state.json");
 
-// Hermetic fixture: `.wam/` is gitignored, so a clean checkout (e.g. CI) has no
-// state file. Seed a minimal valid state and remove it on exit if we created it,
-// so these tests never depend on developer-local state. A state file that
-// exists but carries no tasks is equally unusable (saveState refuses it and
-// exits), so it is seeded too — the pre-existing content is restored on exit.
-function stateUsable() {
+// Hermetic fixture: the runner must never touch the project `.wam` while a
+// live session owns it. Redirect it to a throwaway directory for the whole
+// file, including the child processes it spawns.
+const STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "wam-task-state-"));
+const STATE_PATH = path.join(STATE_DIR, "task-state.json");
+process.env.WAM_TASK_STATE_PATH = STATE_PATH;
+
+fs.writeFileSync(
+  STATE_PATH,
+  JSON.stringify(
+    {
+      version: "1",
+      tasks: Object.fromEntries(
+        ["TASK-06", "TASK-07", "TASK-08", "TASK-09"].map((id) => [
+          id,
+          { id, status: "PENDING", createdAt: "2026-10-06T13:00:00.000Z" },
+        ]),
+      ),
+    },
+    null,
+    2,
+  ),
+);
+process.on("exit", () => {
   try {
-    const s = JSON.parse(fs.readFileSync(STATE_PATH, "utf8"));
-    return !!(s && s.tasks && Object.keys(s.tasks).length > 0);
+    fs.chmodSync(STATE_DIR, 0o755);
+    fs.rmSync(STATE_DIR, { recursive: true, force: true });
   } catch {
-    return false;
+    // best-effort cleanup; never mask test results
   }
-}
-if (!stateUsable()) {
-  const hadFile = fs.existsSync(STATE_PATH);
-  const seedBackup = hadFile ? STATE_PATH + ".seedbak" : null;
-  if (hadFile) fs.copyFileSync(STATE_PATH, seedBackup);
-  fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
-  fs.writeFileSync(
-    STATE_PATH,
-    JSON.stringify(
-      {
-        version: "1",
-        tasks: Object.fromEntries(
-          ["TASK-06", "TASK-07", "TASK-08", "TASK-09"].map((id) => [
-            id,
-            { id, status: "PENDING", createdAt: "2026-10-06T13:00:00.000Z" },
-          ]),
-        ),
-      },
-      null,
-      2,
-    ),
-  );
-  process.on("exit", () => {
-    try {
-      if (seedBackup) {
-        fs.copyFileSync(seedBackup, STATE_PATH);
-        fs.unlinkSync(seedBackup);
-        return;
-      }
-    } catch {
-      // fall through to directory removal below
-    }
-    const dir = path.dirname(STATE_PATH);
-    try {
-      if (fs.existsSync(dir)) fs.chmodSync(dir, 0o755);
-      fs.rmSync(dir, { recursive: true, force: true });
-    } catch {
-      // best-effort cleanup; never mask test results
-    }
-  });
-}
+});
 
 function backupState() {
   const backupPath = STATE_PATH + ".backup";

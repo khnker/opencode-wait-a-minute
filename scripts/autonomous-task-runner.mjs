@@ -30,7 +30,14 @@ import { normalizeStateFile, validateStateFile } from "../src/state/task-state-f
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = process.cwd();
-const STATE_PATH = path.join(ROOT, ".wam", "task-state.json");
+const DEFAULT_STATE_PATH = path.join(ROOT, ".wam", "task-state.json");
+
+// Resolved lazily so tests can redirect the runner to a throwaway file
+// (`WAM_TASK_STATE_PATH`) instead of the live project state.
+function statePath() {
+  const override = process.env.WAM_TASK_STATE_PATH;
+  return override ? path.resolve(override) : DEFAULT_STATE_PATH;
+}
 const DEFAULT_TIMEOUT_MS = 120_000; // 120 seconds
 
 // Registry fallback for tasks that do not declare their own testSuite.
@@ -51,7 +58,7 @@ function fail(message) {
 function loadState() {
   let raw;
   try {
-    raw = fs.readFileSync(STATE_PATH, "utf8");
+    raw = fs.readFileSync(statePath(), "utf8");
   } catch (e) {
     fail(`Failed to load task state: ${e.message}`);
   }
@@ -96,9 +103,10 @@ function saveState(state) {
 
   try {
     // Ensure atomic write
-    const tmpPath = STATE_PATH + ".tmp";
+    const target = statePath();
+    const tmpPath = target + ".tmp";
     fs.writeFileSync(tmpPath, JSON.stringify(normalized, null, 2), "utf8");
-    fs.renameSync(tmpPath, STATE_PATH);
+    fs.renameSync(tmpPath, target);
   } catch (e) {
     fail(`Failed to save task state: ${e.message}`);
   }

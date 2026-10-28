@@ -1,6 +1,7 @@
 import { analyze, getTaskState, persistTaskState, routeSkillsV2, loadSkillOnDemand, cavemanify, estimateTokens, buildAssumptions, escalateAssumptions, formatBacklog, findDuplicateTask } from "./src/skills/engine.js";
+import { createDialogueLlmFromEnv } from "./src/dialogue/llm-observer.js";
 import { startExperiment, noteSuccess, noteFailure } from "./src/execution/execution-engine.js";
-import { planAutoContinuation } from "./src/execution/auto-continuation.js";
+import { planAutoContinuation, buildAutoLoopPrompt } from "./src/execution/auto-continuation.js";
 import { migrateLegacyCognition } from "./src/cognition/cognition-store.js";
 import { handleMessage } from "./src/integration/message-handler.js";
 import { injectWamParts } from "./src/integration/part-provenance.js";
@@ -19,6 +20,8 @@ import { assembleContext } from "./src/context/assembly.js";
 import { injectCanonicalProjectContext } from "./src/context/canonical-project-context.js";
 import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./src/verification/verification.js";
 import { ContextDecisionTracer } from "./src/context/context-decision-audit.js";
+
+const dialogueComplete = createDialogueLlmFromEnv();
 import { listContextEvidence, readContextEvidence } from "./src/context/context-pack-evidence.js";
 import { recordRequestUsage, getRequestUsage } from "./src/verification/request-usage.js";
 import { guardAction } from "./src/execution/runtime-guards.js";
@@ -173,7 +176,9 @@ function genPartId() {
   return s;
 }
 
-// Mantiene los mensajes de WAM ocultos del chat del usuario; se registran internamente y aparecen en el resumen final.
+// Los avisos de WAM viajan como partes synthetic: el modelo los recibe, pero
+// OpenCode no los atribuye al usuario ni los usa como cuerpo de su mensaje.
+// Quedan registrados en el log y en el resumen final.
 function emitTextPart(output, text, meta = {}) {
   if (!output) return { status: "error", reason: "no-output" };
   let prefixedText = String(text).startsWith("[wam]") ? String(text) : `[wam] ${text}`;
@@ -194,7 +199,7 @@ function emitTextPart(output, text, meta = {}) {
     phase: "emit",
     idFactory: genPartId,
     position: "prepend",
-    synthetic: false,
+    synthetic: meta.synthetic !== false,
   });
   return { status: "inserted" };
 }
@@ -992,7 +997,7 @@ refresh();
         sessionID,
         path: { id: sessionID },
         query: { directory: root },
-        body: { parts: [{ type: "text", text: plan.prompt }] },
+        body: buildAutoLoopPrompt(plan),
       }))
         .catch((e) => wamDebug("[wait-a-minute] auto-loop prompt failed:", e?.message))
         .finally(() => autoContinueInFlight.delete(sessionID));
@@ -1181,6 +1186,7 @@ async function postToolExecution(input, output) {
         sessionTasks,
         sessionStore,
         cfg,
+        dialogueComplete,
         resolveSessionBase,
         wamRootFor,
         ensureWamMemory,
@@ -1310,7 +1316,8 @@ async function postToolExecution(input, output) {
       if (sid && argsArr[0] === "task" && argsArr[1] === "switch" && argsArr[2]) {
         sessionTasks.set(sid, argsArr[2]);
       }
-      emitTextPart(output, wamText, { sessionID: sid, messageID: output.message?.id || input.messageID, visible: true });
+      // Respuesta a un comando que el usuario invocó: debe verse en el chat.
+      emitTextPart(output, wamText, { sessionID: sid, messageID: output.message?.id || input.messageID, synthetic: false });
     },
 
     // Enforce Clarification Gate (spec change 4): en ASKING se bloquean las
