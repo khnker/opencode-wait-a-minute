@@ -37,6 +37,7 @@ export const DEFAULT_WAM_CONFIG = Object.freeze({
   debug: true,
   autoLoop: true,
   permissionPreflight: true,
+  contextProjection: "active",
 });
 
 const TRUE_VALUES = new Set(["1", "true", "on", "yes", "enabled", "enable"]);
@@ -95,7 +96,7 @@ export function readConfigFile(baseDir) {
 /**
  * Resolve the effective WAM config for a project root.
  * @param {string} [baseDir]
- * @returns {{skills: boolean, logging: boolean, enforcement: boolean, debug: boolean, autoLoop: boolean, permissionPreflight: boolean}}
+ * @returns {{skills: boolean, logging: boolean, enforcement: boolean, debug: boolean, autoLoop: boolean, permissionPreflight: boolean, contextProjection: string}}
  */
 export function loadWamConfig(baseDir = process.cwd()) {
   const file = readConfigFile(baseDir);
@@ -144,5 +145,17 @@ export function loadWamConfig(baseDir = process.cwd()) {
     DEFAULT_WAM_CONFIG.permissionPreflight,
   );
 
-  return { skills, logging, enforcement, debug, autoLoop, permissionPreflight };
+  return {
+    skills,
+    logging,
+    enforcement,
+    debug,
+    autoLoop,
+    permissionPreflight,
+    contextProjection: firstDefined(
+      process.env.WAM_CONTEXT_PROJECTION,
+      typeof file.contextProjection === "string" ? file.contextProjection : undefined,
+      DEFAULT_WAM_CONFIG.contextProjection,
+    ),
+  };
 }
