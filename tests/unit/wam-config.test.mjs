@@ -15,6 +15,7 @@ const ENV_KEYS = [
   "WAM_DEBUG", "WAM_DISABLE_DEBUG", "WAM_LOG_LEVEL", "WAM_CONFIG",
   "WAM_AUTO_LOOP", "WAM_DISABLE_AUTO_LOOP",
   "WAM_PERMISSION_PREFLIGHT", "WAM_DISABLE_PERMISSION_PREFLIGHT",
+  "WAM_CONTEXT_PROJECTION",
 ];
 let saved = {};
 
@@ -82,7 +83,17 @@ test("WAM_GOVERNANCE=off / WAM_BYPASS disable enforcement", () => {
 
 test("config file is honored", () => {
   const cfg = loadWamConfig(tmpProject({ skills: false, logging: false, enforcement: false }));
-  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false, debug: true, autoLoop: true, permissionPreflight: true });
+  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false, debug: true, autoLoop: true, permissionPreflight: true, contextProjection: "active" });
+});
+
+test("contextProjection defaults to active and honors env/file overrides", () => {
+  assert.equal(loadWamConfig(tmpProject()).contextProjection, "active");
+  assert.equal(loadWamConfig(tmpProject({ contextProjection: "shadow" })).contextProjection, "shadow");
+  process.env.WAM_CONTEXT_PROJECTION = "shadow";
+  assert.equal(loadWamConfig(tmpProject({ contextProjection: "active" })).contextProjection, "shadow");
+  delete process.env.WAM_CONTEXT_PROJECTION;
+  // Raw file values pass through unvalidated; resolveProjectionMode falls back to active.
+  assert.equal(loadWamConfig(tmpProject({ contextProjection: "bogus" })).contextProjection, "bogus");
 });
 
 test("env overrides config file", () => {

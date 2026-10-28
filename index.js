@@ -744,7 +744,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
   configureLogger({ enabled: wamConfig.logging });
   setLoggingEnabled(wamConfig.logging);
   setDebugEnabled(wamConfig.debug);
-  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement, debug: wamConfig.debug, autoLoop: wamConfig.autoLoop, permissionPreflight: wamConfig.permissionPreflight };
+  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement, debug: wamConfig.debug, autoLoop: wamConfig.autoLoop, permissionPreflight: wamConfig.permissionPreflight, contextProjection: wamConfig.contextProjection };
   // Audit which WAM logic gates are loaded so WAM_DEBUG=1 output is self-describing.
   registerLogicGate("skills", { loaded: wamConfig.skills, source: "wam-config", note: "skill discovery/routing/injection" });
   registerLogicGate("logging", { loaded: wamConfig.logging, source: "wam-config", note: "file + console log emission" });
@@ -1611,13 +1611,45 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
         if (!state) return;
         const memory = loadConversationMemory(root, sid);
         const decisions = listDecisions(root);
-        const brief = buildContextBrief({
+        const { resolveProjectionMode, buildShadowRecord, appendShadowRecord } = await import(
+          "./src/context/context-shadow.js"
+        );
+        const mode = resolveProjectionMode(cfg.contextProjection, {
+          onInvalid: (value) => wamLog(`[wait-a-minute] invalid contextProjection "${value}"; using active`),
+        });
+        const briefOptions = {
           taskId,
           taskState: state,
           decisions,
           entities: memory.entities || [],
+          root,
+        };
+        const brief = buildContextBrief({
+          ...briefOptions,
+          projectionMode: mode === "active" ? "active" : "legacy",
         });
         if (!brief.text) return;
+        if (mode === "shadow") {
+          try {
+            const shadowBrief = buildContextBrief({ ...briefOptions, projectionMode: "active" });
+            appendShadowRecord(
+              root,
+              buildShadowRecord({
+                sessionId: sid,
+                taskId,
+                mode,
+                budgetChars: shadowBrief.budgetChars,
+                injectedText: brief.text,
+                shadowText: shadowBrief.text,
+                projection: shadowBrief.projection,
+                taskState: state,
+                decisions,
+              }),
+            );
+          } catch (e) {
+            wamLog("[wait-a-minute] shadow context telemetry error:", e.message);
+          }
+        }
         if (Array.isArray(output?.context)) output.context.push(brief.text);
         else if (output) output.context = [brief.text];
         if (cfg.contextBriefReplacePrompt === true && output) output.prompt = brief.text;
