@@ -780,7 +780,8 @@ const WaitAMinutePlugin = async (pluginInput) => {
     }
   }
   const sessionTasks = new Map(); // sessionID → taskId activo visto en chat.message
-  const sessionAutoCompact = new Map(); // sessionID → { at, total }
+  const sessionAutoCompact = new Map(); // sessionID → { at, total, armed }
+  const sessionAutoCompactInFlight = new Set(); // sessionIDs with a summarize call in flight
   const autoContinueInFlight = new Set(); // sessionID → auto-loop prompt en vuelo
   const client = pluginInput?.client;
 
@@ -1015,6 +1016,7 @@ refresh();
       if (cfg.autoCompact === false || process.env.WAM_AUTO_COMPACT === "0") return;
       const sid = info.sessionID;
       if (!sid || bypassed || sessionBypasses.has(sid)) return;
+      if (sessionAutoCompactInFlight.has(sid)) return;
       const tokens = info.tokens || {};
       const total =
         Number(tokens.total) ||
@@ -1022,24 +1024,34 @@ refresh();
           Number(tokens.output || 0) +
           Number(tokens.cache?.read || 0) +
           Number(tokens.cache?.write || 0);
+      if (!Number.isFinite(total)) return;
       const threshold = Number(process.env.WAM_AUTO_COMPACT_TOKENS || cfg.autoCompactTokens || 100000);
-      if (!Number.isFinite(total) || total < threshold) return;
+      // Re-arm only once the reported total falls to half the threshold, so a
+      // post-compaction count that is still high does not compact again.
+      const state = sessionAutoCompact.get(sid);
+      if (state && state.armed === false) {
+        if (total > threshold * 0.5) return;
+        sessionAutoCompact.set(sid, { ...state, armed: true });
+        return;
+      }
+      if (total < threshold) return;
       const now = Date.now();
       const cooldown = Number(process.env.WAM_AUTO_COMPACT_COOLDOWN_MS || cfg.autoCompactCooldownMs || 300000);
-      const last = sessionAutoCompact.get(sid);
-      if (last && now - last.at < cooldown) return;
-      if (last && total <= last.total) return;
+      if (state && now - state.at < cooldown) return;
       if (!client?.session?.summarize) return;
-      sessionAutoCompact.set(sid, { at: now, total });
+      sessionAutoCompactInFlight.add(sid);
+      sessionAutoCompact.set(sid, { at: now, total, armed: false });
       const root = await resolveSessionBase(sid);
       await client.session.summarize({
         path: { id: sid },
-        body: { providerID: info.providerID, modelID: info.modelID },
+        body: { providerID: info.providerID, modelID: info.modelID, auto: true },
         query: { directory: root },
       });
       wamLog(`[wait-a-minute] auto-compacted session ${sid} at ${total} tokens`);
     } catch (e) {
-      wamLog(`[wait-a-minute] auto-compact error:`, e.message);
+      console.warn("[wait-a-minute] auto-compact error:", e.message);
+    } finally {
+      if (info?.sessionID) sessionAutoCompactInFlight.delete(info.sessionID);
     }
   }
 
