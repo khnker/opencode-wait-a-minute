@@ -12,7 +12,7 @@ import { evaluateCompletionGate, applyPhaseTransition, isCompletionIntent, COMPL
 import { loadPrompt } from "./src/prompts/loader.js";
 import { activeTaskPath, tasksDir as wamTasksDir, taskDir as wamTaskDir } from "./src/shared/wam-paths.js";
 
-import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
+import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, listDecisions, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
 import { purgeTasks } from "./src/persistence/retention-manager.js";
 import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, selectContextWithCqe, detectFileSearchIntent, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules, setActiveSession } from "./src/context/context.js";
 import { assembleContext } from "./src/context/assembly.js";
@@ -28,6 +28,10 @@ import { evaluateDiscovery } from "./src/policy/discovery-classifier.js";
 import { classifyByCapabilities, buildCandidate } from "./src/policy/strategy-capabilities.js";
 import { getStatusReport } from "./src/execution/execution-state.js";
 import { createSnapshot, checkContinuation, rebuildScope } from "./src/context/context-snapshot.js";
+import { reduceToolOutput } from "./src/context/tool-output-reducer.js";
+import { filterNewContext } from "./src/context/context-dedupe.js";
+import { buildContextBrief } from "./src/context/context-brief.js";
+import { loadConversationMemory } from "./src/persistence/conversation-memory.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -771,6 +775,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
     }
   }
   const sessionTasks = new Map(); // sessionID → taskId activo visto en chat.message
+  const sessionAutoCompact = new Map(); // sessionID → { at, total }
   const autoContinueInFlight = new Set(); // sessionID → auto-loop prompt en vuelo
   const client = pluginInput?.client;
 
@@ -996,6 +1001,43 @@ refresh();
     }
   }
 
+  // Automatic compaction: OpenCode auto-compaction can be disabled globally,
+  // so WAM triggers session.summarize once the assistant crosses the token
+  // threshold. Debounced per session; summary messages are ignored.
+  async function maybeAutoCompact(info) {
+    try {
+      if (!info || info.role !== "assistant" || info.summary) return;
+      if (cfg.autoCompact === false || process.env.WAM_AUTO_COMPACT === "0") return;
+      const sid = info.sessionID;
+      if (!sid || bypassed || sessionBypasses.has(sid)) return;
+      const tokens = info.tokens || {};
+      const total =
+        Number(tokens.total) ||
+        Number(tokens.input || 0) +
+          Number(tokens.output || 0) +
+          Number(tokens.cache?.read || 0) +
+          Number(tokens.cache?.write || 0);
+      const threshold = Number(process.env.WAM_AUTO_COMPACT_TOKENS || cfg.autoCompactTokens || 100000);
+      if (!Number.isFinite(total) || total < threshold) return;
+      const now = Date.now();
+      const cooldown = Number(process.env.WAM_AUTO_COMPACT_COOLDOWN_MS || cfg.autoCompactCooldownMs || 300000);
+      const last = sessionAutoCompact.get(sid);
+      if (last && now - last.at < cooldown) return;
+      if (last && total <= last.total) return;
+      if (!client?.session?.summarize) return;
+      sessionAutoCompact.set(sid, { at: now, total });
+      const root = await resolveSessionBase(sid);
+      await client.session.summarize({
+        path: { id: sid },
+        body: { providerID: info.providerID, modelID: info.modelID },
+        query: { directory: root },
+      });
+      wamLog(`[wait-a-minute] auto-compacted session ${sid} at ${total} tokens`);
+    } catch (e) {
+      wamLog(`[wait-a-minute] auto-compact error:`, e.message);
+    }
+  }
+
 /**
  * Runs after tool.execute.before — persists success/failure to the
  * cognition store via noteSuccess/noteFailure, reading experiment IDs
@@ -1108,6 +1150,7 @@ async function postToolExecution(input, output) {
             requestTokens: (t.input || 0) + cacheRead,
             cost: info.cost || 0,
           });
+          void maybeAutoCompact(info);
           return;
         }
         if (event?.type === "message.part.updated") {
@@ -1510,9 +1553,57 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
         }
       }
       try {
+        const sid = input?.sessionID;
+        const root = await resolveSessionBase(sid);
+        const taskId =
+          sessionTasks.get(sid) ||
+          readActiveTaskIdFresh(root, { sessionId: sid, projectRoot: root }) ||
+          "default-task";
+        if (cfg.reduceToolOutput !== false && typeof output?.output === "string") {
+          const reduced = reduceToolOutput({
+            toolName: input?.tool || "tool",
+            text: output.output,
+            root,
+            taskId,
+          });
+          if (reduced.changed) output.output = reduced.text;
+        }
+      } catch (e) {
+        wamLog(`[wait-a-minute] tool output reduction error:`, e.message);
+      }
+      try {
         await postToolExecution(input, output);
       } catch (e) {
         wamLog(`[wait-a-minute] tool.execute.after non-blocking error:`, e.message);
+      }
+    },
+
+    // OpenCode compaction hook: inject WAM's structured brief before the
+    // generic continuation summary is generated.
+    "experimental.session.compacting": async (input, output) => {
+      try {
+        const sid = input?.sessionID || input?.session?.id || null;
+        const root = await resolveSessionBase(sid);
+        const taskId =
+          sessionTasks.get(sid) ||
+          readActiveTaskIdFresh(root, { sessionId: sid, projectRoot: root }) ||
+          (sid ? `ses-${sid.slice(-10)}` : "default-task");
+        const state = getTaskState(taskId, root);
+        if (!state) return;
+        const memory = loadConversationMemory(root, sid);
+        const decisions = listDecisions(root);
+        const brief = buildContextBrief({
+          taskId,
+          taskState: state,
+          decisions,
+          entities: memory.entities || [],
+        });
+        if (!brief.text) return;
+        if (Array.isArray(output?.context)) output.context.push(brief.text);
+        else if (output) output.context = [brief.text];
+        if (cfg.contextBriefReplacePrompt === true && output) output.prompt = brief.text;
+      } catch (e) {
+        wamLog(`[wait-a-minute] compaction brief error:`, e.message);
       }
     },
   };

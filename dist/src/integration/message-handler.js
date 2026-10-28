@@ -28,6 +28,7 @@ import { pruneCompletedTasks } from "../persistence/retention-manager.js";
 import { classifyIntentLane, INTENT_LANES } from "../policy/intent-router.js";
 import { loadHistoryEntries, retrieveIntentHistory } from "../context/intent-history.js";
 import { applyContextBudget } from "../context/context-budget.js";
+import { filterNewContext } from "../context/context-dedupe.js";
 import { recordContextPack, recordDelegationEvidence, injectedSkillIds } from "../context/context-pack-evidence.js";
 import { activeTaskPath } from "../shared/wam-paths.js";
 import { loadConversationMemory, recordTurn, formatMemoryForContext } from "../persistence/conversation-memory.js";
@@ -429,7 +430,13 @@ export async function handleMessage(input, output, deps) {
             const delegation = delegationLines(existingState);
             parts.push(...delegation.map((l) => l + "\n"));
             try { recordDelegationEvidence({ taskId, lines: delegation, root: wamRoot }); } catch {}
-            emitTextPart(output, parts.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+            const dedupedParts = filterNewContext(parts, {
+              root: wamRoot,
+              sessionID: input.sessionID,
+            });
+            if (dedupedParts.length > 0) {
+              emitTextPart(output, dedupedParts.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+            }
           } catch {}
           return;
         }
@@ -831,8 +838,11 @@ const { lines } = buildTaskInferenceDirective({
     const budgetedAux = applyContextBudget(auxInject, {
       state: updatedState.phase || intentLane.lane,
     });
-    const budgetedInject = [...contextInject, ...inject, ...budgetedAux];
-    const wamBlockText = budgetedInject.length > 0 ? wrapWamBlock(budgetedInject.join("\n")) : "";
+    const dedupedInject = filterNewContext([...contextInject, ...inject, ...budgetedAux], {
+      root: wamRoot,
+      sessionID: input.sessionID,
+    });
+    const wamBlockText = dedupedInject.length > 0 ? wrapWamBlock(dedupedInject.join("\n")) : "";
 
     if (updatedState.contract?.status !== "APPROVED" && updatedState.phase !== "DONE") {
       waitAMinute.presentValidation({

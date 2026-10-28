@@ -279,6 +279,11 @@ export function getDecision(id, root) {
   return entries.find((e) => e.id === id);
 }
 
+export function listDecisions(root) {
+  const { body } = readDoc("decisions", root);
+  return parseDecisionEntries(body);
+}
+
 // espe §7 + §10: preserva user-decided ante inferencias de menor autoridad
 export function recordDecision(entry = {}, root) {
   const { id, decision } = entry;

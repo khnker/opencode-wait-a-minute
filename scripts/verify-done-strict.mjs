@@ -231,7 +231,7 @@ checks.push({
     name: "Token Savings Meter",
     ...runStrict(
       "Token Savings Meter",
-      "node --input-type=module -e \"const ns = await import('./src/verification/token-savings-meter.js'); const r = ns.recordTokenSavings(process.cwd(), 'gate-verify', 53, 50); if (!r || r.savingsPct <= 0) { console.error('no savings recorded'); process.exit(2); } console.log('savingsPct=' + r.savingsPct);\""
+      "node --input-type=module -e \"const ns = await import('./src/verification/token-savings-meter.js'); const r = ns.recordTokenSavings(process.cwd(), 'gate-verify', 50, { baselineTokens: 100, baselineSource: 'measured', actualRequestTokens: 50, usageSource: 'provider' }); if (!r || r.savingsPct <= 0) { console.error('no savings recorded'); process.exit(2); } console.log('savingsPct=' + r.savingsPct);\""
     ),
   });
 }
