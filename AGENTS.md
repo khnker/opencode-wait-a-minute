@@ -18,11 +18,17 @@ Every non-trivial change follows this order:
 ## Project commands
 
 ```bash
-npm run build                 # copy src/skills/prompts to dist
+npm run build                 # copy index.js, package.json, src/, skills/, prompts/, vendor/ to dist (POSIX cp)
 npm run validate              # release gate (full suite; slow)
 node scripts/run-tests.mjs    # full suite with force-exit
 node scripts/prune-wam-artifacts.mjs --apply  # archive one-use test tasks/snapshots
 ```
+
+Prerequisites: Node >= 20 and the sibling `../context-query-core` checkout
+(`context-query-core` is a `file:` dependency).
+
+Tests live in `tests/` (legacy, e2e, isolation), as `test-*.mjs` at the repo root and as
+`src/**/*.test.js`. Per-file runs use `node --test --test-force-exit <files>`.
 
 ## Runtime notes
 
