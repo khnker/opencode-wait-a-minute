@@ -33,10 +33,13 @@ test("invalid projection mode falls back to active and reports a diagnostic", ()
 });
 
 test("buildShadowRecord is deterministic with an injected clock and hashes both texts", () => {
+  // Real buildSemanticProjection shape: execution state is nested.
   const projection = {
-    requirements: [{ id: "req-1" }],
-    pending: [{ requirementId: "req-2" }],
-    conflicts: [],
+    execution: {
+      requirements: [{ id: "req-1" }],
+      pending: [{ requirementId: "req-2" }],
+      conflicts: [],
+    },
     decisions: [{ id: "d1", text: "keep" }],
     constraints: [{ text: "a" }, { text: "b" }],
     retrievableRefs: ["src/a.js", "src/b.js"],
@@ -78,6 +81,37 @@ test("buildShadowRecord is deterministic with an injected clock and hashes both 
   assert.equal(first.constraints, 2);
   assert.equal(first.retrievableRefs, 2);
   assert.equal(first.injectedTokenEstimate, 3);
+});
+
+test("buildShadowRecord never extracts zeros from a non-empty nested execution", () => {
+  const projection = {
+    execution: {
+      requirements: [{ id: "req-1" }, { id: "req-2" }],
+      pending: [{ requirementId: "req-2" }],
+      conflicts: [{ requirementId: "req-1", ref: "c-1" }],
+    },
+    decisions: [{ id: "d1" }, { id: "d2" }],
+    constraints: ["no migrations"],
+    retrievableRefs: ["src/a.js"],
+  };
+
+  const record = buildShadowRecord({
+    now: () => "t",
+    projection,
+    taskState: { requirements: [{ id: "req-1" }, { id: "req-3" }] },
+    decisions: [{ id: "d1" }, { id: "d2" }, { id: "d3" }],
+  });
+
+  assert.deepEqual(record.requirements, {
+    included: ["req-1", "req-2"],
+    omitted: ["req-3"],
+    pending: 1,
+    conflicts: 1,
+  });
+  assert.deepEqual(record.decisions, { live: 2, dropped: 1 });
+  assert.equal(record.constraints, 1);
+  assert.equal(record.retrievableRefs, 1);
+  assert.equal(record.requirements.included.filter((id) => record.requirements.omitted.includes(id)).length, 0);
 });
 
 test("buildShadowRecord marks identical texts as equivalent", () => {

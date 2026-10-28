@@ -54,9 +54,13 @@ export function buildShadowRecord({
   const injectedHash = hashText(injected);
   const shadowHash = hashText(shadow);
 
-  const included = Array.isArray(projection?.requirements) ? projection.requirements : [];
+  // Real projections nest execution state under projection.execution; only
+  // constraints and retrievableRefs stay top-level.
+  const execution = projection?.execution || {};
+  const included = Array.isArray(execution.requirements) ? execution.requirements : [];
   const includedIds = included.map((req) => req?.id).filter(Boolean);
   const includedSet = new Set(includedIds);
+  // Projections expose no omitted-requirement list: derive it from the caller's task state.
   const omittedIds = (Array.isArray(taskState.requirements) ? taskState.requirements : [])
     .map((req) => req?.id)
     .filter((id) => id && !includedSet.has(id));
@@ -81,8 +85,8 @@ export function buildShadowRecord({
     requirements: {
       included: includedIds,
       omitted: omittedIds,
-      pending: Array.isArray(projection?.pending) ? projection.pending.length : 0,
-      conflicts: Array.isArray(projection?.conflicts) ? projection.conflicts.length : 0,
+      pending: Array.isArray(execution.pending) ? execution.pending.length : 0,
+      conflicts: Array.isArray(execution.conflicts) ? execution.conflicts.length : 0,
     },
     decisions: {
       live: liveDecisions,
