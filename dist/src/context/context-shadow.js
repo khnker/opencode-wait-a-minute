@@ -46,6 +46,7 @@ export function buildShadowRecord({
   injectedText = "",
   shadowText = "",
   projection = null,
+  fallbackReason = null,
   taskState = {},
   decisions = [],
 } = {}) {
@@ -94,6 +95,8 @@ export function buildShadowRecord({
     },
     constraints: Array.isArray(projection?.constraints) ? projection.constraints.length : 0,
     retrievableRefs: Array.isArray(projection?.retrievableRefs) ? projection.retrievableRefs.length : 0,
+    projectionAvailable: projection != null,
+    fallbackReason: projection ? null : fallbackReason || "projection-unavailable",
     equivalent: injectedHash === shadowHash,
   };
 }

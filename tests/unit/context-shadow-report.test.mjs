@@ -24,6 +24,8 @@ function record(overrides = {}) {
     injectedTokenEstimate: 250,
     shadowTokenEstimate: 225,
     requirements: { included: [], omitted: [], pending: [], conflicts: [] },
+    projectionAvailable: true,
+    fallbackReason: null,
     equivalent: false,
     ...overrides,
   };
@@ -62,7 +64,7 @@ test("fails when fewer than min-records are present", () => {
   const result = evaluateShadowRecords(many(19));
   assert.equal(result.pass, false);
   assert.equal(gate(result, "records").pass, false);
-  assert.match(gate(result, "records").detail, /19 record\(s\), minimum 20/);
+  assert.match(gate(result, "records").detail, /19 available record\(s\), minimum 20/);
 });
 
 test("corrupt line fails loud and names the line", () => {
@@ -112,4 +114,53 @@ test("clean telemetry file exits 0", () =>
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /records: 20/);
     assert.match(result.stdout, /PASS/);
+  }));
+
+test("min-records counts only available projections", () => {
+  const records = [
+    ...many(19),
+    record({ projectionAvailable: false, fallbackReason: "no-ledger-and-no-base" }),
+  ];
+  const result = evaluateShadowRecords(records);
+  assert.equal(result.pass, false);
+  assert.match(gate(result, "records").detail, /19 available record\(s\), minimum 20/);
+  assert.equal(result.summary.available, 19);
+  assert.equal(result.summary.fallback, 1);
+});
+
+test("fallback records never satisfy the minimum", () => {
+  const result = evaluateShadowRecords(
+    many(20, { projectionAvailable: false, fallbackReason: "no-ledger-and-no-base" }),
+  );
+  assert.equal(result.pass, false);
+  assert.equal(result.summary.available, 0);
+  assert.equal(result.summary.fallback, 20);
+});
+
+test("records without availability are unknown and never satisfy the minimum", () => {
+  const result = evaluateShadowRecords(many(20, { projectionAvailable: undefined }));
+  assert.equal(result.pass, false);
+  assert.equal(result.summary.unknown, 20);
+});
+
+test("mixed legacy telemetry with unknown fields stays parseable", () => {
+  const legacy = { ...record(), projectionAvailable: undefined, legacyExtra: { kept: true } };
+  const result = evaluateShadowRecords([legacy, ...many(2)]);
+  assert.equal(gate(result, "parse").pass, true);
+  assert.equal(result.summary.unknown, 1);
+  assert.equal(result.summary.available, 2);
+});
+
+test("fallback telemetry exits 1 and names the shortfall", () =>
+  withTempDir((dir) => {
+    const file = path.join(dir, "context-shadow.jsonl");
+    const lines = many(20, {
+      projectionAvailable: false,
+      fallbackReason: "no-ledger-and-no-base",
+    });
+    fs.writeFileSync(file, `${lines.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
+    const result = runCli(["--file", file]);
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /availability: 0 available, 20 fallback, 0 unknown/);
+    assert.match(result.stdout, /0 available record\(s\), minimum 20/);
   }));

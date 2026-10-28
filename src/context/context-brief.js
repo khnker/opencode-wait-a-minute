@@ -124,5 +124,17 @@ export function buildContextBrief({
   }
 
   const text = lines.join("\n").slice(0, maxChars);
-  return { text, tokens: estimateTokens(text), sections: lines.length, budgetChars: maxChars, projection };
+  const fallbackReason = projection
+    ? null
+    : projectionMode === "legacy"
+      ? "legacy-mode"
+      : "no-ledger-and-no-base";
+  return {
+    text,
+    tokens: estimateTokens(text),
+    sections: lines.length,
+    budgetChars: maxChars,
+    projection,
+    fallbackReason,
+  };
 }

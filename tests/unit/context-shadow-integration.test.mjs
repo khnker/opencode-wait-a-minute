@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import pluginDefault from "../../index.js";
+import { emptyExecutionLedger, saveExecutionLedger } from "../../src/state/execution-ledger.js";
 
 function makeRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "wam-shadow-int-"));
@@ -131,5 +132,44 @@ test("shadow telemetry failure is fail-soft and compaction still injects context
     else process.env.WAM_METRICS_DIR = previous;
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(blockerDir, { recursive: true, force: true });
+  }
+});
+
+test("shadow without a ledger or base reports projectionAvailable false", async () => {
+  const root = makeRoot();
+  try {
+    await withMetricsDir(async (metrics) => {
+      await compactIn(root, "fallback-int", { contextProjection: "shadow" }, "fallback-task");
+      const records = readRecords(path.join(metrics, "context-shadow.jsonl"));
+      assert.equal(records.at(-1).projectionAvailable, false);
+      assert.equal(records.at(-1).fallbackReason, "no-ledger-and-no-base");
+    });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("shadow with a seeded ledger reports projectionAvailable true", async () => {
+  const root = makeRoot();
+  const taskId = "ledger-task";
+  try {
+    const ledger = emptyExecutionLedger(taskId);
+    ledger.requirements["req-1"] = {
+      id: "req-1",
+      claim: "seeded requirement",
+      status: "in_progress",
+      evidence: [],
+      actions: [],
+      observations: [],
+    };
+    saveExecutionLedger(root, ledger);
+    await withMetricsDir(async (metrics) => {
+      await compactIn(root, "ledger-int", { contextProjection: "shadow" }, taskId);
+      const records = readRecords(path.join(metrics, "context-shadow.jsonl"));
+      assert.equal(records.at(-1).projectionAvailable, true);
+      assert.equal(records.at(-1).fallbackReason, null);
+    });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });

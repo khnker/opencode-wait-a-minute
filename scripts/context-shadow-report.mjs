@@ -60,6 +60,15 @@ export function evaluateShadowRecords(records, options = {}) {
   const maxDeltaRatio = options.maxDeltaRatio ?? DEFAULT_MAX_DELTA_RATIO;
   const { parsed, errors } = parseRecords(records);
   const list = parsed.map((entry) => entry.record);
+  const availability = list.reduce(
+    (counts, record) => {
+      if (record.projectionAvailable === true) counts.available += 1;
+      else if (record.projectionAvailable === false) counts.fallback += 1;
+      else counts.unknown += 1;
+      return counts;
+    },
+    { available: 0, fallback: 0, unknown: 0 },
+  );
 
   const badMode = parsed.filter(({ record }) => {
     const mode = record.mode ?? record.projectionMode;
@@ -109,8 +118,8 @@ export function evaluateShadowRecords(records, options = {}) {
   const gates = [
     {
       name: "records",
-      pass: list.length >= minRecords,
-      detail: `${list.length} record(s), minimum ${minRecords}`,
+      pass: availability.available >= minRecords,
+      detail: `${availability.available} available record(s), minimum ${minRecords}; fallback ${availability.fallback}, unknown ${availability.unknown} excluded`,
     },
     {
       name: "parse",
@@ -157,6 +166,7 @@ export function evaluateShadowRecords(records, options = {}) {
     gates,
     summary: {
       count: list.length,
+      ...availability,
       firstTimestamp: timestamps[0] ?? null,
       lastTimestamp: timestamps[timestamps.length - 1] ?? null,
       equivalenceRate: list.length > 0 ? equivalent / list.length : 0,
@@ -178,7 +188,7 @@ function printUsage() {
       "usage: node scripts/context-shadow-report.mjs [options]",
       "",
       "  --file <path>            telemetry file (default: <cwd>/.wam/context-shadow.jsonl)",
-      "  --min-records <n>        required record count (default: 20)",
+      "  --min-records <n>        required available projection records (default: 20)",
       "  --max-delta-ratio <r>    allowed |deltaChars| / injectedChars (default: 1.0)",
       "",
       "exit: 0 pass, 1 gate failure, 2 missing telemetry",
@@ -217,6 +227,9 @@ function printReport(file, result) {
   console.log(`records: ${summary.count}`);
   console.log(
     `window: ${summary.firstTimestamp ?? "n/a"} -> ${summary.lastTimestamp ?? "n/a"}`,
+  );
+  console.log(
+    `availability: ${summary.available} available, ${summary.fallback} fallback, ${summary.unknown} unknown`,
   );
   console.log(`equivalence: ${(summary.equivalenceRate * 100).toFixed(1)}%`);
   console.log(

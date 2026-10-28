@@ -155,3 +155,37 @@ test("appendShadowRecord is fail-soft when the destination is unwritable", () =>
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("buildShadowRecord marks an available projection", () => {
+  const record = buildShadowRecord({
+    projection: {
+      execution: { requirements: [{ id: "req-1" }] },
+      decisions: [],
+      constraints: [],
+      retrievableRefs: [],
+    },
+    injectedText: "a",
+    shadowText: "b",
+    now: () => "t",
+  });
+  assert.equal(record.projectionAvailable, true);
+  assert.equal(record.fallbackReason, null);
+});
+
+test("buildShadowRecord marks a fallback and reports the reason", () => {
+  const record = buildShadowRecord({
+    projection: null,
+    fallbackReason: "no-ledger-and-no-base",
+    injectedText: "a",
+    shadowText: "a",
+    now: () => "t",
+  });
+  assert.equal(record.projectionAvailable, false);
+  assert.equal(record.fallbackReason, "no-ledger-and-no-base");
+});
+
+test("buildShadowRecord defaults the fallback reason", () => {
+  const record = buildShadowRecord({ now: () => "t" });
+  assert.equal(record.projectionAvailable, false);
+  assert.equal(record.fallbackReason, "projection-unavailable");
+});

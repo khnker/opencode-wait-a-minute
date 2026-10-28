@@ -1642,6 +1642,7 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
                 injectedText: brief.text,
                 shadowText: shadowBrief.text,
                 projection: shadowBrief.projection,
+                fallbackReason: shadowBrief.fallbackReason,
                 taskState: state,
                 decisions,
               }),
