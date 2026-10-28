@@ -1008,6 +1008,7 @@ function buildSkillRegistry(availableSkills) {
     "wizard": { capabilities: ["setup", "infra", "credentials"], triggers: ["setup", "configurar", "credenciales", "one-shot", "migracion", "cutover"], risk: "medium" },
     "prototype": { capabilities: ["design", "ui", "state"], triggers: ["prototype", "sanity-check", "state model", "validar disenio"], risk: "medium" },
     "improve-codebase-architecture": { capabilities: ["architecture", "deepening"], triggers: ["deepening", "arquitectura", "scan", "friction", "AI-navigable"], risk: "medium" },
+    "agentic-code-foundations": { capabilities: ["code-quality", "maintainability", "refactoring"], triggers: ["agentic code", "code foundations", "maintainability", "refactor", "code review", "review code", "abstraction", "agent-readable"], risk: "low" },
   };
 
   for (const [name, info] of Object.entries(availableSkills || {})) {

@@ -114,6 +114,12 @@ const DEFAULT_CONSTRAINTS = {
     conflicts: [],
     reason: "Scan for deepening opportunities in architecture",
   },
+  "agentic-code-foundations": {
+    allowedLayers: ["backend", "frontend", "shared", "infrastructure"],
+    dependsOn: [],
+    conflicts: [],
+    reason: "General coding foundations apply to every layer",
+  },
 };
 
 /**
