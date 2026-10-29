@@ -20,6 +20,7 @@ import { assembleContext } from "./src/context/assembly.js";
 import { injectCanonicalProjectContext } from "./src/context/canonical-project-context.js";
 import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./src/verification/verification.js";
 import { ContextDecisionTracer } from "./src/context/context-decision-audit.js";
+import { recordRequirementStatus, resetExecutionLedger, seedRequirements } from "./src/state/ledger-writer.js";
 
 const dialogueComplete = createDialogueLlmFromEnv();
 import { listContextEvidence, readContextEvidence } from "./src/context/context-pack-evidence.js";
@@ -2348,6 +2349,11 @@ const waitAMinute = {
     try {
       updateLiveContext(taskId, state, root);
     } catch {}
+    try {
+      seedRequirements(root, taskId, state.requirements);
+    } catch (e) {
+      wamLog("[wait-a-minute] execution ledger seed error:", e.message);
+    }
     return { ok: true, status: "APPROVED", phase: state.phase };
   },
 
@@ -2375,6 +2381,11 @@ const waitAMinute = {
         status: "pending",
         evidence: [],
       }));
+      try {
+        resetExecutionLedger(root, taskId);
+      } catch (e) {
+        wamLog("[wait-a-minute] execution ledger reset error:", e.message);
+      }
     }
     if (Array.isArray(patch?.verification)) contract.verification = patch.verification;
     if (Array.isArray(patch?.constraints)) contract.constraints = patch.constraints;
@@ -2415,6 +2426,11 @@ const waitAMinute = {
     if (status === "pending") req.evidence = [];
     state.nextAction = nextActionFrom(state);
     persistTaskState(taskId, state, root);
+    try {
+      recordRequirementStatus(root, taskId, { requirementId: reqId, status, evidence });
+    } catch (e) {
+      wamLog("[wait-a-minute] execution ledger write error:", e.message);
+    }
     return { ok: true, phase: state.phase, nextAction: state.nextAction };
   },
 
