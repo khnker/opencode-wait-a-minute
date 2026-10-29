@@ -41,19 +41,71 @@ const ledger = {
   },
 };
 
-test("keeps only live decisions", () => {
+test("keeps only live decisions linked to the task", () => {
   const decisions = [
-    { id: "d1", status: "accepted", decision: "use projection" },
-    { id: "d2", status: "rejected", decision: "keep transcript summary" },
-    { id: "d3", status: "superseded", decision: "old approach" },
-    { id: "d4", status: "approved", decision: "ship it" },
-    { id: "d5", status: "proposed", decision: "maybe later" },
-    { id: "d6", status: "invalidated", decision: "invalid" },
+    { id: "task-t1-d1", status: "accepted", decision: "use projection" },
+    { id: "task-t1-d2", status: "rejected", decision: "keep transcript summary" },
+    { id: "task-t1-d3", status: "superseded", decision: "old approach" },
+    { id: "task-t1-d4", status: "approved", decision: "ship it" },
+    { id: "task-t1-d5", status: "proposed", decision: "maybe later" },
+    { id: "task-t1-d6", status: "invalidated", decision: "invalid" },
   ];
 
-  const projection = buildSemanticProjection({ taskId: "t1", taskState: baseTask, decisions });
+  const projection = buildSemanticProjection({ taskId: "task-t1", taskState: baseTask, decisions });
 
-  assert.deepEqual(projection.decisions.map((d) => d.id), ["d1", "d4"]);
+  assert.deepEqual(projection.decisions.map((d) => d.id), ["task-t1-d1", "task-t1-d4"]);
+});
+
+test("drops decisions from other tasks and sessions", () => {
+  const decisions = [
+    { id: "strategy-ses-other-1788489794148", status: "approved", decision: "Aprobar estrategia NORMAL" },
+    { id: "task-t1-decision-1788604421557", status: "accepted", decision: "use projection" },
+    { id: "strategy-ses-other2-1788604421999", status: "accepted", decision: "unrelated" },
+  ];
+
+  const projection = buildSemanticProjection({ taskId: "task-t1", taskState: baseTask, decisions });
+
+  assert.deepEqual(projection.decisions.map((d) => d.id), ["task-t1-decision-1788604421557"]);
+});
+
+test("keeps project-wide decisions without a scope marker", () => {
+  const decisions = [
+    { id: "dec-sqlite", status: "accepted", decision: "use sqlite" },
+    { id: "strategy-ses-other-1788489794148", status: "accepted", decision: "other session" },
+  ];
+
+  const projection = buildSemanticProjection({ taskId: "task-t1", taskState: baseTask, decisions });
+
+  assert.deepEqual(projection.decisions.map((d) => d.id), ["dec-sqlite"]);
+});
+
+test("collapses repeated decisions, keeping the most recent", () => {
+  const decisions = [
+    { id: "task-t1-a-1700000000000", status: "accepted", decision: "Aprobar estrategia FAST" },
+    { id: "task-t1-b-1800000000000", status: "accepted", decision: "Aprobar estrategia FAST" },
+    { id: "task-t1-c-1750000000000", status: "accepted", decision: "Aprobar estrategia NORMAL" },
+  ];
+
+  const projection = buildSemanticProjection({ taskId: "task-t1", taskState: baseTask, decisions });
+
+  assert.deepEqual(projection.decisions.map((d) => d.id), [
+    "task-t1-b-1800000000000",
+    "task-t1-c-1750000000000",
+  ]);
+});
+
+test("orders task decisions most recent first", () => {
+  const decisions = [
+    { id: "task-t1-old-1700000000000", status: "accepted", decision: "first" },
+    { id: "task-t1-new-1800000000000", status: "accepted", decision: "second" },
+  ];
+
+  const projection = buildSemanticProjection({ taskId: "task-t1", taskState: baseTask, decisions });
+
+  assert.deepEqual(projection.decisions.map((d) => d.id), [
+    "task-t1-new-1800000000000",
+    "task-t1-old-1700000000000",
+  ]);
 });
 
 test("surfaces pending obligations and evidence conflicts", () => {
@@ -81,7 +133,7 @@ test("is deterministic across builds and renders", () => {
   const args = {
     taskId: "t1",
     taskState: baseTask,
-    decisions: [{ id: "d1", status: "accepted", decision: "use projection" }],
+    decisions: [{ id: "task-t1-d1", status: "accepted", decision: "use projection" }],
     ledger,
     base: { entries: [{ id: "cpc-2", status: "active" }, { id: "cpc-1", status: "superseded" }] },
     constraints: ["no new dependencies"],
@@ -137,9 +189,9 @@ test("missing ledger yields an empty but valid projection", () => {
 
 test("renders every projection section", () => {
   const projection = buildSemanticProjection({
-    taskId: "t1",
+    taskId: "task-t1",
     taskState: baseTask,
-    decisions: [{ id: "d1", status: "accepted", decision: "use projection" }],
+    decisions: [{ id: "task-t1-d1", status: "accepted", decision: "use projection" }],
     ledger,
   });
   const text = renderSemanticProjection(projection, { truncate });

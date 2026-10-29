@@ -17,7 +17,7 @@ const taskState = {
   ],
 };
 
-const decisions = [{ id: "d1", status: "accepted", decision: "use it" }];
+const decisions = [{ id: "task-t1-d1", status: "accepted", decision: "use it" }];
 const entities = [{ kind: "file", value: "src/x.js" }];
 
 const legacyExpected = [
@@ -82,7 +82,7 @@ test("a root without a ledger keeps the legacy brief", () => {
 });
 
 test("with a ledger the brief carries projection sections", () => {
-  const brief = buildContextBrief({ taskId: "t1", taskState, decisions, entities, ledger });
+  const brief = buildContextBrief({ taskId: "task-t1", taskState, decisions, entities, ledger });
 
   assert.ok(brief.text.includes("execution state:"));
   assert.ok(brief.text.includes("live decisions:"));

@@ -18,6 +18,59 @@ const CAPS = Object.freeze({
 });
 
 const LIVE_DECISION_STATUSES = new Set(["accepted", "approved"]);
+const MIN_ID_REF = 4;
+const MIN_TITLE_REF = 8;
+const DECISION_CLIP = 120;
+const SCOPED_ID = /(?:^|[-_])(?:task|ses)[-_]/i;
+const BASE_REF_SAMPLE = 4;
+
+function normalizeRef(value) {
+  return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function decisionRecency(decision) {
+  const match = /(\d{10,})\s*$/.exec(String(decision?.id || ""));
+  return match ? Number(match[1]) : 0;
+}
+
+/**
+ * Decisions are projected when they are task-linked. Ids carry their scope
+ * (`task-…`, `ses-…`); an id scoped to another task/session is retrievable
+ * context, not compaction context. Unscoped ids are project-wide decisions.
+ */
+function decisionBelongsToTask(decision, { idRefs, titleRefs }) {
+  const id = String(decision?.id || "");
+  const haystack = normalizeRef(`${id} ${decisionText(decision)}`);
+  if (idRefs.some((ref) => haystack.includes(ref))) return true;
+  if (!SCOPED_ID.test(id)) return true;
+  return titleRefs.some((ref) => haystack.includes(ref));
+}
+
+/** Repeated approvals of the same choice add no continuity value. */
+function dedupeDecisions(decisions) {
+  const seen = new Set();
+  return decisions.filter((decision) => {
+    const key = normalizeRef(decisionText(decision));
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function taskRefsFor(taskId, taskState) {
+  const requirements = Array.isArray(taskState?.requirements) ? taskState.requirements : [];
+  const idRefs = uniqueSorted(
+    [taskId, ...requirements.map((req) => req?.id)]
+      .map(normalizeRef)
+      .filter((ref) => ref.length >= MIN_ID_REF),
+  );
+  const titleRefs = uniqueSorted(
+    requirements
+      .map((req) => normalizeRef(req?.title))
+      .filter((ref) => ref.length >= MIN_TITLE_REF),
+  );
+  return { idRefs, titleRefs };
+}
 
 function constraintText(constraint) {
   if (typeof constraint === "string") return constraint;
@@ -114,8 +167,16 @@ export function buildSemanticProjection({
     omitted,
   );
 
-  const liveDecisions = (Array.isArray(decisions) ? decisions : []).filter((decision) =>
-    LIVE_DECISION_STATUSES.has(String(decision?.status || "").toLowerCase()),
+  const taskRefs = taskRefsFor(taskId, taskState);
+  const liveDecisions = dedupeDecisions(
+    (Array.isArray(decisions) ? decisions : [])
+      .filter((decision) => LIVE_DECISION_STATUSES.has(String(decision?.status || "").toLowerCase()))
+      .filter((decision) => decisionBelongsToTask(decision, taskRefs))
+      .sort(
+        (a, b) =>
+          decisionRecency(b) - decisionRecency(a) ||
+          String(a?.id || "").localeCompare(String(b?.id || "")),
+      ),
   );
   const projectedDecisions = take(
     liveDecisions.map((decision) => ({
@@ -166,7 +227,8 @@ export function buildSemanticProjection({
 
   const projectedEvidence = take(evidenceRefs, CAPS.evidence, omitted);
   const baseEntries = Array.isArray(base?.entries) ? base.entries : [];
-  const retrievableRefs = uniqueSorted([...baseEntries.map(refOf), ...omitted]);
+  const baseRefs = uniqueSorted(baseEntries.map(refOf));
+  const retrievableRefs = uniqueSorted([...baseRefs, ...omitted]);
 
   return {
     taskId,
@@ -177,6 +239,7 @@ export function buildSemanticProjection({
     evidenceRefs: projectedEvidence,
     openItems,
     nextObligation,
+    baseRefs,
     retrievableRefs,
   };
 }
@@ -208,10 +271,6 @@ export function renderSemanticProjection(projection, { maxChars = 4000, truncate
     "execution state",
     [
       ...(execution.requirements || []).map((req) => `req ${req.id}: ${req.status}`),
-      ...(execution.pending || []).map(
-        (item) =>
-          `pending ${item.requirementId}: ${item.reason} (${item.status} -> [${item.nextStates.join(", ")}])`,
-      ),
       ...(execution.conflicts || []).map(
         (item) => `conflict ${item.requirementId}: ${[item.ref, item.note].filter(Boolean).join(": ") || "unresolved"}`,
       ),
@@ -219,10 +278,7 @@ export function renderSemanticProjection(projection, { maxChars = 4000, truncate
     (line) => clip(line, 200),
   );
 
-  section("live decisions", value.decisions, (decision) => {
-    const label = decision?.id ? `[${decision.id}] ` : "";
-    return `${label}${clip(decision?.text || "", 160)}`;
-  });
+  section("live decisions", value.decisions, (decision) => clip(decision?.text || "", DECISION_CLIP));
 
   section("evidence", value.evidenceRefs, (ref) => clip(ref, 180));
 
@@ -230,13 +286,10 @@ export function renderSemanticProjection(projection, { maxChars = 4000, truncate
 
   lines.push(`next obligation: ${clip(value.nextObligation || "none", 220)}`);
 
-  lines.push(
-    `omitted details (retrievable): ${
-      value.retrievableRefs && value.retrievableRefs.length
-        ? clip(value.retrievableRefs.join(", "), 400)
-        : "none"
-    }`,
-  );
+  const refs = Array.isArray(value.retrievableRefs) ? value.retrievableRefs : [];
+  const baseRefs = Array.isArray(value.baseRefs) ? value.baseRefs : [];
+  const sample = baseRefs.length ? `, e.g. ${clip(baseRefs.slice(0, BASE_REF_SAMPLE).join(", "), 140)}` : "";
+  lines.push(`omitted details (retrievable): ${refs.length ? `${refs.length} ref(s)${sample}` : "none"}`);
 
   return lines.join("\n").slice(0, maxChars);
 }

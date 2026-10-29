@@ -83,6 +83,27 @@ flowchart LR
 The model sees what it needs for the current decision.
 WAM retains the state needed to continue the task.
 
+### State is authoritative; context is derived
+
+WAM separates three layers, and only the first one is a source of truth:
+
+| Layer | Role | Lifetime |
+| --- | --- | --- |
+| Task state (`.wam/tasks/<id>/task.json`) | Requirements, assumptions, evidence, decisions | Authoritative |
+| Execution ledger | Event-sourced read model of requirement transitions | Derived; reset when the contract changes |
+| Context brief | Deterministic, budgeted rendering of state for one model call | Rebuilt per call, never accumulated |
+
+The ledger is seeded from task state when a contract is approved, advanced by
+requirement transitions, and discarded when requirements are edited. It never
+becomes a second source of truth.
+
+The semantic projection is pure and deterministic: the same state yields the
+same brief. Decisions are part of task state, but they are projected only when
+they belong to the task (a task or requirement reference, or no scope marker).
+Decisions from other tasks or sessions stay retrievable instead of being
+injected: the context-pollution rule that excludes unrelated conversation
+applies to persisted memory as well.
+
 ## How WAM works
 
 On each request, WAM:
@@ -142,6 +163,7 @@ Once installed, WAM intercepts requests before skill resolution and agent execut
 - `/wam config get` — show effective config; set `WAM_GOVERNANCE=off` or `.wam/config.json` to disable globally.
 - Automatic post-DONE loop — when a DONE claim is rejected, WAM re-drives the session itself until the gate is clean. Bounded per pending set (3 attempts) and total (10). Disable with `"autoLoop": false` in `.wam/config.json` or `WAM_AUTO_LOOP=0`.
 - Permission preflight — before delegating to a subagent, WAM derives the access permissions the approved task needs and blocks delegation until they are granted (`/wam permissions approve` / `deny`). Disable with `"permissionPreflight": false` in `.wam/config.json` or `WAM_DISABLE_PERMISSION_PREFLIGHT=1`.
+- Context projection — `"contextProjection": "legacy" | "shadow" | "active"` in `.wam/config.json` (default `active`; override with `WAM_CONTEXT_PROJECTION`). `shadow` measures the projection against the legacy brief without injecting it; `legacy` keeps the previous brief.
 
 ## Debugging and diagnostics
 WAM emits structured, greppable traces when debug mode is on. They audit which WAM logic is loaded, which is skipped, and what runtime decisions were made — useful for benchmarking, regression detection and logic-gap analysis.
