@@ -163,6 +163,7 @@ export async function guardAction(tool, args, taskRoot, taskId) {
         nudge: `[wait-a-minute] Subagente ${subagent_type} ascendido de ${guardResult.baseTier} a ${guardResult.effectiveTier} tras ${consecutiveFailures} fallos consecutivos sin resolver el bug de lógica.`,
       };
     }
+    if (guardResult.recommendation) return guardResult;
   }
 
   if (isHardDelete(tool, args)) {

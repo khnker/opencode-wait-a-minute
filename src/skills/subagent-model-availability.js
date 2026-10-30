@@ -38,12 +38,22 @@ export const SUBAGENT_TIER_MAP = Object.freeze({
 });
 
 /**
+ * Resolve the canonical tier for a subagent type and report whether the type is
+ * known. Unknown types still fall back to "medium" (fail-open: never block
+ * dispatch on an unrecognised type name) but the miss is surfaced to the caller.
+ */
+export function resolveSubagentTier(subagentType) {
+  if (subagentType == null) return { tier: "medium", unknown: false };
+  const tier = SUBAGENT_TIER_MAP[String(subagentType).toLowerCase()];
+  return tier ? { tier, unknown: false } : { tier: "medium", unknown: true };
+}
+
+/**
  * Resolve the canonical tier for a subagent type. Unknown types fall back to
  * "medium" (fail-open: never block dispatch on an unrecognised type name).
  */
 export function tierForSubagentType(subagentType) {
-  if (subagentType == null) return "medium";
-  return SUBAGENT_TIER_MAP[String(subagentType).toLowerCase()] || "medium";
+  return resolveSubagentTier(subagentType).tier;
 }
 
 /**
@@ -89,7 +99,7 @@ export function guardSubagentDispatch(tool, args, { registry, maxDepth = 1, dept
   }
 
   const { subagent_type } = args;
-  const baseTier = tierForSubagentType(subagent_type);
+  const { tier: baseTier, unknown: unknownSubagentType } = resolveSubagentTier(subagent_type);
 
   // Tier escalation: when a subagent has failed consecutively without
   // solving the logic bug, walk up the ladder. 2 consecutive failures is
@@ -115,6 +125,12 @@ export function guardSubagentDispatch(tool, args, { registry, maxDepth = 1, dept
       effectiveTier,
       escalated,
       consecutiveFailures,
+      ...(unknownSubagentType
+        ? {
+            unknownSubagentType: true,
+            recommendation: `Recomendación: subagent_type "${subagent_type}" no está en SUBAGENT_TIER_MAP; se despacha con el tier "${baseTier}" por defecto. Definí el tipo o corregí el nombre.`,
+          }
+        : {}),
       reason: escalated
         ? `escalated from ${baseTier} to ${effectiveTier} after ${consecutiveFailures} consecutive failures`
         : resolution.reason,
