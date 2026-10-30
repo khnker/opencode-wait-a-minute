@@ -42,6 +42,12 @@ function deltaRatio(record) {
   return delta / injected;
 }
 
+function evaluatedEntries(parsed, windowSize) {
+  return parsed
+    .filter(({ record }) => record.projectionAvailable === true)
+    .slice(-windowSize);
+}
+
 function selfContradictoryIds(record) {
   const requirements = record.requirements || {};
   const omitted = new Set(Array.isArray(requirements.omitted) ? requirements.omitted : []);
@@ -70,47 +76,51 @@ export function evaluateShadowRecords(records, options = {}) {
     { available: 0, fallback: 0, unknown: 0 },
   );
 
-  const badMode = parsed.filter(({ record }) => {
+  const windowSize = options.windowSize ?? minRecords;
+  const evaluated = windowSize <= 0 ? [] : evaluatedEntries(parsed, windowSize);
+  const window = evaluated.map((entry) => entry.record);
+
+  const badMode = evaluated.filter(({ record }) => {
     const mode = record.mode ?? record.projectionMode;
     return String(mode ?? "").toLowerCase() !== "shadow";
   });
-  const overBudget = parsed.filter(
+  const overBudget = evaluated.filter(
     ({ record }) => Number(record.shadowChars) > Number(record.budgetChars),
   );
-  const badDelta = parsed.filter(({ record }) => deltaRatio(record) > maxDeltaRatio);
-  const contradictory = parsed
+  const badDelta = evaluated.filter(({ record }) => deltaRatio(record) > maxDeltaRatio);
+  const contradictory = evaluated
     .map(({ record, line }) => ({ line, ids: selfContradictoryIds(record) }))
     .filter((entry) => entry.ids.length > 0);
 
-  const maxDelta = list.reduce((max, record) => Math.max(max, deltaRatio(record)), 0);
-  const deltas = list
+  const maxDelta = window.reduce((max, record) => Math.max(max, deltaRatio(record)), 0);
+  const deltas = window
     .map((record) => Math.abs(Number(record.deltaChars) || 0))
     .sort((a, b) => a - b);
-  const timestamps = list
+  const timestamps = window
     .map((record) => record.timestamp ?? record.ts ?? record.at)
     .filter((value) => typeof value === "string")
     .sort();
   const equivalent = list.filter((record) => record.equivalent === true).length;
-  const omittedIds = list.reduce(
+  const omittedIds = window.reduce(
     (sum, record) =>
       sum + (Array.isArray(record.requirements?.omitted) ? record.requirements.omitted.length : 0),
     0,
   );
-  const pendingIds = list.reduce(
+  const pendingIds = window.reduce(
     (sum, record) =>
       sum + (Array.isArray(record.requirements?.pending) ? record.requirements.pending.length : 0),
     0,
   );
-  const conflictIds = list.reduce(
+  const conflictIds = window.reduce(
     (sum, record) =>
       sum + (Array.isArray(record.requirements?.conflicts) ? record.requirements.conflicts.length : 0),
     0,
   );
-  const injectedTokens = list.reduce(
+  const injectedTokens = window.reduce(
     (sum, record) => sum + (Number(record.injectedTokenEstimate) || 0),
     0,
   );
-  const shadowTokens = list.reduce(
+  const shadowTokens = window.reduce(
     (sum, record) => sum + (Number(record.shadowTokenEstimate) || 0),
     0,
   );
@@ -118,8 +128,8 @@ export function evaluateShadowRecords(records, options = {}) {
   const gates = [
     {
       name: "records",
-      pass: availability.available >= minRecords,
-      detail: `${availability.available} available record(s), minimum ${minRecords}; fallback ${availability.fallback}, unknown ${availability.unknown} excluded`,
+      pass: evaluated.length >= minRecords,
+      detail: `${evaluated.length} available record(s), minimum ${minRecords} (window ${windowSize}); fallback ${availability.fallback}, unknown ${availability.unknown} excluded`,
     },
     {
       name: "parse",
@@ -132,7 +142,7 @@ export function evaluateShadowRecords(records, options = {}) {
       detail:
         badMode.length > 0
           ? `non-shadow mode at line(s) ${badMode.map((entry) => entry.line).join(", ")}`
-          : "all records in shadow mode",
+          : "all evaluated records in shadow mode",
     },
     {
       name: "budget",
@@ -166,6 +176,7 @@ export function evaluateShadowRecords(records, options = {}) {
     gates,
     summary: {
       count: list.length,
+      evaluated: window.length,
       ...availability,
       firstTimestamp: timestamps[0] ?? null,
       lastTimestamp: timestamps[timestamps.length - 1] ?? null,
@@ -189,6 +200,7 @@ function printUsage() {
       "",
       "  --file <path>            telemetry file (default: <cwd>/.wam/context-shadow.jsonl)",
       "  --min-records <n>        required available projection records (default: 20)",
+      "  --window <n>             evaluate the last n available records (default: min-records)",
       "  --max-delta-ratio <r>    allowed |deltaChars| / injectedChars (default: 1.0)",
       "",
       "exit: 0 pass, 1 gate failure, 2 missing telemetry",
@@ -201,6 +213,7 @@ function parseArgs(argv) {
     file: null,
     minRecords: DEFAULT_MIN_RECORDS,
     maxDeltaRatio: DEFAULT_MAX_DELTA_RATIO,
+    windowSize: null,
     help: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -209,6 +222,7 @@ function parseArgs(argv) {
     if (flag === "--file") options.file = value();
     else if (flag === "--min-records") options.minRecords = Number(value());
     else if (flag === "--max-delta-ratio") options.maxDeltaRatio = Number(value());
+    else if (flag === "--window") options.windowSize = Number(value());
     else if (flag === "--help" || flag === "-h") options.help = true;
     else throw new Error(`unknown argument: ${argv[index]}`);
   }
@@ -218,13 +232,16 @@ function parseArgs(argv) {
   if (!Number.isFinite(options.maxDeltaRatio) || options.maxDeltaRatio < 0) {
     throw new Error("--max-delta-ratio must be a non-negative number");
   }
+  if (options.windowSize !== null && (!Number.isFinite(options.windowSize) || options.windowSize < 1)) {
+    throw new Error("--window must be a positive number");
+  }
   return options;
 }
 
 function printReport(file, result) {
   const { summary } = result;
   console.log(`file: ${file}`);
-  console.log(`records: ${summary.count}`);
+  console.log(`records: ${summary.count} (evaluated ${summary.evaluated})`);
   console.log(
     `window: ${summary.firstTimestamp ?? "n/a"} -> ${summary.lastTimestamp ?? "n/a"}`,
   );

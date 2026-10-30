@@ -164,3 +164,41 @@ test("fallback telemetry exits 1 and names the shortfall", () =>
     assert.match(result.stdout, /availability: 0 available, 20 fallback, 0 unknown/);
     assert.match(result.stdout, /0 available record\(s\), minimum 20/);
   }));
+
+test("historical delta breach outside the window does not fail", () => {
+  const stale = record({ injectedChars: 100, shadowChars: 400, deltaChars: 300 });
+  const result = evaluateShadowRecords([stale, ...many(20)]);
+  assert.equal(result.pass, true);
+  assert.equal(result.summary.count, 21);
+  assert.equal(result.summary.evaluated, 20);
+  assert.equal(gate(result, "delta").pass, true);
+});
+
+test("delta breach inside the window still fails", () => {
+  const result = evaluateShadowRecords([
+    ...many(19),
+    record({ injectedChars: 100, shadowChars: 400, deltaChars: 300 }),
+  ]);
+  assert.equal(result.pass, false);
+  assert.equal(gate(result, "delta").pass, false);
+  assert.match(gate(result, "delta").detail, /max ratio 3\.000/);
+});
+
+test("window option evaluates only the last n available records", () => {
+  const stale = record({ injectedChars: 100, shadowChars: 400, deltaChars: 300 });
+  const result = evaluateShadowRecords([stale, ...many(4)], { windowSize: 4 });
+  assert.equal(result.summary.evaluated, 4);
+  assert.equal(gate(result, "delta").pass, true);
+  assert.equal(gate(result, "records").pass, false);
+});
+
+test("--window is honored by the CLI", () =>
+  withTempDir((dir) => {
+    const file = path.join(dir, "context-shadow.jsonl");
+    const lines = [record({ injectedChars: 100, shadowChars: 400, deltaChars: 300 }), ...many(20)];
+    fs.writeFileSync(file, `${lines.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
+    const result = runCli(["--file", file, "--window", "20"]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /records: 21 \(evaluated 20\)/);
+  }));
+
