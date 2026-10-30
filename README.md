@@ -162,7 +162,7 @@ Once installed, WAM intercepts requests before skill resolution and agent execut
 - `/wam on` — restore WAM for the current session.
 - `/wam config get` — show effective config; set `WAM_GOVERNANCE=off` or `.wam/config.json` to disable globally.
 - Automatic post-DONE loop — when a DONE claim is rejected, WAM re-drives the session itself until the gate is clean. Bounded per pending set (3 attempts) and total (10). Disable with `"autoLoop": false` in `.wam/config.json` or `WAM_AUTO_LOOP=0`.
-- Permission preflight — before delegating to a subagent, WAM derives the access permissions the approved task needs and blocks delegation until they are granted (`/wam permissions approve` / `deny`). Disable with `"permissionPreflight": false` in `.wam/config.json` or `WAM_DISABLE_PERMISSION_PREFLIGHT=1`.
+- Permission preflight — before delegating to a subagent, WAM derives the access permissions the approved task needs and surfaces them as a recommendation; delegation is never blocked (`/wam permissions approve` / `deny` only update the plan, `/wam status` shows it). Disable with `"permissionPreflight": false` in `.wam/config.json` or `WAM_DISABLE_PERMISSION_PREFLIGHT=1`.
 - Context projection — `"contextProjection": "legacy" | "shadow" | "active"` in `.wam/config.json` (default `active`; override with `WAM_CONTEXT_PROJECTION`). `shadow` measures the projection against the legacy brief without injecting it; `legacy` keeps the previous brief.
 
 ## Debugging and diagnostics
