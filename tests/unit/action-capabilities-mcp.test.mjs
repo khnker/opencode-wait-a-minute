@@ -22,6 +22,8 @@ import { evaluateAction } from "../../src/policy/risk-engine.js";
 
 describe("action-capabilities: scope boundary", () => {
   it("runtime/meta tools are out of scope and bypass fail-closed", () => {
+    assert.equal(getEffectiveCapability("task"), CAPABILITY_LEVELS.SAFE);
+    assert.equal(getEffectiveCapability("skill"), CAPABILITY_LEVELS.SAFE);
     for (const tool of ["compress", "delegate_task", "call_agent"]) {
       assert.equal(OUT_OF_SCOPE_TOOLS.has(tool), true, `${tool} must be out of scope`);
       assert.equal(getEffectiveCapability(tool), CAPABILITY_LEVELS.SAFE);

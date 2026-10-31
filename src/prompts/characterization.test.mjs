@@ -16,7 +16,7 @@ const STATIC = {
   "notice.no_active_task": "[wait-a-minute] No hay tarea activa. Dime qué tarea nueva quieres — no asumo intención previa.",
   "notice.blocked_generic": "⛔ [wait-a-minute] BLOQUEADO: Tienes preguntas sin responder.",
   "notice.new_intent": "[wait-a-minute] Nueva intención detectada. Abriendo tarea nueva.",
-  "injection.delegation": "[wam delegation] Reqs pendientes → conviene delegar en PARALELO via Task (agente: el apropiado según config del entorno). La mutación directa desde la sesión principal está PERMITIDA: si Task no está disponible o falla, editá/writeá inline. Fallback: reintentar secuencial → tier más barato → inline con evidencia. Nunca abortar en silencio por fallo de delegación.",
+  "injection.delegation": "[wam delegation] PROPUESTA sin fricción: por defecto, delegá cada req pendiente independiente a un subagente via Task, en paralelo. Contexto justo por subagente: SOLO objetivo del req + dominio/archivos relevantes + criterio de aceptación; nunca el historial completo. No delegues tareas triviales (≤1 edición): resolvelas inline. La sesión principal puede editar/escribir inline sin pedir permiso. Fallback: secuencial → tier más barato → inline con evidencia. Nunca abortar en silencio por fallo de delegación.",
 };
 
 for (const [id, expected] of Object.entries(STATIC)) {

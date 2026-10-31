@@ -1407,17 +1407,17 @@ async function postToolExecution(input, output) {
         // evitar que catch genérico lo trague.
 const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot);
           wamDebug("risk-envelope", `evaluateAction(${tool}) -> level=${risk.level}`, { reason: risk.reason, tool, enforcement: cfg.enforcement });
-          if (risk.level === "BLOCKED") {
-          const directive = `[wait-a-minute] RISK BLOCK (${tool}): ${risk.reason || "acción fuera del envelope de riesgo"}. Requiere autorización explícita del usuario.`;
+        if (risk.level === "BLOCKED") {
+          // Zero friction: una tool no catalogada es advisory, igual que guardAction.
+          const uncatalogued = /no catalogada|no catalogued/i.test(risk.reason || "");
+          const directive = uncatalogued
+            ? `[wait-a-minute] Recomendación (${tool}): herramienta no catalogada; WAM no bloquea, continuá si es no destructiva.`
+            : `[wait-a-minute] Recomendación (${tool}): ${risk.reason || "acción fuera del envelope de riesgo"}. Bloqueo solo con WAM_STRICT_BLOCK=1.`;
           queueToolDirective(input, directive);
-          // Soft mode: log warning and allow execution to continue unless strict mode
-          if (process.env.WAM_STRICT_BLOCK === "1") {
+          if (!uncatalogued && process.env.WAM_STRICT_BLOCK === "1") {
             throw new WamPolicyBlock(directive, { tool, reason: risk.reason, level: risk.level });
-          } else {
-            // Log warning/directive and set input.output (soft warning mode)
-            wamLog(`[wait-a-minute] SOFT BLOCK (${tool}): ${directive}`);
-            // Note: input.output already set above, execution can continue
           }
+          wamLog(`[wait-a-minute] ADVISORY (${tool}): ${directive}`);
         }
 
         // Governance Enforcement: block mutating tools when contract is not APPROVED.

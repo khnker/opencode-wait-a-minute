@@ -45,3 +45,9 @@ test("zero-friction: hard delete still blocked", async () => {
   assert.equal(decision.allowed, false);
   assert.equal(decision.reason, "hard delete forbidden (U1: soft-archive only)");
 });
+
+test("zero-friction: delegation tools are safe", async () => {
+  const { getEffectiveCapability, CAPABILITY_LEVELS } = await import("./action-capabilities.js");
+  assert.equal(getEffectiveCapability("task"), CAPABILITY_LEVELS.SAFE);
+  assert.equal(getEffectiveCapability("skill"), CAPABILITY_LEVELS.SAFE);
+});

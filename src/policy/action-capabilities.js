@@ -36,7 +36,7 @@ export const CAPABILITY_LEVELS = Object.freeze({
  * bloquean).
  */
 export const OUT_OF_SCOPE_TOOLS = Object.freeze(
-  new Set(["compress", "delegate_task", "call_agent"]),
+  new Set(["compress", "delegate_task", "call_agent", "task", "skill"]),
 );
 
 /**
