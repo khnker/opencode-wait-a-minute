@@ -265,7 +265,7 @@ describe("C. validacion de seleccion multilingue y multi-capa", () => {
   });
 
   it("prompt en ingles detecta skills relevantes (no requiere id especifico)", () => {
-    const sel = select("build a nestjs REST endpoint with swagger docs");
+    const sel = select("build an aspnet minimal api endpoint with openapi docs");
     const onDemand = sel.selected.filter((s) => !s.base);
     // El routing puede o no devolver nestjs-developer segun el scoring; lo
     // que validamos es que la seleccion de on-demand tiene motivos coherentes.
@@ -457,12 +457,12 @@ describe("E. end-to-end primer mensaje (handler real)", () => {
     const headIds = emitted.map((s) => s.id);
     const allText = pack.lines.join("\n");
     for (const id of headIds) {
-      assert.ok(allText.includes(`[wam N3 skill] ${id}`),
-        `output.parts debe contener bloque [wam N3 skill] para ${id}`);
+      assert.ok(new RegExp(`\\[wam N3 skill(?:-ref)?\\] ${id}`).test(allText),
+        `output.parts debe contener bloque [wam N3 skill] o [wam N3 skill-ref] para ${id}`);
     }
     // Sin duplicacion: head aparece <= 1 vez por skill en el pack.
     for (const id of headIds) {
-      const occurrences = (allText.match(new RegExp(`\\[wam N3 skill\\] ${id}`, "g")) || []).length;
+      const occurrences = (allText.match(new RegExp(`\\[wam N3 skill(?:-ref)?\\] ${id}`, "g")) || []).length;
       assert.ok(occurrences <= 1, `skill ${id} aparece ${occurrences} veces (posible duplicacion)`);
     }
   });

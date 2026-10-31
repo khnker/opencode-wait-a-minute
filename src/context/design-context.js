@@ -7,8 +7,16 @@ export const DESIGN_CATEGORIES = [
   "responsive work", "accessibility work", "design-system work", "token modification", "content/copy work"
 ];
 
+const DESIGN_TERM_RE = /\b(ui|ux|frontends?|designs?|buttons?|cards?|modals?|dropdowns?|layouts?|css|tailwind|styles?|views?|dashboards?|landings?|forms?|colou?rs?|spacings?|fonts?|typography|accessibility|a11y|responsive|mobiles?|breakpoints?|tokens?|redesigns?|components?|pages?|screens?|radius|rounded|wcag|keyboard|focus|tablets?|hero|navbar|sidebar)\b/gi;
+const STRONG_DESIGN_ACTION_RE = /\b(redesign\w*|design system|accessibility|a11y|responsive)\b/i;
+
+export function designSignalCount(prompt = "") {
+  return new Set(String(prompt).toLowerCase().match(DESIGN_TERM_RE) || []).size;
+}
+
 export function classifyDesignTask(prompt = "") {
   const p = prompt.toLowerCase();
+  if (designSignalCount(prompt) < 2 && !STRONG_DESIGN_ACTION_RE.test(p)) return null;
   if (/(token|color|spacing|radius|typography|font|make buttons more rounded)/i.test(p)) return "token modification";
   if (/(accessibility|a11y|wcag|label|focus|keyboard|screen reader)/i.test(p)) return "accessibility work";
   if (/(responsive|mobile|tablet|breakpoint|screen size)/i.test(p)) return "responsive work";

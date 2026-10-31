@@ -89,17 +89,17 @@ stateEquivalentRate {mean 1, median 1, p95 1, stddev 0}
 
 Three trap scenarios where an agent claims completion while a criterion is
 unmet. `baselineFalseCompletion` counts claims a naive self-verification
-accepts; `wamFalseCompletion` counts claims the WAM completion gate lets
-through.
+accepts; `wamUndetectedFalseCompletion` counts claims the WAM completion gate
+fails to flag with an advisory.
 
 ```
-baselineFalseCompletion: 3
-wamFalseCompletion:      0
-correctCompletion:       3
+baselineFalseCompletion:       3
+wamUndetectedFalseCompletion:  0
+correctCompletion:             3
 ```
 
-The gate blocks every premature completion in the corpus while still accepting
-the three correct ones.
+The gate flags every premature completion in the corpus (advisory, never a
+hard block) while still accepting the three correct ones.
 
 ### 4. P0-C — long-context scaling
 

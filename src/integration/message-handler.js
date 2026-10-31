@@ -41,11 +41,19 @@ const MAX_TRACKED_SESSIONS = 200;
 const WAM_BLOCK_START = "[wam][start]";
 const WAM_BLOCK_END = "[wam][end]";
 
-function wrapWamBlock(text) {
+export function wrapWamBlock(text) {
   const body = String(text || "").trim();
   if (!body) return "";
   if (body.startsWith(WAM_BLOCK_START) && body.endsWith(WAM_BLOCK_END)) return body;
   return `${WAM_BLOCK_START}\n${body}\n${WAM_BLOCK_END}`;
+}
+
+export function mergeValidationLines(inject, validation) {
+  const lines = (validation?.validationLines || []).filter(
+    (line) => typeof line === "string" && line.trim()
+  );
+  if (lines.length > 0) inject.push(...lines);
+  return lines.length > 0;
 }
 
 function injectedSkillsFor(sessionID) {
@@ -405,14 +413,14 @@ export async function handleMessage(input, output, deps) {
     // Continuation fast-path: approved contract + no DONE claim
     if (existingState?.contract?.status === "APPROVED") {
       // For non-DONE messages, skip the gate entirely. For DONE messages,
-      // run the gate; if it doesn't block and isn't allDone, treat the
-      // message as a continuation. Either way, on a VALID snapshot we emit
-      // the N2 task delta and return.
+      // run the gate; if it reports an advisory (requirements still pending)
+      // we fall through so the recommendation notice is emitted. On a VALID
+      // snapshot we emit the N2 task delta and return.
       const isDoneClaim = waitAMinute.isCompletionIntent(promptText);
       const claim = isDoneClaim
         ? waitAMinute.evaluateCompletionGate(existingState, promptText)
         : { blocked: false };
-      const isContinuation = !claim.blocked && !claim.allDone;
+      const isContinuation = !isDoneClaim || claim.allDone === true;
       if (isContinuation) {
         const snapshotCheck = checkContinuation(taskId, existingState, wamRoot);
         if (snapshotCheck.status === "VALID") {
@@ -533,6 +541,7 @@ export async function handleMessage(input, output, deps) {
     }
 
     // Approval gate
+    const earlyNotices = [];
     const intentConf = Number(analysis.intent?.confidence ?? analysis.intent?.conf ?? 100);
     const openUnknowns = (state.contract?.unknowns || []).filter((u) => u.status !== "answered" && u.status !== "blocking");
     const highUncertainty =
@@ -540,59 +549,16 @@ export async function handleMessage(input, output, deps) {
       intentConf < 60 ||
       openUnknowns.length > 0;
     const trimmed = promptText.trim();
-    const explicitYes =
-      /^(s[ií]|ok|okey|dale|hazlo|adelante|continuar|continua|aprobar|apruebo|confirmo|correcto|perfecto|bueno|va|listo|sigue|yes)\b/i.test(trimmed);
-    const userConfirms = !highUncertainty || explicitYes;
-    const userRejects =
-      /^(no|nel|ni\b|rechazo|rechazar|cancela|cancelar|todav[ií]a no|espera|para)\b/i.test(trimmed);
 
-    if (state.contract?.status === "PROPOSED" && state.phase === "PROPOSED" && userRejects) {
-      waitAMinute.rejectContract(taskId, wamRoot);
-      emitTextPart(output, "Contrato rechazado — dime cómo ajustarlo (edita requisitos o describe de nuevo la tarea).", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
-      try {
-        const fresh = getTaskState(taskId, wamRoot);
-        if (fresh) {
-          state.contract = fresh.contract;
-          state.phase = fresh.phase;
-          state.nextAction = fresh.nextAction;
-        }
-      } catch {}
-    } else if (
-      (state.contract?.status === "PROPOSED" && state.phase === "PROPOSED" && userConfirms) ||
-      (state.contract?.status === "REJECTED" && explicitYes)
-    ) {
-      waitAMinute.approveContract(taskId, wamRoot);
-      const skillsLine = analysis.skills?.selected?.length
-        ? analysis.skills.selected.map((s) => s.name).join(", ")
-        : "ninguna";
-      emitTextPart(
-        output,
-        `Contrato aprobado — estrategia activada. Skills en uso: ${skillsLine}. Próximo paso: ${state.nextAction || "continuar"}`,
-        { sessionID: input.sessionID, messageID: output.message?.id || input.messageID }
-      );
-      try {
-        recordDecision({
-          id: `strategy-${taskId}-${Date.now()}`,
-          decision: `Aprobar estrategia ${analysis.strategy || "NORMAL"} para ${taskId}`,
-          reason: promptText.slice(0, 120),
-          source: highUncertainty ? "user-decided" : "observed",
-          confidence: "high",
-        }, wamRoot);
-        try { compactDecisions(wamRoot); } catch {}
-      } catch {}
-      const fresh = getTaskState(taskId, wamRoot);
-      if (fresh) {
-        state.contract = fresh.contract;
-        state.phase = fresh.phase;
-        state.nextAction = fresh.nextAction;
-      }
-    } else if (
+    // 0 fricción: un contrato propuesto nunca pide confirmación — se emite una
+    // recomendación y se procede. Solo /wam contract edit modifica el contrato.
+    if (
       state.contract?.status === "PROPOSED" &&
       state.phase === "PROPOSED" &&
-      !state.contractPrompted &&
-      intentLane.lane === INTENT_LANES.TASK_NEW
+      !state.contractPrompted
     ) {
-      emitTextPart(output, "¿Apruebo este contrato? Responde sí para aprobar o no para rechazar. (o /wam contract approve)", { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+      const reqCount = (state.contract?.requirements || []).length;
+      earlyNotices.push(`Recomendación: contrato propuesto (${reqCount} requisitos) — procedo; /wam contract edit si algo no coincide.`);
       state.contractPrompted = true;
       try { persistTaskState(taskId, state, wamRoot); } catch {}
     }
@@ -612,7 +578,7 @@ export async function handleMessage(input, output, deps) {
     // Anti-tampering: only mutate persisted state when the prompt actually
     // asserts completion intent. The gate always evaluates real state now, so
     // this guard guarantees a normal message never mutates phase/nextAction.
-    if (!isTrivialAnalysis && waitAMinute.isCompletionIntent(promptText) && (gate.blocked || gate.allDone)) {
+    if (!isTrivialAnalysis && waitAMinute.isCompletionIntent(promptText) && (gate.advisory || gate.allDone)) {
       const { phase, nextAction } = waitAMinute.applyPhaseTransition(state, gate);
       state.phase = phase;
       state.nextAction = nextAction;
@@ -655,7 +621,7 @@ export async function handleMessage(input, output, deps) {
     try { persistLiveContext(taskId, updatedState, wamRoot); } catch {}
 
     // ---- Context Assembly ----
-    const inject = [];
+    const inject = [...earlyNotices];
     const contextInject = [];
     const auxInject = [];
 
@@ -755,10 +721,10 @@ export async function handleMessage(input, output, deps) {
           });
           if (cqeFiles.length > 8) shown.push(`  ... (+${cqeFiles.length - 8} más)`);
           contextInject.push(`\n[wam cqe file_context: ${cqeFiles.length} archivos en ${cqeMs}ms, fuente ${cqeMeta.source || "?"}]\n${shown.join("\n")}`);
-          emitTextPart(output, `cqe: ${cqeFiles.length} archivos en ${cqeMs}ms (fuente ${cqeMeta.source || "?"}) — top: ${(cqeFiles.slice(0, 3).map((f) => f?.path || "?")).join(", ")}`, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+          contextInject.push(`cqe: ${cqeFiles.length} archivos en ${cqeMs}ms (fuente ${cqeMeta.source || "?"}) — top: ${(cqeFiles.slice(0, 3).map((f) => f?.path || "?")).join(", ")}`);
         } else {
           const reason = cqeMeta.fallbackReason || (cqeMeta.cqeError ? `error: ${cqeMeta.cqeError}` : "sin resultados");
-          emitTextPart(output, `cqe: sin resultados (${reason}) en ${cqeMs}ms — contexto nativo prevalece`, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+          contextInject.push(`[wam cqe] sin resultados (${reason}) en ${cqeMs}ms — contexto nativo prevalece`);
         }
         if (cqePack.cqeMeta) {
           const cqeTarget = updatedState || state;
@@ -801,7 +767,7 @@ const { lines } = buildTaskInferenceDirective({
     }
 
 
-    if (isCompletionClaim && gate.blocked) {
+    if (isCompletionClaim && gate.advisory) {
       const maxGateReqs = 5;
       const pendingItems = gate.pending || [];
       const gateKey = pendingItems.join("|");
@@ -884,7 +850,6 @@ const { lines } = buildTaskInferenceDirective({
           inject.push(...lines);
           if (!updatedState.permissionPreflightNotified) {
             updatedState.permissionPreflightNotified = true;
-            emitTextPart(output, lines.join("\n"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
           }
         }
         try { persistTaskState(taskId, updatedState, wamRoot); } catch {}
@@ -894,24 +859,28 @@ const { lines } = buildTaskInferenceDirective({
     const budgetedAux = applyContextBudget(auxInject, {
       state: updatedState.phase || intentLane.lane,
     });
-    const dedupedInject = filterNewContext([...contextInject, ...inject, ...budgetedAux], {
-      root: wamRoot,
-      sessionID: input.sessionID,
-    });
-    const wamBlockText = dedupedInject.length > 0 ? wrapWamBlock(dedupedInject.join("\n")) : "";
-
-    if (updatedState.contract?.status !== "APPROVED" && updatedState.phase !== "DONE") {
-      waitAMinute.presentValidation({
+    if (typeof waitAMinute?.presentValidation === "function" && updatedState.phase !== "DONE") {
+      const validation = await waitAMinute.presentValidation({
         analysis: {
           ...analysis,
           contractStatus: updatedState.contract.status,
           phase: updatedState.phase,
           completionContract: updatedState.contract,
         },
-        ctx: output,
+        ctx: null,
         meta: { sessionID: input.sessionID, messageID: output.message?.id || input.messageID },
+        emit: false,
       });
+      if (mergeValidationLines(inject, validation)) {
+        inject.push(`fase ${updatedState.phase || "IMPLEMENTING"} → ${analysis.nextAction || updatedState.nextAction || "continuar"}`);
+      }
     }
+
+    const dedupedInject = filterNewContext([...contextInject, ...inject, ...budgetedAux], {
+      root: wamRoot,
+      sessionID: input.sessionID,
+    });
+    const wamBlockText = dedupedInject.length > 0 ? wrapWamBlock(dedupedInject.join("\n")) : "";
 
     if (wamBlockText) {
       emitTextPart(output, wamBlockText, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });

@@ -118,7 +118,7 @@ test("chat.message 1.18.25: extrae prompt de message.parts e inyecta validación
     res = await attempt(process.cwd());
   }
   assert.ok(res.ok, `debe persistir estado en ${res.p}`);
-  const visible = res.output.parts.find((p) => p.type === "text" && typeof p.text === "string" && p.text.includes("contrato") && p.text.includes("/wam contract approve"));
+  const visible = res.output.parts.find((p) => p.type === "text" && typeof p.text === "string" && p.text.includes("contrato") && p.text.includes("/wam contract edit"));
   assert.ok(visible, "debe inyectar el checkpoint como part visible en output.parts");
 try {
     fs.rmSync(path.join(process.cwd(), ".wam", "tasks", taskId), { recursive: true, force: true });
@@ -209,7 +209,7 @@ test("Contract Synthesizer: requisitos específicos del prompt, no genéricos", 
   assert.ok(reqs.some((x) => /tests/i.test(x)), "requisito de tests");
 });
 
-test("VERIFYING: done sin verificar bloquea DONE → fase VERIFYING; verified permite DONE", async () => {
+test("advisory: done sin verificar no bloquea DONE (fase sin VERIFYING); verified permite DONE", async () => {
   const taskId = `ver-${Date.now()}`;
   const hooks = await pluginDefault({ directory: process.cwd(), client: {}, project: {}, $: {} });
 
@@ -230,9 +230,12 @@ test("VERIFYING: done sin verificar bloquea DONE → fase VERIFYING; verified pe
   const inp = { parts: [{ type: "text", text: "terminé, done" }], taskId };
   const outDone = { parts: [], system: [] };
   await hooks["chat.message"](inp, outDone);
-  assert.ok(outDone.parts.map((p) => p.text || "").join("\n").includes("COMPLETION GATE"), "DONE bloqueado con reqs sin verificar");
+  const doneText = outDone.parts.map((p) => p.text || "").join("\n");
+  assert.ok(/Recomendación/.test(doneText), "DONE con reqs sin verificar inyecta recomendación advisory");
+  assert.ok(/procedo/.test(doneText), "la recomendación no exige aprobación para continuar");
   const st2 = getTaskState(taskId);
-  assert.equal(st2.phase, "VERIFYING", "fase pasa a VERIFYING");
+  assert.notEqual(st2.phase, "VERIFYING", "fase no pasa a VERIFYING (sin gate bloqueante)");
+  assert.notEqual(st2.phase, "DONE", "DONE no se declara con reqs sin verificar");
 
   for (const req of getTaskState(taskId).requirements) {
     const ver = await pluginDefault.markRequirement(taskId, req.id, "verified", "npm test pasa");
@@ -270,7 +273,7 @@ test("Live Context: task-context.md refleja la tarea activa, cierre y sobreescri
   );
   let body = fs.readFileSync(liveFileFor(t1), "utf-8");
   assert.ok(body.includes(t1), "contexto vivo apunta a la tarea activa");
-  assert.ok(/PROPOSED/.test(body), "fase reflejada");
+  assert.ok(/IMPLEMENTING/.test(body), "fase reflejada");
 
   assert.equal(pluginDefault.approveContract(t1).ok, true);
   for (const r of getTaskState(t1).requirements) {
@@ -321,7 +324,7 @@ test("cavemanify + /wam compress: resumen terse y headroom reportado", async () 
   } catch {}
 });
 
-test("Continuation fast-path: contrato aprobado + continuación inyecta SOLO N2 (live task delta) y el gate de DONE sigue activo", async () => {
+test("Continuation fast-path: contrato aprobado + continuación inyecta SOLO N2 (live task delta) y el claim de DONE es advisory", async () => {
   const taskId = `flow-${Date.now()}`;
   const hooks = await pluginDefault({ directory: process.cwd(), client: {}, project: {}, $: {} });
 
@@ -346,14 +349,19 @@ test("Continuation fast-path: contrato aprobado + continuación inyecta SOLO N2 
   const inp2 = { parts: [{ type: "text", text: "listo, terminé la tarea" }], taskId };
   const out2 = { parts: [], system: [] };
   await hooks["chat.message"](inp2, out2);
-  assert.ok(out2.parts.map((p) => p.text || "").join("\n").includes("⛔"), "hard block sigue activo en claims de DONE con pendientes");
+  const doneText = out2.parts.map((p) => p.text || "").join("\n");
+  // DONE con reqs pendientes: el gate es advisory y NO toma el fast-path N2-only;
+  // cae al flujo normal, que emite el aviso de recomendación y no pasa a DONE.
+  assert.ok(/Recomendación/.test(doneText), "claim de DONE con pendientes emite aviso de recomendación (advisory)");
+  assert.ok(/Requisitos pendientes|requisito\(s\) sin evidencia/.test(doneText), "el aviso lista los requisitos pendientes");
+  assert.notEqual(getTaskState(taskId).phase, "DONE", "DONE no se declara con reqs pendientes");
 
   try {
     fs.rmSync(path.join(process.cwd(), ".wam", "tasks", taskId), { recursive: true, force: true });
   } catch {}
 });
 
-test("Hard Block: claim de DONE con requisitos pendientes inyecta directiva de bloqueo en output.parts", async () => {
+test("advisory: claim de DONE con requisitos pendientes inyecta estado advisory (no directiva de bloqueo) en output.parts", async () => {
   const taskId = `hb-${Date.now()}`;
   const hooks = await pluginDefault({ directory: process.cwd(), client: {}, project: {}, $: {} });
 
@@ -367,12 +375,12 @@ test("Hard Block: claim de DONE con requisitos pendientes inyecta directiva de b
     { sessionID: "s3", message: { parts: [{ type: "text", text: "terminé la tarea, está done" }] }, taskId },
     output
   );
-  const gatePart = output.parts.find((p) => p.type === "text" && typeof p.text === "string" && p.text.includes("⛔"));
-  assert.ok(gatePart, "el gate debe inyectarse como part visible en output.parts");
-  assert.ok(gatePart.text.startsWith("[wam]"), "toda parte sintética WAM lleva prefijo [wam]");
-  assert.ok(gatePart.text.includes("⛔"), "el claim debe reescribirse a directiva de bloqueo");
-  assert.ok(gatePart.text.includes("COMPLETION GATE"), "directiva menciona el gate");
-  assert.ok(gatePart.text.includes("No declare DONE"), "directiva prohíbe DONE");
+  const advisoryPart = output.parts.find((p) => p.type === "text" && typeof p.text === "string" && p.text.includes("[wam N2 task]"));
+  assert.ok(advisoryPart, "el estado advisory debe inyectarse como part visible en output.parts");
+  assert.ok(advisoryPart.text.startsWith("[wam]"), "toda parte sintética WAM lleva prefijo [wam]");
+  assert.ok(!/⛔|COMPLETION GATE|No declare DONE/.test(advisoryPart.text), "el claim no se reescribe a directiva de bloqueo");
+  assert.ok(!/¿Apruebo|Responde sí|GOVERNANCE BLOCK/.test(advisoryPart.text), "no pide aprobación ni bloquea");
+  assert.notEqual(getTaskState(taskId).phase, "DONE", "DONE no se declara con reqs pendientes");
 
   try {
     fs.rmSync(path.join(process.cwd(), ".wam", "tasks", taskId), { recursive: true, force: true });
@@ -515,24 +523,30 @@ test("client.session.get ausente → fallback al directory del plugin (compat)",
   } catch {}
 });
 
-test("delegación dura: contrato APPROVED con reqs pendientes genera directivas paralelas con dominio", async () => {
+test("delegación advisory: contrato APPROVED con reqs pendientes genera directivas paralelas con dominio y el claim de DONE no bloquea", async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wam-del-"));
   const hooks = await pluginDefault({ directory: tmp, client: {}, project: {}, $: {} });
   const taskId = `del-${Date.now()}`;
+  const created = { parts: [], system: [] };
   await hooks["chat.message"](
     { sessionID: "sd1", parts: [{ type: "text", text: "arregla el bug del frontend y agrega tests e2e" }], taskId },
-    { parts: [], system: [] }
+    created
   );
   pluginDefault.approveContract(taskId, tmp);
   const st = getTaskState(taskId, tmp);
   assert.ok(st.contract.status === "APPROVED", "contrato aprobado");
 
+  const createdText = created.parts.map((p) => p.text || "").join("\n");
+  assert.ok(createdText.includes("[wam delegation]"), "directiva de delegación visible");
+  assert.ok(/Task\(parallel\)/.test(createdText), "reqs → Task paralelo");
+  assert.ok(/contexto: frontend/.test(createdText), "req con hint de dominio frontend");
+
   const out = { parts: [], system: [] };
   await hooks["chat.message"]({ sessionID: "sd1", parts: [{ type: "text", text: "tarea terminada, done" }], taskId }, out);
   const t = out.parts.map((p) => p.text || "").join("\n");
-  assert.ok(t.includes("[wam delegation]"), "directiva de delegación visible");
-  assert.ok(/Task\(parallel\)/.test(t), "reqs → Task paralelo");
-  assert.ok(/contexto: frontend/.test(t), "req con hint de dominio frontend");
+  assert.ok(/Recomendación/.test(t), "claim de DONE con reqs pendientes emite aviso de recomendación (advisory)");
+  assert.ok(/Requisitos pendientes|requisito\(s\) sin evidencia/.test(t), "el aviso lista los requisitos pendientes");
+  assert.notEqual(getTaskState(taskId, tmp).phase, "DONE", "DONE no se declara con reqs pendientes");
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
 });
 
@@ -565,18 +579,18 @@ test("flujo sin fricción: sesión principal SÍ muta con reqs pendientes (bloqu
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
 });
 
-test("incertidumbre: prompt ambiguo pide aprobación; confirmación natural 'sí' aprueba (sin /wam)", async () => {
+test("incertidumbre: prompt ambiguo no pide aprobación; el contrato nace APPROVED", async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wam-unc-"));
   const hooks = await pluginDefault({ directory: tmp, client: {}, project: {}, $: {} });
   const taskId = `unc-${Date.now()}`;
 
-  // primer mensaje ambiguo → contrato PROPOSED (pide aprobación)
+  // primer mensaje ambiguo → contrato nace APPROVED (no espera un sí/no)
   const out1 = { parts: [], system: [] };
   await hooks["chat.message"]({ sessionID: "su1", parts: [{ type: "text", text: "haz algo con eso" }], taskId }, out1);
   let st = getTaskState(taskId, tmp);
-  assert.equal(st.contract?.status, "PROPOSED", "ambiguo → espera aprobación (no auto-aprueba)");
+  assert.equal(st.contract?.status, "APPROVED", "ambiguo → contrato APPROVED (sin espera de aprobación)");
   const t1 = out1.parts.map((p) => p.text || "").join("\n");
-  assert.ok(/Continuar → ejecutar|contrato PROPOSED/i.test(t1), "contrato presentado pidiendo confirmación");
+  assert.ok(!/¿Apruebo|Responde sí/.test(t1), "no pide aprobación explícita");
 
   // confirmación natural → aprueba sin comando /wam
   const out2 = { parts: [], system: [] };

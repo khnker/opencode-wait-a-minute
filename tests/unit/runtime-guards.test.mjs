@@ -44,7 +44,7 @@ test("SAFE read allowed", async () => {
   }
 });
 
-test("repeated failed experiment blocked", async () => {
+test("repeated failed experiment is advisory, not blocked", async () => {
   const { root, taskId, cleanup } = setup();
   try {
     const h = createHypothesis(root, taskId, { statement: "bug in parser" });
@@ -61,8 +61,10 @@ test("repeated failed experiment blocked", async () => {
       root,
       taskId,
     );
-    assert.equal(g.allowed, false);
+    assert.equal(g.allowed, true, "no bloquea");
+    assert.equal(g.level, "ADVISORY");
     assert.match(g.reason, /repetitive failure/);
+    assert.match(g.recommendation, /^Recomendación:/);
   } finally {
     cleanup();
   }

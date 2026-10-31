@@ -2,13 +2,13 @@
 id: injection.delegation
 name: Injection: delegation directive
 purpose: Direct agent to delegate pending requirements in parallel via Task.
-responsibility: Enforces parallel Task delegation of pending requirements and blocks main-session file mutation.
+responsibility: Recommends parallel Task delegation of pending requirements; direct main-session mutation stays allowed (advisory only).
 consumer: index.js#delegationLines
 inputs: []
 output: single-line string
-restrictions: must match previous literal exactly
+restrictions: advisory wording; must match the characterization fixture
 verification: src/prompts/characterization.test.mjs
 dependencies: []
 status: active
 ---
-[wam delegation] Reqs pendientes → delegar en PARALELO via Task (agente: el apropiado según config del entorno). Mutación directa de archivos desde la sesión principal está BLOQUEADA — solo un subagente ejecuta write/edit. Fallback: si un dispatch Task falla (modelo/agente no disponible) → reintentar secuencial → tier más barato → inline con evidencia. Nunca abortar en silencio por fallo de delegación.
+[wam delegation] Reqs pendientes → conviene delegar en PARALELO via Task (agente: el apropiado según config del entorno). La mutación directa desde la sesión principal está PERMITIDA: si Task no está disponible o falla, editá/writeá inline. Fallback: reintentar secuencial → tier más barato → inline con evidencia. Nunca abortar en silencio por fallo de delegación.

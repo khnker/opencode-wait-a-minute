@@ -42,7 +42,7 @@ async function assembleWithSkills(prompt, selected, overrides = {}) {
 // Normal scenarios verified against the real catalog: a domain prompt must
 // detect a capability, select the matching skill(s), and inject real content.
 const SCENARIOS = [
-  { prompt: "write documentation", expect: ["github-awesome-copilot-documentation-writer"] },
+  { prompt: "write documentation writer guide", expect: ["github-awesome-copilot-documentation-writer"] },
   { prompt: "create an implementation plan", expect: ["github-awesome-copilot-create-implementation-plan"] },
   { prompt: "generate playwright test", expect: ["github-awesome-copilot-playwright-generate-test"] },
 ];
@@ -118,7 +118,7 @@ describe("skill pipeline integration (detect -> select -> inject)", () => {
     injectWamParts(output, [skillText], {
       messageID: "msg-skill-1",
       phase: "emit",
-      idFactory: () => "wam-skill-part-1",
+      idFactory: () => "prt_0000000000000001",
       position: "prepend",
     });
 
@@ -126,7 +126,7 @@ describe("skill pipeline integration (detect -> select -> inject)", () => {
     const part = output.parts[0];
     assert.ok(isWamSynthetic(part), "injected part must be tagged as WAM synthetic");
     assert.equal(part.type, "text");
-    assert.equal(part.id, "wam-skill-part-1");
+    assert.equal(part.id, "prt_0000000000000001");
     assert.equal(part.metadata.wamMessageId, "msg-skill-1");
     assert.ok(part.text.includes(expect[0]), "injected part must carry the skill content");
   });

@@ -67,7 +67,7 @@ assert(
   "gate returns not-blocked for incidental 'complete disaster'",
 );
 
-console.log("\n[4] evaluateCompletionGate — real DONE-claim on incomplete state still blocks");
+console.log("\n[4] evaluateCompletionGate — real DONE-claim on incomplete state is advisory");
 const pendingState = {
   requirements: [{ id: "r1", title: "do thing", status: "pending" }],
   contract: { status: "APPROVED", unknowns: [], assumptions: [], checks: [] },
@@ -75,8 +75,10 @@ const pendingState = {
   outcomeContract: { acceptanceCriteria: [{ id: "c1" }] },
 };
 const r = evaluateCompletionGate(pendingState, "done");
-assert(r.blocked === true, "real DONE-claim with pending req blocks");
+assert(r.blocked === false, "real DONE-claim with pending req never blocks");
+assert(r.advisory === true, "real DONE-claim with pending req is advisory");
 assert(Array.isArray(r.pending) && r.pending.some((p) => p.includes("r1")), "pending list mentions r1");
+assert(typeof r.recommendation === "string" && r.recommendation.startsWith("Recomendación:"), "recommendation is injected");
 
 console.log(`\nResult: ${pass} pass / ${fail} fail`);
 if (fail > 0) process.exit(1);

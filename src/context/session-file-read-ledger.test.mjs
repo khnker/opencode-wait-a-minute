@@ -50,10 +50,12 @@ test('Stale edit guard', async () => {
     // Change file content on disk
     fs.writeFileSync(filePath, 'version 2');
     
-    // Try to edit - should be blocked
+    // Stale edit: 0 fricción — el guard es advisory (no bloquea) y recomienda releer
     const res = await guardAction('edit', { filePath }, tmpDir, 'task-1');
-    assert.strictEqual(res.allowed, false, 'Should be blocked');
-    assert.strictEqual(res.level, 'BLOCKED');
+    assert.strictEqual(res.allowed, true, 'advisory: no bloquea');
+    assert.notStrictEqual(res.level, 'BLOCKED', 'el guard no emite bloqueo duro');
+    assert.ok(/Recomendación|cambió desde la última lectura/i.test(JSON.stringify(res)),
+      'emite recomendación de releer');
     
     // Fresh case
     readLedger.recordRead(filePath, 'version 2');

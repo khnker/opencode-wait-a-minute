@@ -11,7 +11,7 @@ import crypto from "node:crypto";
 
 const MAX_ENTRIES = 500;
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
-const CRITICAL_RE = /⛔|COMPLETION GATE|VALIDACI[OÓ]N|ASKING|¿Apruebo este contrato\?|Contrato (aprobado|rechazado)|No declare DONE/i;
+const CRITICAL_RE = /⛔|COMPLETION GATE|VALIDACI[OÓ]N|ASKING|¿Apruebo este contrato\?|Contrato (aprobado|rechazado)|No declare DONE|Recomendación/i;
 
 function safeSession(sessionID) {
   return String(sessionID || "default").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
@@ -29,8 +29,19 @@ export function normalizeContextText(text) {
     .toLowerCase();
 }
 
+const CQE_FIRST_LINE_RE = /^(?:cqe:|\[wam cqe)/i;
+const FILE_TOKEN_RE = /(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+\.[A-Za-z][A-Za-z0-9]{0,7}|[A-Za-z0-9_.-]+\.[A-Za-z][A-Za-z0-9]{0,7}/g;
+
+function cqeFileKey(text) {
+  const raw = String(text || "").trim();
+  if (!CQE_FIRST_LINE_RE.test(raw)) return null;
+  const files = [...raw.matchAll(FILE_TOKEN_RE)].map((m) => m[0]);
+  return `cqe:${[...new Set(files)].sort().join(",")}`;
+}
+
 export function hashContextBlock(text) {
-  return crypto.createHash("sha256").update(normalizeContextText(text)).digest("hex").slice(0, 16);
+  const key = cqeFileKey(text) ?? normalizeContextText(text);
+  return crypto.createHash("sha256").update(key).digest("hex").slice(0, 16);
 }
 
 export function loadInjected(root, sessionID) {

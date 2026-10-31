@@ -140,6 +140,14 @@ function activeSessionId(root) {
   return "";
 }
 
+// The pointer is an identity, not a location: a root path must never be bound
+// as an OpenCode session id (it derives a ses_… hash from the path instead).
+export function isSessionId(value, root = "") {
+  if (typeof value !== "string" || !value.trim()) return false;
+  if (value.includes("/") || value.includes("\\")) return false;
+  return value !== root;
+}
+
 /**
  * Registers an OpenCode session as the active one of its root and returns its
  * WAM identity. The pointer makes every session-scoped call site (even those
@@ -152,7 +160,7 @@ export function setActiveSession(root, sessionID) {
     fs.mkdirSync(path.join(base, ".wam"), { recursive: true });
     fs.writeFileSync(activeSessionFile(base), JSON.stringify({
       session_id: sid,
-      opencode_session_id: sessionID || null,
+      opencode_session_id: isSessionId(sessionID, base) ? sessionID : null,
       updated_at: nowIso(),
     }, null, 2));
   } catch {}
@@ -218,6 +226,31 @@ export function getSessionId(root, sessionID) {
 
 export function resetSessionCache() {
   if (getSessionId._cache) getSessionId._cache.clear();
+}
+
+// -- Bootstrap: the first task of a root without WAM memory is born approved --
+// A brand-new project has no contract to approve yet; leaving it PROPOSED
+// deadlocks the gate before the first write. Every later task is gated again.
+
+export function isBootstrapRoot(root, taskId) {
+  const base = root || process.cwd();
+  if (fileExists(path.join(base, ".wam", "context", "project.md"))) return false;
+  try {
+    const entries = fs.readdirSync(path.join(base, ".wam", "tasks"), { withFileTypes: true });
+    return !entries.some((e) => e.isDirectory() && e.name !== taskId);
+  } catch {
+    return true;
+  }
+}
+
+export function applyBootstrapApproval(state, taskId, root) {
+  if (!isBootstrapRoot(root, taskId)) return state;
+  return {
+    ...state,
+    phase: "IMPLEMENTING",
+    contract: { ...(state?.contract || {}), status: "APPROVED", approvedBy: "bootstrap" },
+    nextAction: "Implementar — contrato bootstrap aprobado",
+  };
 }
 
 // -- Change 1: capsule CRUD ------------------------------------------------------
@@ -756,9 +789,13 @@ export function resolveWamRoot(prompt = "", sessionRoot = process.cwd()) {
       bestScore = score;
     }
   }
-  // Sin match y sessionRoot no es repo → continuidad: repo hijo con memoria
-  // .wam más reciente (el usuario sigue donde dejó el trabajo, no donde nació
-  // el proceso). Evita que mensajes sin señal de repo caigan a la raíz vacía.
+  // sessionRoot con memoria propia nunca adopta la de un repo vecino: su .wam
+  // es la señal que su autor eligió, no un artefacto de mtime.
+  if (best === sessionRoot && fileExists(path.join(sessionRoot, ".wam"))) return sessionRoot;
+
+  // Contenedor ancestro sin .wam → continuidad: repo hijo con memoria .wam
+  // más reciente (el usuario sigue donde dejó el trabajo, no donde nació el
+  // proceso). Evita que mensajes sin señal de repo caigan a la raíz vacía.
   // NOTA: mtime se usa como tiebreaker ÚNICAMENTE entre repos que tienen ya
   // memoria .wam — NO es la señal primaria. La resolución primaria es siempre
   // por señales explícitas (paths del prompt) o coincidencia de repo.

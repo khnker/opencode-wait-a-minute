@@ -19,11 +19,12 @@ test("Lifecycle: status + phase evolution", async () => {
     await hooks["chat.message"]({ sessionID: "lfy", message: { parts: [{ type: "text", text: "implementar X y agregar tests" }] }, taskId }, { message: {}, parts: [] });
     let state = getTaskState(taskId);
     assert.equal(state.phase, "PROPOSED");
-    assert.equal(state.contract.status, "PROPOSED");
+    assert.equal(state.contract.status, "APPROVED", "los contratos arrancan APPROVED (sin espera de aprobación)");
 
-    // 2. Aprobación: PROPOSED -> IMPLEMENTING
+    // 2. Aprobación explícita: sigue siendo APPROVED, la fase pasa a IMPLEMENTING
     const approved = pluginDefault.approveContract(taskId);
     assert.equal(approved.ok, true);
+    assert.equal(approved.phase, "IMPLEMENTING");
     state = getTaskState(taskId);
     assert.equal(state.phase, "IMPLEMENTING");
     assert.equal(state.contract.status, "APPROVED");

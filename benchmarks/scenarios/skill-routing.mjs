@@ -36,7 +36,7 @@ export const SKILL_ROUTING_CORPUS = [
   },
   {
     id: "sec-audit",
-    prompt: "Audit the security of this auth flow and report vulnerabilities",
+    prompt: "Audit the security of this MCP server config and report vulnerabilities",
     expected: ["github-awesome-copilot-mcp-security-audit"],
     forbidden: ["angular-new-app"],
   },

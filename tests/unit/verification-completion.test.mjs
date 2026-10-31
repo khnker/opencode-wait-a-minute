@@ -68,22 +68,25 @@ test("markRequirement marca `done` sin ejecutar checks", async () => {
   cleanup(taskId);
 });
 
-test("evaluateCompletionGate bloquea DONE si hay checks FAIL", () => {
+test("evaluateCompletionGate advierte, no bloquea, si hay checks FAIL", () => {
   const state = makeState({ checks: [{ reqId: "R1", type: "command", status: "FAIL" }], reqStatus: "verified" });
   const g = pluginDefault.evaluateCompletionGate(state, "task complete");
-  assert.equal(g.blocked, true, "gate debe bloquear");
-  assert.equal(g.verifying, true);
+  assert.equal(g.blocked, false, "el gate nunca bloquea");
+  assert.equal(g.advisory, true, "el gate advierte");
   assert.ok(Array.isArray(g.pending) && g.pending.length > 0);
+  assert.match(g.recommendation, /^Recomendación:/);
 });
 
-test("evaluateCompletionGate requiere outcomeContract para permitir DONE", () => {
-  // Sin outcomeContract el gate debe bloquear (sin contrato implícito)
+test("evaluateCompletionGate recomienda outcomeContract sin bloquear DONE", () => {
+  // Sin outcomeContract el gate sólo recomienda (sin contrato implícito, nunca bloquea)
   const state = makeState({
     checks: [{ reqId: "R1", type: "command", status: "PASS" }],
     reqStatus: "verified",
   });
   const g = pluginDefault.evaluateCompletionGate(state, "task complete");
-  assert.equal(g.blocked, true, "gate debe bloquear sin outcomeContract");
+  assert.equal(g.blocked, false, "no bloquea sin outcomeContract");
+  assert.equal(g.advisory, true);
+  assert.match(g.recommendation, /^Recomendación:/);
   assert.ok(Array.isArray(g.pending) && g.pending.length > 0);
 
   // Con outcomeContract válido y ACHIEVED el gate permite DONE
@@ -103,7 +106,7 @@ test("evaluateCompletionGate requiere outcomeContract para permitir DONE", () =>
   assert.equal(g2.blocked, false, "gate debe permitir con ACHIEVED");
   assert.equal(g2.allDone, true);
 
-  // Con outcomeContract NO_ACHIEVED el gate debe bloquear
+  // Con outcomeContract NO_ACHIEVED el gate sólo advierte
   const state3 = makeState({
     checks: [{ reqId: "R1", type: "command", status: "PASS" }],
     reqStatus: "verified",
@@ -115,7 +118,9 @@ test("evaluateCompletionGate requiere outcomeContract para permitir DONE", () =>
   };
   state3.evidence = [{ criterionId: "c1", status: "FAILED", timestamp: Date.now() }];
   const g3 = pluginDefault.evaluateCompletionGate(state3, "task complete");
-  assert.equal(g3.blocked, true, "gate debe bloquear con NOT_ACHIEVED");
+  assert.equal(g3.blocked, false, "no bloquea con NOT_ACHIEVED");
+  assert.equal(g3.advisory, true);
+  assert.match(g3.recommendation, /^Recomendación:/);
   assert.ok(Array.isArray(g3.pending) && g3.pending.length > 0);
 });
 

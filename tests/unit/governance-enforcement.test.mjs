@@ -5,7 +5,6 @@ import {
   isTrivialChange,
   isTerminalPhase,
 } from "../../src/policy/governance-enforcement.js";
-import { WamPolicyBlock } from "../../src/policy/risk-engine.js";
 
 const approved = { phase: "IMPLEMENTING", contract: { status: "APPROVED" } };
 const draft = {
@@ -23,14 +22,13 @@ test("allows on terminal phase (DONE / COMPLETE)", () => {
   assert.doesNotThrow(() => enforceGovernance("edit", { phase: "COMPLETE", contract: { status: "PROPOSED" } }));
 });
 
-test("blocks gated tools without approved contract", () => {
-  assert.throws(() => enforceGovernance("write", draft), WamPolicyBlock);
-  assert.throws(() => enforceGovernance("todo_write", draft), WamPolicyBlock);
-  assert.throws(() => enforceGovernance("apply_patch", draft), WamPolicyBlock);
-  assert.throws(
-    () => enforceGovernance("edit", draft),
-    (err) => err instanceof WamPolicyBlock && err.wamPolicyBlock === true && err.name === "WamPolicyBlock"
-  );
+test("advisory: gated tools without approved contract recommend, never block", () => {
+  for (const tool of ["write", "todo_write", "apply_patch", "edit"]) {
+    const decision = enforceGovernance(tool, draft);
+    assert.equal(decision.allowed, true);
+    assert.equal(decision.reason, "advisory");
+    assert.match(decision.recommendation, /Recomendación:/);
+  }
 });
 
 test("allows ASKING (defers to clarification gate)", () => {
@@ -56,15 +54,20 @@ test("trivial declared change is allowed", () => {
   assert.doesNotThrow(() => enforceGovernance("write", draft, { declaredFiles: ["a.mjs", "b.mjs"] }));
 });
 
-test("non-trivial declared change is blocked", () => {
-  assert.throws(() => enforceGovernance("write", draft, { declaredFiles: ["a", "b", "c"] }), WamPolicyBlock);
+test("non-trivial declared change is advisory, not blocked", () => {
+  const decision = enforceGovernance("write", draft, { declaredFiles: ["a", "b", "c"] });
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.reason, "advisory");
+  assert.match(decision.recommendation, /Recomendación:/);
 });
 
 test("protected paths are never trivial", () => {
   assert.equal(isTrivialChange(["ci.yml"]), false);
   assert.equal(isTrivialChange([".github/workflows/ci.yml"]), false);
   assert.equal(isTrivialChange(["migrations/001.sql"]), false);
-  assert.throws(() => enforceGovernance("write", draft, { declaredFiles: ["ci.yml"] }), WamPolicyBlock);
+  const decision = enforceGovernance("write", draft, { declaredFiles: ["ci.yml"] });
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.reason, "advisory");
 });
 
 test("override (WAM_GOVERNANCE=off) disables enforcement", () => {
@@ -101,14 +104,21 @@ test("empty-contract fix: a blocking unknown still gates an otherwise empty cont
     contract: { status: "PROPOSED", unknowns: [{ id: "U1", status: "blocking", question: "?" }] },
     requirements: [],
   };
-  assert.throws(() => enforceGovernance("write", withUnknown), WamPolicyBlock);
+  const decision = enforceGovernance("write", withUnknown);
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.reason, "advisory");
+  assert.match(decision.recommendation, /Recomendación:/);
 });
 
 test("empty-contract fix: any pending requirement still gates", () => {
-  assert.throws(
-    () => enforceGovernance("write", { phase: "PROPOSED", contract: { status: "PROPOSED" }, requirements: [{ id: "r1" }] }),
-    WamPolicyBlock
-  );
+  const decision = enforceGovernance("write", {
+    phase: "PROPOSED",
+    contract: { status: "PROPOSED" },
+    requirements: [{ id: "r1" }],
+  });
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.reason, "advisory");
+  assert.match(decision.recommendation, /Recomendación:/);
 });
 
 test("trivial escape reachable via declaredFiles (single src file)", () => {

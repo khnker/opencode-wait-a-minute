@@ -26,11 +26,13 @@ function cleanup(taskId) {
   try { fs.rmSync(path.join(CWD, ".wam", "tasks", taskId), { recursive: true, force: true }); } catch {}
 }
 function gateText(out) {
-  const p = out.parts.find((x) => x.type === "text" && typeof x.text === "string" && /COMPLETION GATE|VALIDACIÓN/.test(x.text));
-  return p?.text || "";
+  return out.parts
+    .filter((x) => x.type === "text" && typeof x.text === "string")
+    .map((x) => x.text)
+    .join("\n");
 }
 
-test("G5: DONE con requisito pendiente -> BLOCK, indica qué falta y próxima acción", async () => {
+test("G5: DONE con requisito pendiente → recomendación advisory, indica qué falta y próxima acción", async () => {
   const taskId = `g5-a-${Date.now()}`;
   await runHook("implementar X y agregar tests", taskId);
   pluginDefault.approveContract(taskId);
@@ -46,15 +48,15 @@ test("G5: DONE con requisito pendiente -> BLOCK, indica qué falta y próxima ac
   const pendingReq = (getTaskState(taskId)?.requirements || []).find((r) => r.id !== implReq.id && /test/i.test(r.title));
   cleanup(taskId);
 
-  assert.ok(/COMPLETION GATE|VALIDACIÓN/.test(gate), "gate bloquea");
-  assert.ok(/No declare[s]? DONE/.test(gate), "prohíbe DONE");
+  assert.ok(/Recomendación|COMPLETION GATE|VALIDACIÓN/.test(gate), "gate recomienda, no bloquea");
+  assert.ok(!/No declare[s]? DONE/.test(gate), "no prohíbe DONE");
   assert.ok(pendingReq && gate.includes(pendingReq.title), "indica exactamente qué falta (tests pendientes)");
   assert.ok(/req-\d/.test(gate), "identifica el requisito pendiente por ID");
   assert.ok(/Continuar con:|Continúa con el próximo requisito/.test(gate), "produce próxima acción concreta");
   assert.ok(gate.toLowerCase().includes("requisito"), "explica qué falta");
 });
 
-test("G5: DONE sin evidencia -> BLOCK (markRequirement lo rechaza y gate lo detecta)", async () => {
+test("G5: DONE sin evidencia → advisory (markRequirement lo rechaza y gate lo reporta)", async () => {
   const taskId = `g5-b-${Date.now()}`;
   await runHook("implementar X y agregar tests", taskId);
   pluginDefault.approveContract(taskId);
@@ -74,7 +76,7 @@ test("G5: DONE sin evidencia -> BLOCK (markRequirement lo rechaza y gate lo dete
   assert.ok(gate.includes("sin evidencia"), "gate lista requisito done-sin-evidencia como pendiente");
 });
 
-test("G5: DONE sin contrato aprobado -> BLOCK (aprobar antes)", async () => {
+test("G5: contrato nace aprobado; DONE con reqs sin verificar es advisory", async () => {
   const taskId = `g5-d-${Date.now()}`;
   await runHook("implementar X y agregar tests", taskId);
   const st = getTaskState(taskId);
@@ -84,9 +86,10 @@ test("G5: DONE sin contrato aprobado -> BLOCK (aprobar antes)", async () => {
   }
   const gate = pluginDefault.evaluateCompletionGate(st, "todo listo, done");
   cleanup(taskId);
-  assert.equal(st.contract.status, "PROPOSED");
-  assert.ok(gate.blocked, "bloquea aunque todos los reqs estén done");
-  assert.ok(gate.pending.some((p) => /aprobar/.test(p)), "indica que falta aprobar el contrato");
+  assert.equal(st.contract.status, "APPROVED");
+  assert.equal(gate.blocked, false, "no bloquea el claim de DONE");
+  assert.equal(gate.advisory, true, "devuelve recomendación");
+  assert.match(gate.recommendation, /Recomendación:/);
 });
 
 test("G5: DONE con todo verificado y evidencia -> ALLOW, fase DONE, summary.md, recent-changes", async () => {
@@ -111,7 +114,7 @@ test("G5: DONE con todo verificado y evidencia -> ALLOW, fase DONE, summary.md, 
     && fs.readFileSync(path.join(CWD, ".wam", "context", "recent-changes.md"), "utf8").includes(taskId);
   cleanup(taskId);
 
-  assert.equal(gate, "", "gate NO bloquea (sin ⛔ ni COMPLETION GATE de bloqueo)");
+  assert.ok(!/⛔|COMPLETION GATE|No declares DONE/.test(gate), "gate NO bloquea (sin ⛔ ni COMPLETION GATE de bloqueo)");
   assert.equal(st.phase, "DONE", "fase DONE");
   assert.equal(st.nextAction, "Tarea completa — contrato verificado");
   assert.ok(st.requirements.every((r) => r.status === "verified" && r.evidence.length > 0), "todos verificados con evidencia");

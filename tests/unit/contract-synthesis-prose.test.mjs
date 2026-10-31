@@ -29,3 +29,14 @@ test("requirement titles keep their verb and avoid double prefixes", () => {
     "Implementar todo (req-1 pending)"
   );
 });
+
+test("question-only prompts create no requirements", () => {
+  const contract = synthesizeContract("¿Cómo funciona el router de contexto?", "NORMAL");
+  assert.deepEqual(contract.requirements, []);
+  assert.equal(contract.trivial, true);
+});
+
+test("question plus imperative creates requirements", () => {
+  const contract = synthesizeContract("¿Falla el build? arréglalo", "NORMAL");
+  assert.ok(contract.requirements.length > 0);
+});

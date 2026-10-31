@@ -116,18 +116,20 @@ describe("risk-engine: unknown tool evaluates to BLOCKED", () => {
   });
 });
 
-describe("runtime-guards: unknown tool blocked at pre-check", () => {
-  it("guardAction blocks unknown tool before any other evaluation", async () => {
+describe("runtime-guards: unknown tool advised at pre-check", () => {
+  it("guardAction advises on unknown tool before any other evaluation", async () => {
     const result = await guardAction("totally-made-up-tool", { path: "/tmp/x" }, tmpRoot, "task-1");
-    assert.equal(result.allowed, false);
-    assert.equal(result.level, "BLOCKED");
-    assert.match(result.reason, /fail-closed/i);
+    assert.equal(result.allowed, true);
+    assert.equal(result.level, "ADVISORY");
+    assert.match(result.reason, /catalog/i);
+    assert.match(result.recommendation, /^Recomendación: /);
   });
 
-  it("guardAction blocks unknown tool even when args would normally be safe", async () => {
+  it("guardAction advises on unknown tool even when args would normally be safe", async () => {
     const result = await guardAction("ghost-tool", { path: nodePath.join(tmpRoot, "inside.txt") }, tmpRoot, "task-2");
-    assert.equal(result.allowed, false);
-    assert.equal(result.level, "BLOCKED");
+    assert.equal(result.allowed, true);
+    assert.equal(result.level, "ADVISORY");
+    assert.match(result.recommendation, /^Recomendación: /);
   });
 });
 

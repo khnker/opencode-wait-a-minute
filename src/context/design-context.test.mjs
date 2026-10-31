@@ -64,3 +64,21 @@ test("T7 — design context non-UI zero overhead", async () => {
   });
   assert.equal(pack.lines.some(l => l.includes("[wam design]")), false);
 });
+
+test("T8 — cards-only skill prompt is not a design task", async () => {
+  initDesignMarkdown(process.cwd());
+  const prompt = "skills base: cards ≤400 chars, suggest skills context";
+  assert.equal(classifyDesignTask(prompt), null);
+  const pack = await assembleContext({ prompt, taskId: "t-cards-only", budget: 8000 });
+  const text = pack.lines.join("\n");
+  assert.equal(text.includes("[wam design context]"), false);
+  assert.equal(text.includes("[wam design budget]"), false);
+});
+
+test("T9 — real UI prompt still emits design context", async () => {
+  initDesignMarkdown(process.cwd());
+  const pack = await assembleContext({ prompt: "create the dashboard page", taskId: "t-ui", budget: 8000 });
+  const text = pack.lines.join("\n");
+  assert.equal(text.includes("[wam design context]"), true);
+  assert.equal(text.includes("[wam design budget]"), true);
+});

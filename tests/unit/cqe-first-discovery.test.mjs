@@ -98,7 +98,7 @@ test('cqe-first: hook por defecto (sin env) avisa sin bloquear', async () => {
   }
 });
 
-test('cqe-first: hook con off silencia, con enforce bloquea', async () => {
+test('cqe-first: hook con off silencia, con enforce avisa sin bloquear', async () => {
   const orig = process.env.WAM_READ_DELEGATION;
   try {
     const hooks = await getHooks();
@@ -111,15 +111,17 @@ test('cqe-first: hook con off silencia, con enforce bloquea', async () => {
     assert.equal(resultOff.output, "tool result text", "off no encola directiva: el resultado queda byte-idéntico");
 
     process.env.WAM_READ_DELEGATION = "enforce";
-    await assert.rejects(
+    await assert.doesNotReject(
       hooks["tool.execute.before"](
         { tool: "bash", sessionID: "cqe-first-main", callID: "c3" },
         { args: { command: "grep -rn foo src" } },
       ),
+      "enforce es advisory: nunca lanza",
     );
     const resultEnforce = { title: "r", output: "tool result text", metadata: {} };
     await hooks["tool.execute.after"]({ tool: "bash", sessionID: "cqe-first-main", callID: "c3" }, resultEnforce);
-    assert.equal(resultEnforce.output, "tool result text", "enforce no encola directiva");
+    assert.ok(String(resultEnforce.output).includes("tool result text"), "el resultado original se conserva");
+    assert.match(String(resultEnforce.output), /Prefer|CQE|deleg/i, "enforce agrega nudge advisory");
   } finally {
     if (orig !== undefined) process.env.WAM_READ_DELEGATION = orig;
     else delete process.env.WAM_READ_DELEGATION;

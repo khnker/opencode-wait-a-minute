@@ -1,8 +1,8 @@
 ---
 id: notice.completion_gate
 name: Notice: completion gate
-purpose: Block DONE claim when requirements are pending.
-responsibility: Owns the hard block forbidding a DONE claim while requirements remain pending.
+purpose: Recommend verification when requirements are still pending.
+responsibility: Injects an advisory recommendation on a DONE claim with pending requirements. Never blocks.
 consumer: src/integration/message-handler.js
 inputs: [count, pendingList, nextAction]
 output: single-line string
@@ -11,4 +11,4 @@ verification: src/prompts/characterization.test.mjs
 dependencies: []
 status: active
 ---
-⛔ [wait-a-minute] COMPLETION GATE: faltan {{count}} requisito(s). No declare DONE.{{pendingList}} Continuar con: {{nextAction}}
+⚠️ [wait-a-minute] Recomendación: faltan {{count}} requisito(s) sin evidencia.{{pendingList}} Verificá cuando puedas; procedo. Continuar con: {{nextAction}}

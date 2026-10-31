@@ -59,7 +59,9 @@ test("loop: failure archives hypothesis, repeat blocked, cognition file kept", a
       root,
       taskId,
     );
-    assert.equal(again.allowed, false);
+    assert.equal(again.allowed, true, "repetir un experimento fallido es advisory, no bloquea");
+    assert.equal(again.level, "ADVISORY");
+    assert.ok(again.recommendation, "incluye recomendación");
 
     const cogDir = path.join(root, ".wam", "tasks", taskId, "cognition");
     assert.equal(fs.existsSync(path.join(cogDir, "hypotheses.jsonl")), true);

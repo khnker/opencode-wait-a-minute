@@ -7,7 +7,9 @@ import {
   DEFAULT_AUTO_LOOP_CAP,
 } from "./auto-continuation.js";
 
-const gate = (pending) => ({ blocked: pending.length > 0, pending });
+// Zero-friction contract: the gate never blocks; an incomplete state is
+// advisory, and the auto-loop plans off `advisory` instead of `blocked`.
+const gate = (pending) => ({ blocked: false, advisory: pending.length > 0, pending });
 
 test("signature: stable and order-sensitive", () => {
   assert.equal(pendingSignature({ pending: ["a", "b"] }), "a\nb");
@@ -29,12 +31,16 @@ test("claim: ignores questions and incidental mentions", () => {
 });
 
 test("plan: gate open never continues", () => {
-  const plan = planAutoContinuation({ state: {}, gate: { blocked: false }, assistantText: "DONE" });
+  const plan = planAutoContinuation({
+    state: {},
+    gate: { blocked: false, advisory: false },
+    assistantText: "DONE",
+  });
   assert.equal(plan.continue, false);
   assert.equal(plan.reason, "gate-open");
 });
 
-test("plan: no claim never continues even when blocked", () => {
+test("plan: no claim never continues even when the gate is advisory", () => {
   const plan = planAutoContinuation({
     state: {},
     gate: gate(["req-1 pending"]),

@@ -7,7 +7,7 @@ import { startExperiment, noteSuccess, noteFailure } from "../src/execution/exec
 import { getTaskState } from "../src/skills/engine.js";
 import { evaluateCompletion } from "../src/verification/completion-gate-simple.js";
 
-test("E2E: Fallo real en Playwright (Chromium missing) bloquea DONE", async () => {
+test("E2E: Fallo real en Playwright (Chromium missing) emite aviso advisory (no bloquea DONE)", async () => {
   const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-playwright-fail-"));
   const taskId = "playwright-fail-task";
   const taskDir = path.join(TMP, ".wam", "tasks", taskId);
@@ -42,8 +42,15 @@ test("E2E: Fallo real en Playwright (Chromium missing) bloquea DONE", async () =
     const state = getTaskState(taskId, TMP);
     const gate = evaluateCompletion(state);
     
-    assert.equal(gate.blocked, true, "Gate debe bloquear el DONE");
-    assert.equal(state.requirements[0].status, "pending", "Requisito debe seguir pending");
+    assert.equal(gate.blocked, false, "el gate nunca bloquea el DONE");
+    assert.equal(gate.advisory, true, "el gate emite aviso advisory");
+    assert.ok(
+      gate.unresolvedRequirements.length > 0,
+      "el aviso incluye los requisitos sin verificar",
+    );
+    assert.match(gate.recommendation, /^Recomendación:/, "el aviso es una recomendación");
+    assert.doesNotMatch(gate.recommendation, /⛔|No declares DONE/, "sin directiva de bloqueo");
+    assert.equal(state.requirements[0].status, "pending", "el requisito sigue pendiente");
     
   } finally {
     fs.rmSync(TMP, { recursive: true, force: true });

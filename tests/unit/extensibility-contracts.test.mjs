@@ -54,7 +54,7 @@ describe("extensibility: EP2 routing of an injected capability", () => {
     try {
       const { registry } = buildRegistry(NEW_CAPABILITY, tmp);
       const res = routeSkillsV2(
-        "please run the fixturekw workflow",
+        "please run the fixture-cap fixturekw workflow",
         {},
         registry,
         "STANDARD",

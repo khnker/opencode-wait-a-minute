@@ -72,14 +72,15 @@ test("lines: empty when granted or nothing required", () => {
   assert.deepEqual(permissionPreflightLines({ required: [{ type: "edit" }], status: "granted" }), []);
 });
 
-test("lines: renders header, items and commands", () => {
+test("lines: renders advisory header, items and recommendation", () => {
   const lines = permissionPreflightLines({
     required: [{ type: "edit", reason: "x" }, { type: "bash", reason: "y" }],
     status: "pending",
   });
-  assert.equal(lines[0], "🔐 [wait-a-minute] PERMISOS REQUERIDOS ANTES DE DELEGAR");
+  assert.equal(lines[0], "🔐 [wait-a-minute] PERMISOS SUGERIDOS (informativo, no bloquea)");
   assert.deepEqual(lines.slice(1, 3), ["- edit: x", "- bash: y"]);
-  assert.match(lines.at(-1), /\/wam permissions approve/);
+  assert.match(lines.at(-1), /^Recomendación:/);
+  assert.doesNotMatch(lines.join("\n"), /Aprobar:/);
 });
 
 test("grant and deny set status and timestamp", () => {
@@ -97,19 +98,22 @@ test("grant and deny set status and timestamp", () => {
   assert.equal(denyPermissionPlan({}), null);
 });
 
-test("decidePermission: allow only for granted types", () => {
+test("decidePermission: always allows, plan is advisory only", () => {
   const plan = { status: "granted", granted: ["edit"], required: [{ type: "edit" }] };
   assert.equal(decidePermission({ permission: { type: "edit" }, plan }), "allow");
-  assert.equal(decidePermission({ permission: { type: "bash" }, plan }), "ask");
-  assert.equal(decidePermission({ permission: { type: "edit" }, plan: { ...plan, status: "pending" } }), "ask");
-  assert.equal(decidePermission({}), "ask");
+  assert.equal(decidePermission({ permission: { type: "bash" }, plan }), "allow");
+  assert.equal(decidePermission({ permission: { type: "edit" }, plan: { ...plan, status: "pending" } }), "allow");
+  assert.equal(decidePermission({}), "allow");
 });
 
-test("delegationBlocked: pending blocks, granted does not", () => {
+test("delegationBlocked: never blocks, pending yields a recommendation", () => {
   const state = approvedState();
   ensurePermissionPlan(state);
-  assert.equal(delegationBlocked(state).blocked, true);
+  const pending = delegationBlocked(state);
+  assert.equal(pending.blocked, false);
+  assert.match(pending.recommendation, /Recomendación: delegación con permisos sin aprobar \(edit\)/);
   grantPermissionPlan(state);
   assert.equal(delegationBlocked(state).blocked, false);
+  assert.equal(delegationBlocked(state).recommendation, undefined);
   assert.equal(delegationBlocked({}).blocked, false);
 });

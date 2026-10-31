@@ -48,11 +48,12 @@ test("seeded outcomeContract + verified evidence ⇒ allowed", () => {
   assert.equal(g.allDone, true);
 });
 
-test("task without outcomeContract ⇒ blocked with 'Missing outcome contract'", () => {
+test("task without outcomeContract ⇒ advisory with 'Missing outcome contract'", () => {
   const g = evaluateCompletionGate(baseState(), "task complete");
-  assert.equal(g.blocked, true);
+  assert.equal(g.blocked, false);
+  assert.equal(g.advisory, true);
   assert.ok(
     (g.pending || []).some((p) => /missing outcome contract/i.test(p)),
-    `expected missing-contract blocker, got: ${JSON.stringify(g.pending)}`
+    `expected missing-contract pending entry, got: ${JSON.stringify(g.pending)}`
   );
 });

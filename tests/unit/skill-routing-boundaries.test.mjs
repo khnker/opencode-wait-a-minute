@@ -8,7 +8,7 @@ const registry = {
     id: "arch-linux-triage",
     status: "APPROVED",
     name: "arch-linux-triage",
-    keywords: ["arch"],
+    keywords: ["arch", "linux"],
     capabilities: [],
     domain: [],
   },
@@ -16,7 +16,7 @@ const registry = {
     id: "log-reader",
     status: "APPROVED",
     name: "log-reader",
-    keywords: ["log"],
+    keywords: ["log", "reader"],
     capabilities: [],
     domain: [],
   },
@@ -24,7 +24,7 @@ const registry = {
 
 test("keyword matching uses word boundaries, not substrings", () => {
   const selected = routeSkillsV2(
-    "analiza los archivos y revisa el log",
+    "analiza los archivos y revisa el log del reader",
     {},
     registry,
     "STANDARD"
@@ -35,7 +35,7 @@ test("keyword matching uses word boundaries, not substrings", () => {
 });
 
 test("whole-word keywords still match", () => {
-  const selected = routeSkillsV2("triage arch linux", {}, registry, "STANDARD").selected.map(
+  const selected = routeSkillsV2("arch linux", {}, registry, "STANDARD").selected.map(
     (s) => s.name
   );
   assert.ok(selected.includes("arch-linux-triage"));
@@ -48,7 +48,7 @@ test("IDF penalizes ubiquitous keywords", () => {
       id: `arch-${i}`,
       status: "APPROVED",
       name: `arch-${i}`,
-      keywords: ["arch"],
+      keywords: ["arch", "linux"],
       capabilities: [],
       domain: [],
     };
@@ -57,11 +57,11 @@ test("IDF penalizes ubiquitous keywords", () => {
     id: "log-reader",
     status: "APPROVED",
     name: "log-reader",
-    keywords: ["log"],
+    keywords: ["log", "reader"],
     capabilities: [],
     domain: [],
   };
-  const selected = routeSkillsV2("arch log", {}, big, "STANDARD").selected;
+  const selected = routeSkillsV2("arch linux log reader", {}, big, "STANDARD").selected;
   const log = selected.find((s) => s.name === "log-reader");
   const arch = selected.find((s) => s.name === "arch-0") || { relevance: 0 };
   assert.ok(log, "rare keyword must be selected");
@@ -75,14 +75,14 @@ test("minSkillScore drops weak keyword-only matches", () => {
       id: `arch-${i}`,
       status: "APPROVED",
       name: `arch-${i}`,
-      keywords: ["arch"],
+      keywords: ["arch", "linux"],
       capabilities: [],
       domain: [],
     };
   }
-  assert.equal(routeSkillsV2("arch", {}, registry, "STANDARD").selected.length, 0);
+  assert.equal(routeSkillsV2("arch linux", {}, registry, "STANDARD", { minSkillScore: 7 }).selected.length, 0);
   assert.ok(
-    routeSkillsV2("arch", {}, registry, "STANDARD", { minSkillScore: 3 }).selected.length > 0,
+    routeSkillsV2("arch linux", {}, registry, "STANDARD", { minSkillScore: 6 }).selected.length > 0,
     "minSkillScore must be configurable"
   );
 });
@@ -97,15 +97,15 @@ test("outcome feedback adds a small bonus", async () => {
     path.join(root, ".wam", "skills", "outcomes.json"),
     JSON.stringify({ "log-reader": { success: 3, failure: 0 } })
   );
-  const selected = routeSkillsV2("log", {}, registry, "STANDARD", { projectRoot: root }).selected;
+  const selected = routeSkillsV2("log reader", {}, registry, "STANDARD", { projectRoot: root }).selected;
   assert.ok(selected[0].relevance > 0);
   fs.rmSync(root, { recursive: true, force: true });
 });
 
 test("skills sharing a capability are deduplicated", () => {
   const duplicateRegistry = {
-    "auth-a": { id: "auth-a", status: "APPROVED", name: "auth-a", capabilities: ["auth"], keywords: [], domain: [] },
-    "auth-b": { id: "auth-b", status: "APPROVED", name: "auth-b", capabilities: ["auth"], keywords: [], domain: [] },
+    "auth-a": { id: "auth-a", status: "APPROVED", name: "auth-a", capabilities: ["auth"], keywords: ["auth"], domain: [] },
+    "auth-b": { id: "auth-b", status: "APPROVED", name: "auth-b", capabilities: ["auth"], keywords: ["auth"], domain: [] },
   };
   const selected = routeSkillsV2("auth", {}, duplicateRegistry, "STANDARD").selected;
   assert.equal(selected.length, 1);

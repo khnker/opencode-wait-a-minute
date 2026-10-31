@@ -51,7 +51,7 @@ export function planAutoContinuation({
   cap = DEFAULT_AUTO_LOOP_CAP,
   totalCap = DEFAULT_AUTO_LOOP_TOTAL_CAP,
 } = {}) {
-  if (!gate?.blocked) {
+  if (!gate?.advisory) {
     return { continue: false, reason: "gate-open", prompt: null, nextAutoLoop: null };
   }
   if (!isCompletionClaim(assistantText)) {

@@ -28,6 +28,7 @@ function makeRegistry(specs) {
       description: s.description || "",
       capabilities: s.capabilities || [],
       keywords: s.keywords || [],
+      triggers: s.triggers || [],
       domain: s.domain || [],
       risk: s.risk || "low",
       status: s.status || "APPROVED",
@@ -174,4 +175,67 @@ test("integracion: discoverSkills -> buildRegistry -> inferencia on-demand", () 
     if (s.base) assert.equal(s.relevance, 0, `skill base ${s.id} tiene relevancia 0`);
     else assert.ok(s.relevance > 0, `skill on-demand ${s.id} debe tener relevancia > 0`);
   }
+});
+
+test("señal única no selecciona skills on-demand", () => {
+  const registry = makeRegistry([
+    { id: "handoff", capabilities: ["context"], keywords: ["handoff"] },
+    { id: "adaptive-cards", capabilities: ["cards"], keywords: ["adaptive-cards"] },
+    { id: "suggest-awesome", capabilities: ["skills"], keywords: ["suggest-awesome"] },
+  ]);
+  for (const prompt of ["context", "cards", "skills"]) {
+    const result = routeSkillsV2(prompt, {}, registry, "STANDARD", {});
+    const names = result.selected.map((s) => s.name);
+    assert.equal(names.length, 0, `"${prompt}" no debe seleccionar ${names.join(", ")}`);
+    assert.ok(result.rejected.includes(prompt === "context" ? "handoff" : prompt === "cards" ? "adaptive-cards" : "suggest-awesome"), "la skill de señal única debe quedar rechazada");
+  }
+});
+
+test("dos señales distintas seleccionan la skill", () => {
+  const registry = makeRegistry([
+    { id: "handoff", capabilities: ["context"], keywords: ["handoff"] },
+  ]);
+  const result = routeSkillsV2("handoff context", {}, registry, "STANDARD", {});
+  const selected = result.selected.find((s) => s.name === "handoff");
+  assert.ok(selected, `handoff debe seleccionarse (${result.selected.map((s) => s.name)})`);
+  assert.match(selected.reason, /keyword:handoff/);
+  assert.doesNotMatch(selected.reason, /capability:context/);
+});
+
+test("dos keywords genéricas no admiten la skill", () => {
+  const registry = makeRegistry([
+    { id: "create-github-issues-for-unmet-specification-requirements", capabilities: [], keywords: ["create", "for"] },
+  ]);
+  const result = routeSkillsV2("create a card component for the dashboard", {}, registry, "STANDARD", {});
+  assert.equal(result.selected.length, 0, `keywords genéricas no deben seleccionar ${result.selected.map((s) => s.name)}`);
+});
+
+test("una keyword específica admite la skill", () => {
+  const registry = makeRegistry([{ id: "diagnosing-bugs", capabilities: ["debug"], keywords: [], triggers: ["broken"] }]);
+  const selected = routeSkillsV2("debug this broken service", {}, registry, "STANDARD").selected;
+  assert.ok(selected.some((s) => s.name === "diagnosing-bugs"), "una capability específica debe admitir la skill");
+});
+
+test("un sinónimo específico del prompt mantiene la señal de una capability genérica", () => {
+  const registry = makeRegistry([{ id: "backend-integrity", capabilities: ["data"], keywords: ["indices"] }]);
+  const selected = routeSkillsV2("Optimize slow database queries and add the missing indices", {}, registry, "STANDARD").selected;
+  assert.ok(selected.some((s) => s.name === "backend-integrity"), "database es un término específico aunque la capability sea data");
+});
+
+test("dos keywords genéricas no admiten una skill", () => {
+  const registry = makeRegistry([{ id: "card-builder", keywords: ["create", "for"] }]);
+  const selected = routeSkillsV2("create a card component for the dashboard", {}, registry, "STANDARD").selected;
+  assert.equal(selected.length, 0);
+});
+
+test("capability + trigger admite la skill aunque cada señal venga de un campo distinto", () => {
+  const registry = makeRegistry([{ id: "diagnosing-bugs", capabilities: ["debug"], triggers: ["broken"] }]);
+  const selected = routeSkillsV2("debug this broken service", {}, registry, "STANDARD").selected;
+  assert.ok(selected.some((s) => s.name === "diagnosing-bugs"));
+});
+
+test("una única keyword genérica no admite una skill", () => {
+  const registry = makeRegistry([{ id: "workflow-runner", keywords: ["workflow"] }]);
+  const selected = routeSkillsV2("please run the workflow", {}, registry, "STANDARD").selected;
+  assert.equal(selected.length, 0);
 });

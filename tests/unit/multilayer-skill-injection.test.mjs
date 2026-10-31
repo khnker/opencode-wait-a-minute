@@ -39,8 +39,16 @@ test("multi-layer prompt selects multiple matched skills and injects their real 
     selectedSkills: selected,
   });
   const text = pack.lines.join("\n");
-  const withContent = selected.filter((s) => String(REGISTRY[s.id]?.content || "").trim().length > 0);
+  const withContent = selected.filter(
+    (s) => !s.base && String(REGISTRY[s.id]?.content || "").trim().length > 0
+  );
   const injected = withContent.filter((s) => text.includes(`[wam N3 skill] ${s.id}`));
+  for (const s of selected.filter((s) => s.base)) {
+    assert.ok(
+      text.includes(`[wam N3 skill-ref] ${s.id}`),
+      `base skill ${s.id} must render as a card`
+    );
+  }
   assert.ok(injected.length >= 2, `expected >=2 injected skills, got ${injected.length}`);
   assert.equal(
     injected.length,

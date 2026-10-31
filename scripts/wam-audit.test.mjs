@@ -565,7 +565,10 @@ test("dry-run writes nothing", () => {
 // Shape-tolerant smoke against the real DB (no corpus assertions)
 // ---------------------------------------------------------------------------
 
-test("smoke: real corpus run produces the documented JSON shape", () => {
+test(
+  "smoke: real corpus run produces the documented JSON shape",
+  { skip: process.env.WAM_REAL_CORPUS_SMOKE !== "1" ? "opt-in: set WAM_REAL_CORPUS_SMOKE=1" : false },
+  () => {
   const out = tmpDir("wam-smoke-");
   const result = runAudit({
     root: "/home/nicolas/dev",
@@ -594,7 +597,8 @@ test("smoke: real corpus run produces the documented JSON shape", () => {
   const parsed = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
   assert.equal(parsed.schemaVersion, result.schemaVersion);
   fs.rmSync(out, { recursive: true, force: true });
-});
+  },
+);
 
 // ---------------------------------------------------------------------------
 // FIX 5 — ABANDONED with newest-artifact mtime

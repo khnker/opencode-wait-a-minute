@@ -62,7 +62,7 @@ test("guardAction: read of unchanged file surfaces redundant INFO nudge", async 
   }
 });
 
-test("guardAction: edit on stale file is BLOCKED and ledger advances (the fix)", async () => {
+test("guardAction: edit on stale file is advisory (no bloquea) and ledger advances", async () => {
   const { file, taskId, cleanup } = setup();
   try {
     fs.writeFileSync(file, "v1");
@@ -72,9 +72,10 @@ test("guardAction: edit on stale file is BLOCKED and ledger advances (the fix)",
 
     fs.writeFileSync(file, "v2");
     const r = await guardAction("edit", { path: file }, "/tmp", taskId);
-    assert.equal(r.allowed, false, "edit on stale file must be blocked");
-    assert.equal(r.level, "BLOCKED");
+    assert.equal(r.allowed, true, "edit on stale file se avisa, no se bloquea");
+    assert.equal(r.level, "ADVISORY");
     assert.match(r.reason, /stale/i);
+    assert.match(r.recommendation, /^Recomendación: /);
 
     // The fix: after the stale-edit block, the ledger must advance to v2.
     const digestAfter = readLedger.getDigest(file);
@@ -85,15 +86,16 @@ test("guardAction: edit on stale file is BLOCKED and ledger advances (the fix)",
   }
 });
 
-test("guardAction: unknown tools remain fail-closed even when file ledger advances", async () => {
+test("guardAction: unknown tools stay advisory even when file ledger advances", async () => {
   const { file, taskId, cleanup } = setup();
   try {
     fs.writeFileSync(file, "v1");
     await guardAction("read", { path: file }, "/tmp", taskId);
     const r = await guardAction("mystery-tool", { path: file }, "/tmp", taskId);
-    assert.equal(r.allowed, false);
-    assert.equal(r.level, "BLOCKED");
-    assert.match(r.reason, /fail-closed/i);
+    assert.equal(r.allowed, true);
+    assert.equal(r.level, "ADVISORY");
+    assert.match(r.reason, /catalog/i);
+    assert.match(r.recommendation, /^Recomendación: /);
   } finally {
     cleanup();
   }

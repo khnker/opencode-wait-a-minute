@@ -34,13 +34,13 @@ test("Pre-flight cognitivo: analiza intención, contexto de proyecto y riesgo", 
   assert.ok(a.complexity, "evalúa complejidad");
 });
 
-test("Completion Contract: propone requisitos, verificación y restricciones (auto-aprobado sin incertidumbre)", async () => {
+test("Completion Contract: propone requisitos, verificación y restricciones (nace APPROVED, sin espera de aprobación)", async () => {
   const taskId = `rv-ct-${Date.now()}`;
   await runHook("implementar auth con refresh token y migración", taskId);
   const st = getTaskState(taskId);
   cleanup(taskId);
   assert.ok(st, "estado persistido");
-  // Prompt claro (sin incertidumbre) → contrato auto-aprobado, fase IMPLEMENTING
+  // Root nuevo → bootstrap: contrato APPROVED y fase IMPLEMENTING desde el inicio
   assert.equal(st.phase, "IMPLEMENTING");
   assert.equal(st.contract?.status, "APPROVED");
   assert.ok(st.contract?.requirements?.length >= 1, "propone requisitos");
@@ -48,7 +48,7 @@ test("Completion Contract: propone requisitos, verificación y restricciones (au
   assert.ok(Array.isArray(st.contract?.constraints), "define restricciones");
 });
 
-test("Workflow de aprobación: PROPOSED → APPROVED (IMPLEMENTING) y REJECTED (WAITING)", async () => {
+test("Workflow de contrato: nace APPROVED, rejectContract ya no deja WAITING, editContract reabre PROPOSED", async () => {
   const taskId = `rv-ap-${Date.now()}`;
   await runHook("migrar a postgres", taskId);
   const app = pluginDefault.approveContract(taskId);
@@ -59,8 +59,9 @@ test("Workflow de aprobación: PROPOSED → APPROVED (IMPLEMENTING) y REJECTED (
   const taskId2 = `rv-rej-${Date.now()}`;
   await runHook("hacer X", taskId2);
   const rej = pluginDefault.rejectContract(taskId2);
-  assert.equal(rej.status, "REJECTED");
-  assert.equal(rej.phase, "WAITING");
+  assert.equal(rej.status, "APPROVED", "no hay espera de aprobación: el contrato sigue APPROVED");
+  assert.notEqual(rej.phase, "WAITING");
+  assert.equal(getTaskState(taskId2).contract.status, "APPROVED");
 
   const taskId3 = `rv-ed-${Date.now()}`;
   await runHook("hacer Y", taskId3);
@@ -70,15 +71,20 @@ test("Workflow de aprobación: PROPOSED → APPROVED (IMPLEMENTING) y REJECTED (
   cleanup(taskId); cleanup(taskId2); cleanup(taskId3);
 });
 
-test("Completion Gate: detecta claims de fin y bloquea con lista de pendientes", async () => {
+test("Completion Gate: el claim de fin es advisory — reporta pendientes y emite recomendación sin bloquear", async () => {
   const taskId = `rv-gate-${Date.now()}`;
   await runHook("implementar feature con tests", taskId);
   const out = await runHook("terminé la tarea, está done", taskId, "rv2");
-  const gate = out.parts.find((p) => p.type === "text" && typeof p.text === "string" && (p.text.startsWith("⛔") || p.text.includes("COMPLETION GATE")));
+  const st = getTaskState(taskId);
+  const gate = pluginDefault.evaluateCompletionGate(st, "terminé la tarea, está done");
+  const emitted = out.parts.filter((p) => p.type === "text").map((p) => p.text).join("\n");
   cleanup(taskId);
-  assert.ok(gate?.text.includes("COMPLETION GATE"), "gate inyectado");
-  assert.ok(/No declare[s]? DONE/.test(gate.text), "prohíbe DONE");
-  assert.ok(gate.text.includes("Requisitos pendientes"), "lista pendientes");
+  assert.equal(gate.blocked, false, "nunca bloquea");
+  assert.equal(gate.advisory, true, "advierte");
+  assert.ok(gate.pending.length > 0, "lista pendientes");
+  assert.match(gate.recommendation, /^Recomendación:/);
+  assert.ok(/Recomendación/.test(emitted), "emite aviso de recomendación (advisory)");
+  assert.ok(/Requisitos pendientes|requisito\(s\) sin evidencia/.test(emitted), "el aviso reporta los pendientes");
 });
 
 test("Real Progress Tracking: requisito con evidencia + nextAction derivado", async () => {
@@ -115,15 +121,16 @@ test("Skill Registry autocontenido: >=300 skills aprobadas con contenido real em
   }
 });
 
-test("Hard Block on DONE: el claim entrante se reescribe a directiva de bloqueo", async () => {
+test("Advisory on DONE: el claim emite recomendación y no fuerza la fase a DONE", async () => {
   const taskId = `rv-hb-${Date.now()}`;
   await runHook("hacer deployment", taskId);
   const out = await runHook("todo listo, declare done", taskId, "rv3");
   const emitted = out.parts.filter((p) => p.type === "text").map((p) => p.text).join("\n");
+  const st = getTaskState(taskId);
   cleanup(taskId);
-  assert.ok(emitted.includes("⛔"), "directiva hard block visible");
-  assert.ok(!/[^☐]declare d[oó]ne/i.test(emitted.replace(/⛔[\s\S]*/, "")), "claim original no circula como instrucción de fin");
-  assert.equal(getTaskState(taskId)?.phase ?? "IMPLEMENTING", "IMPLEMENTING", "fase no pasa a DONE");
+  assert.ok(/Recomendación/.test(emitted), "emite aviso de recomendación (advisory)");
+  assert.ok(/Requisitos pendientes|requisito\(s\) sin evidencia/.test(emitted), "el aviso lista los pendientes");
+  assert.notEqual(st?.phase, "DONE", "fase no pasa a DONE con requisitos pendientes");
 });
 
 test("Task Resume: /wam task switch + hook persiste bajo tarea activa", async () => {
@@ -167,7 +174,7 @@ test("CLI /wam: skills list|search|inspect|explain + contract + progress + task"
   assert.ok(search.includes("documentation"), "skills search matchea");
   const inspect = await run("skills inspect github-awesome-copilot-documentation-writer");
   assert.ok(inspect.toLowerCase().includes("documentation"), "skills inspect devuelve metadata");
-  const explain = await run("skills explain write documentation");
+  const explain = await run("skills explain documentation writer");
   assert.ok(explain.includes("score"), "skills explain muestra scoring");
   const taskId = `rv-cli-${Date.now()}`;
   await runHook("tarea de prueba", taskId);

@@ -1,6 +1,6 @@
 /**
- * Adapter test: permission preflight gates main-session delegation and answers
- * opencode's permission.ask hook from the granted plan.
+ * Adapter test: permission preflight is advisory for main-session delegation
+ * and always answers opencode's permission.ask hook with "allow".
  *
  * Run: node --test --test-force-exit test/permission-preflight-adapter.test.mjs
  */
@@ -11,6 +11,11 @@ import os from "node:os";
 import path from "node:path";
 
 import pluginDefault from "../index.js";
+import {
+  decidePermission,
+  delegationBlocked,
+  permissionPreflightLines,
+} from "../src/policy/permission-preflight.js";
 
 function setupTmp() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wam-permission-preflight-"));
@@ -45,7 +50,7 @@ function writePlan(tmp, taskId, plan) {
   fs.writeFileSync(file, JSON.stringify(state));
 }
 
-test("pending preflight blocks task delegation and granted types are allowed", async (t) => {
+test("pending preflight is advisory and delegation proceeds", async (t) => {
   const { tmp, taskId } = setupTmp();
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
@@ -53,10 +58,26 @@ test("pending preflight blocks task delegation and granted types are allowed", a
 
   assert.equal(typeof hooks["permission.ask"], "function");
 
-  await assert.rejects(
-    () => hooks["tool.execute.before"]({ tool: "task", sessionID: "sess-1" }, { args: { description: "delegate" } }),
-    /PERMISSION PREFLIGHT/,
+  // Zero friction: a pending preflight never blocks task delegation.
+  await hooks["tool.execute.before"](
+    { tool: "task", sessionID: "sess-1" },
+    { args: { description: "delegate" } },
   );
+
+  const state = JSON.parse(
+    fs.readFileSync(path.join(tmp, ".wam", "tasks", taskId, "task.json"), "utf8"),
+  );
+  const verdict = delegationBlocked(state);
+  assert.equal(verdict.blocked, false);
+  assert.match(verdict.recommendation, /continúo/);
+
+  const notice = permissionPreflightLines(state.permissionPreflight);
+  assert.match(notice[0], /PERMISOS SUGERIDOS \(informativo, no bloquea\)/);
+  assert.doesNotMatch(notice.join("\n"), /Aprobar:/);
+
+  // permission.ask always allows; the granted plan only informs the notice.
+  assert.equal(decidePermission({ type: "edit" }), "allow");
+  assert.equal(decidePermission({ type: "bash" }), "allow");
 
   writePlan(tmp, taskId, { required: [{ type: "edit", reason: "x" }], status: "granted", granted: ["edit"], approvedAt: Date.now() });
 
@@ -66,7 +87,7 @@ test("pending preflight blocks task delegation and granted types are allowed", a
 
   const other = { status: "ask" };
   await hooks["permission.ask"]({ type: "bash", sessionID: "sess-1", pattern: "*" }, other);
-  assert.equal(other.status, "ask");
+  assert.equal(other.status, "allow");
 });
 
 test("subagent permission requests inherit the parent's granted plan", async (t) => {

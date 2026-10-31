@@ -59,7 +59,7 @@ test("E2E Happy Path: tool succeeds → SUPPORTED → verified → DONE", async 
   }
 });
 
-test("E2E Contradiction: tool fails/contradicts → REJECTED → pending NOT DONE", async () => {
+test("E2E Contradiction: tool fails/contradicts → advisory recommendation → pending stays NOT DONE", async () => {
   const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "wam-contradiction-"));
   const taskId = "contradiction-task";
   try {
@@ -81,9 +81,13 @@ test("E2E Contradiction: tool fails/contradicts → REJECTED → pending NOT DON
     });
     const state = getTaskState(taskId, TMP);
     const gate = evaluateCompletion(state);
-    assert.equal(gate.blocked, true, "Contradiction should block DONE");
+    // Advisory contract: a contradiction yields a recommendation, never a hard block.
+    assert.equal(gate.blocked, false, "Contradiction is advisory: DONE is never hard-blocked");
+    assert.equal(gate.advisory, true, "Gate result must be flagged advisory");
+    assert.ok(gate.unresolvedRequirements.includes("req-1"), "Pending requirement must be surfaced");
+    assert.match(gate.recommendation, /req-1/, "Recommendation should name the pending requirement");
     assert.equal(state.requirements[0].status, "pending", "Requirement should stay pending after contradiction");
-    console.log("✅ Contradiction path: gate blocked and requirement pending");
+    console.log("✅ Contradiction path: gate advisory and requirement pending");
   } finally {
     fs.rmSync(TMP, { recursive: true, force: true });
   }

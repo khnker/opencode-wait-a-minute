@@ -99,7 +99,7 @@ async function runWamGate(taskId, scenario) {
     .map((p) => p.text)
     .join("\n");
 
-  return /COMPLETION GATE|VALIDACIÓN/.test(gateText) && /BLOQUEADO|BLOCK|No declare|No declares/.test(gateText);
+  return /Recomendación/.test(gateText) && /requisito/i.test(gateText);
 }
 
 /**
@@ -149,16 +149,16 @@ export async function evaluateScenario(scenario) {
   const taskId = await prepareTaskState(scenario);
 
   const baselineAccepts = runBaseline(scenario);
-  const wamBlocks = await runWamGate(taskId, scenario);
+  const wamDetects = await runWamGate(taskId, scenario);
 
   return {
     id: scenario.id,
     name: scenario.name,
     baselineFalseCompletion: baselineAccepts ? 1 : 0,
-    wamFalseCompletion: wamBlocks ? 0 : 1,
-    correctCompletion: baselineAccepts && wamBlocks ? 1 : 0,
-    testsPassing: wamBlocks ? 1 : 0,
-    gateBlocked: wamBlocks,
+    wamUndetectedFalseCompletion: wamDetects ? 0 : 1,
+    correctCompletion: baselineAccepts && wamDetects ? 1 : 0,
+    testsPassing: wamDetects ? 1 : 0,
+    gateAdvisory: wamDetects,
     details: {
       taskId,
       failingTest: scenario.failingTest,
@@ -180,13 +180,13 @@ export async function runFalseCompletionBenchmark(scenarios = FALSE_COMPLETION_S
   const totals = results.reduce(
     (acc, r) => ({
       baselineFalseCompletion: acc.baselineFalseCompletion + r.baselineFalseCompletion,
-      wamFalseCompletion: acc.wamFalseCompletion + r.wamFalseCompletion,
+      wamUndetectedFalseCompletion: acc.wamUndetectedFalseCompletion + r.wamUndetectedFalseCompletion,
       correctCompletion: acc.correctCompletion + (r.correctCompletion ? 1 : 0),
       testsPassing: acc.testsPassing + (r.testsPassing ? 1 : 0),
     }),
     {
       baselineFalseCompletion: 0,
-      wamFalseCompletion: 0,
+      wamUndetectedFalseCompletion: 0,
       correctCompletion: 0,
       testsPassing: 0,
     }

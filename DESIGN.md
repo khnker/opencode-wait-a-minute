@@ -10,25 +10,11 @@
 ```json
 {
   "color": {
-    "action": {
-      "primary": "#123456",
-      "hover": "#1D4ED8"
-    },
-    "surface": {
-      "default": "#FFFFFF",
-      "muted": "#F3F4F6"
-    },
-    "text": {
-      "primary": "#111827",
-      "muted": "#6B7280"
-    },
-    "border": {
-      "subtle": "#E5E7EB"
-    },
-    "feedback": {
-      "error": "#DC2626",
-      "success": "#16A34A"
-    }
+    "action": { "primary": "#2563EB", "hover": "#1D4ED8" },
+    "surface": { "default": "#FFFFFF", "muted": "#F3F4F6" },
+    "text": { "primary": "#111827", "muted": "#6B7280" },
+    "border": { "subtle": "#E5E7EB" },
+    "feedback": { "error": "#DC2626", "success": "#16A34A" }
   },
   "space": {
     "compact": "4px",
