@@ -135,6 +135,20 @@ export function canTransitionPhase(from, to) {
  * @returns {{ blocked: boolean, allDone?: boolean, verifying?: boolean, pending?: string[], autoApprove?: boolean }}
  */
 export function evaluateCompletionGate(state, promptText) {
+  const gate = evaluateCompletionGateStrict(state, promptText);
+  if (!gate.blocked) return gate;
+  return {
+    ...gate,
+    blocked: false,
+    advisory: true,
+    recommendation:
+      "Recomendación: la tarea no está verificada. Pendiente:\n" +
+      (gate.pending || []).map((p) => `- ${p}`).join("\n") +
+      "\nVerificá o documentá evidencia cuando puedas; procedo.",
+  };
+}
+
+function evaluateCompletionGateStrict(state, promptText) {
   const completionIntent = isCompletionIntent(promptText);
 
   // 1. Blocking unknowns
@@ -196,15 +210,7 @@ export function evaluateCompletionGate(state, promptText) {
     };
   }
 
-  // 5. Contract must be APPROVED
-  if (state?.contract?.status !== "APPROVED") {
-    return {
-      blocked: true,
-      pending: [
-        `contrato ${state.contract?.status || "PROPOSED"} — aprobar con /wam contract approve antes de DONE`,
-      ],
-    };
-  }
+  // 5. Contract status is advisory: nunca bloquea el progreso (0 fricción).
 
   // 6. All requirements must be verified with evidence
   const unverified = (state?.requirements || []).filter(
@@ -309,14 +315,14 @@ export function buildCompletionValidation(gate, state = {}) {
     120,
   );
   const lines = [
-    "⛔ [wait-a-minute] VALIDACIÓN — la afirmación de completitud fue rechazada: el LLM declaró DONE pero el contrato todavía tiene requisitos pendientes.",
+    "⚠️ [wait-a-minute] Recomendación — la afirmación de completitud no está verificada: el contrato todavía tiene requisitos pendientes.",
   ];
   if (pending.length > 0) {
     lines.push("Requisitos pendientes:");
     for (const item of pending) lines.push(`- ${truncate(item, 150)}`);
   }
   lines.push(
-    `Objetivo del contrato: "${requestedAction}" → implementa los requisitos pendientes y vuelve a verificarlos. No declares DONE.`,
+    `Objetivo del contrato: "${requestedAction}" → cuando puedas, implementa los requisitos pendientes y verificalos. Podés continuar.`,
   );
   lines.push(`Continuar con: ${nextAction}`);
   return {
@@ -328,9 +334,9 @@ export function buildCompletionValidation(gate, state = {}) {
 }
 
 export function applyPhaseTransition(state, gate) {
-  if (gate.blocked) {
+  if (gate.advisory) {
     return {
-      phase: gate.verifying ? PHASE_VERIFYING : PHASE_IMPLEMENTING,
+      phase: state?.phase || PHASE_PROPOSED,
       nextAction: nextActionFrom(state),
     };
   }

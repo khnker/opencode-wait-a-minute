@@ -339,10 +339,10 @@ export function loadCanonicalProjectContext(root) {
  * Idempotente: si el bloque ya está presente en la salida, no se duplica.
  *
  * @param {{ parts?: any[], system?: any[] }} output
- * @param {{ root?: string, taskId?: string, messageID?: string, phase?: string }} [params]
+ * @param {{ root?: string, taskId?: string, messageID?: string, sessionID?: string, phase?: string, idFactory?: Function }} [params]
  * @returns {{ injected: boolean, reason?: string, tokens?: number }}
  */
-export function injectCanonicalProjectContext(output, { root, taskId, messageID, sessionID, phase } = {}) {
+export function injectCanonicalProjectContext(output, { root, taskId, messageID, sessionID, phase, idFactory } = {}) {
   if (!taskId) return { injected: false, reason: "no active task" };
   if (phase && !CPC_INJECTABLE_PHASES.has(String(phase).trim().toUpperCase())) {
     return { injected: false, reason: `task phase ${phase}` };
@@ -362,7 +362,7 @@ export function injectCanonicalProjectContext(output, { root, taskId, messageID,
     rememberCpcInjection(taskId);
     return { injected: false, reason: "already injected", tokens: prepared.tokens };
   }
-  injectWamParts(output, prepared.text, { messageID, sessionID, phase: "cpc", position: "append" });
+  injectWamParts(output, prepared.text, { messageID, sessionID, phase: "cpc", position: "append", idFactory });
   rememberCpcInjection(taskId);
   return { injected: true, tokens: prepared.tokens };
 }

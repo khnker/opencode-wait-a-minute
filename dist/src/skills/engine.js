@@ -682,14 +682,32 @@ function persistRegistry(registryFile, registry) {
   fs.writeFileSync(registryFile, JSON.stringify(registry, null, 2));
 }
 
+const GENERIC_SKILL_TERMS = new Set([
+  "context", "cards", "skills", "create", "for", "with", "this", "that", "the", "a", "an", "to", "of", "in", "on", "and", "or",
+  "new", "add", "use", "using", "from", "by", "is", "are", "be", "as", "at", "it", "its", "your", "you", "we", "our", "can", "will",
+  "should", "would", "could", "make", "get", "set", "all", "any", "each", "how", "what", "when", "where", "why", "who", "which",
+  "do", "does", "not", "no", "yes", "please", "need", "needs", "want", "wants", "help", "support", "based", "via", "into", "over",
+  "under", "about", "after", "before", "same", "other", "more", "less", "best", "good", "bad", "simple", "quick", "fast", "slow",
+  "easy", "hard", "code", "file", "test", "build", "task", "project", "agent", "prompt", "tool", "session", "message", "user",
+  "config", "system", "service", "api", "data", "result", "value", "item",
+  "flow", "workflow", "specification", "analysis", "blueprint", "generator", "action",
+  "component", "card"
+]);
+const isGenericSkillTerm = (term) => GENERIC_SKILL_TERMS.has(String(term || "").toLowerCase().trim());
+
 /**
  * Score de relevancia ponderado (spec §7) — pesos configurables.
  */
 function scoreSkill(skill, promptTokens, weights, idf = null, outcomes = null) {
+  return scoreSkillDetailed(skill, promptTokens, weights, idf, outcomes).score;
+}
+
+function scoreSkillDetailed(skill, promptTokens, weights, idf = null, outcomes = null) {
   const w = { ...DEFAULT_SCORING_WEIGHTS, ...(weights || {}) };
   const lowerPrompt = promptTokens.toLowerCase();
   const name = (skill.name || "").toLowerCase();
   const desc = (skill.description || "").toLowerCase();
+  const signals = new Set();
   let score = 0;
 
   const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -707,20 +725,50 @@ function scoreSkill(skill, promptTokens, weights, idf = null, outcomes = null) {
     if (t.endsWith("y")) variants.add(`${t.slice(0, -1)}ies`);
     for (const extra of IRREGULAR[t] || []) variants.add(extra);
     const body = [...variants].map(escapeRe).join("|");
-    return new RegExp(`(^|[^a-z0-9áéíóúñü])(${body})([^a-z0-9áéíóúñü]|$)`, "i").test(lowerPrompt);
+    const re = new RegExp(`(^|[^a-z0-9áéíóúñü])(${body})([^a-z0-9áéíóúñü]|$)`, "i");
+    if (!re.test(lowerPrompt)) return false;
+    for (const variant of variants) {
+      if (new RegExp(`(^|[^a-z0-9áéíóúñü])(${escapeRe(variant)})([^a-z0-9áéíóúñü]|$)`, "i").test(lowerPrompt)) return variant;
+    }
+    return t;
   };
   const idfWeight = (term) => (idf && idf.get(String(term || "").toLowerCase())) || 1;
 
-  if (name && hasTerm(name)) score += w.name;
+  if (name && hasTerm(name)) {
+    score += w.name;
+    signals.add("name");
+  }
   for (const c of skill.capabilities || []) {
-    if (hasTerm(c)) score += w.capability * idfWeight(c);
+    const matched = hasTerm(c);
+    if (matched) {
+      score += w.capability * idfWeight(c);
+      if (!isGenericSkillTerm(matched)) signals.add(`capability:${String(c).toLowerCase()}`);
+    }
   }
   for (const k of skill.keywords || []) {
-    if (hasTerm(k)) score += w.keyword * idfWeight(k);
+    const matched = hasTerm(k);
+    if (matched) {
+      score += w.keyword * idfWeight(k);
+      if (!isGenericSkillTerm(matched)) signals.add(`keyword:${String(k).toLowerCase()}`);
+    }
   }
-  if (desc && hasTerm(desc.slice(0, 20))) score += w.description;
+  for (const tr of skill.triggers || []) {
+    const matched = hasTerm(tr);
+    if (matched) {
+      score += w.keyword * idfWeight(tr);
+      if (!isGenericSkillTerm(matched)) signals.add(`trigger:${String(tr).toLowerCase()}`);
+    }
+  }
+  if (desc && hasTerm(desc.slice(0, 20))) {
+    score += w.description;
+    signals.add("description");
+  }
   for (const d of skill.domain || []) {
-    if (hasTerm(d)) score += w.domain * idfWeight(d);
+    const matched = hasTerm(d);
+    if (matched) {
+      score += w.domain * idfWeight(d);
+      if (!isGenericSkillTerm(matched)) signals.add(`domain:${String(d).toLowerCase()}`);
+    }
   }
 
   const outcome = outcomes?.[skill.id];
@@ -728,7 +776,7 @@ function scoreSkill(skill, promptTokens, weights, idf = null, outcomes = null) {
     const delta = (Number(outcome.success) || 0) - (Number(outcome.failure) || 0);
     score += Math.max(-1, Math.min(1, delta * 0.2));
   }
-  return score;
+  return { score, signals };
 }
 
 function buildSkillIdf(registry) {
@@ -879,12 +927,20 @@ function _routeSkillsV2Impl(prompt, projectInfo, registry, mode, options = {}) {
       continue;
     }
 
-    const score = scoreSkill(skill, lower, options.weights, idf, outcomes);
+    const { score, signals } = scoreSkillDetailed(skill, lower, options.weights, idf, outcomes);
     if (score > 0 && score >= minSkillScore) {
+      if (!signals.has("name") && signals.size < 2) {
+        rejected.push({
+          name: skill.name || id,
+          reason: `señales insuficientes (${[...signals].join(",") || "término genérico o sin match"})`,
+        });
+        continue;
+      }
       candidates.push({
         id,
         name: skill.name || id,
         score,
+        signals: [...signals],
         matchingKeywords: (skill.keywords || []).filter((k) => lower.includes(k.toLowerCase())).slice(0, 4),
         matchingCapabilities: (skill.capabilities || []).filter((c) => lower.includes(c.toLowerCase())),
         risk: skill.risk,
@@ -937,7 +993,7 @@ candidates.sort((a, b) => b.score - a.score);
       relevance: c.score,
       reason: c.base
         ? `Skill base (loadStrategy: "base")`
-        : `score ${c.score} (${c.matchingCapabilities.join(",") || c.matchingKeywords.join(",")})`,
+        : `score ${c.score} (${(c.signals || []).join(",")})`,
       capabilities: c.matchingCapabilities,
       keywords: c.matchingKeywords,
       risk: c.risk,
@@ -1609,6 +1665,21 @@ export function synthesizeContract(prompt = "", mode = "NORMAL", uncertainties =
     requirements.push(req);
   }
   if (requirements.length === 0) {
+    const questionOnly = /[?¿]/.test(prompt) && !/\b(implement\w*|crea\w*|create|añad\w*|add|arregl\w*|fix|corrig\w*|refactor\w*|haz|ejecuta\w*|aplica\w*|apply|build|constru\w*|migra\w*|migrate)\b/i.test(prompt);
+    if (questionOnly) {
+      return {
+        requirements: [],
+        constraints: structured.constraints,
+        nonGoals: structured.nonGoals,
+        acceptance: structured.acceptance,
+        objective: structured.objective,
+        verification,
+        unknowns,
+        status: "PROPOSED",
+        rigor: mode,
+        trivial: true,
+      };
+    }
     const fallback = String(prompt || "").trim().replace(/[.!¿?]+$/, "");
     if (fallback && classifyIntentLane(prompt).lane === "TASK_NEW") {
       requirements.push(fallback[0].toUpperCase() + fallback.slice(1));

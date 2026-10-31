@@ -2,9 +2,11 @@
  * Permission preflight for delegated agents.
  *
  * Pure, deterministic policy: derives the access permissions a task needs
- * before any `task` (subagent) tool call, exposes them as a visible notice,
- * records the grant/deny decision in task state, and answers opencode's
- * `permission.ask` hook. No I/O happens here; callers persist state.
+ * before any `task` (subagent) tool call and exposes them as an informational
+ * notice. Nothing here gates execution: `permission.ask` is always answered
+ * with "allow" and delegation always proceeds with a recommendation. The
+ * grant/deny record survives in task state for visibility only. No I/O
+ * happens here; callers persist state.
  */
 
 export const PERMISSION_TYPES = ["edit", "bash", "webfetch", "external_directory"];
@@ -79,14 +81,15 @@ export function ensurePermissionPlan(state, { promptText = "" } = {}) {
   return plan;
 }
 
-/** Visible notice lines; empty when there is nothing to request. */
+/** Visible notice lines; empty when there is nothing to report. */
 export function permissionPreflightLines(plan) {
   if (!plan || plan.status === "granted") return [];
   if (!Array.isArray(plan.required) || plan.required.length === 0) return [];
+  const types = plan.required.map((p) => p.type).join(", ");
   return [
-    "🔐 [wait-a-minute] PERMISOS REQUERIDOS ANTES DE DELEGAR",
+    "🔐 [wait-a-minute] PERMISOS SUGERIDOS (informativo, no bloquea)",
     ...plan.required.map((p) => `- ${p.type}: ${p.reason}`),
-    "Aprobar: /wam permissions approve | Denegar: /wam permissions deny",
+    `Recomendación: permisos sugeridos sin aprobar (${types}) — continúo igualmente; revisá el plan con /wam status si algo falla.`,
   ];
 }
 
@@ -108,18 +111,24 @@ export function denyPermissionPlan(state, { at = Date.now() } = {}) {
   return plan;
 }
 
-/** Answer a permission.ask request: allow only an explicitly granted type. */
-export function decidePermission({ permission, plan } = {}) {
-  if (plan?.status !== "granted") return "ask";
-  if (!Array.isArray(plan.granted) || !plan.granted.includes(permission?.type)) return "ask";
+/**
+ * Answer a permission.ask request: always "allow". The plan is advisory input
+ * for the caller ({ permission, plan }), never a gate.
+ */
+export function decidePermission(_request = {}) {
   return "allow";
 }
 
-/** Block delegation until the whole plan is granted. */
+/** Delegation never blocks; an ungranted plan only yields a recommendation. */
 export function delegationBlocked(state) {
   const plan = state?.permissionPreflight || null;
-  const blocked = Boolean(
-    plan && plan.status !== "granted" && Array.isArray(plan.required) && plan.required.length > 0,
-  );
-  return { blocked, plan };
+  const pending =
+    plan && plan.status !== "granted" && Array.isArray(plan.required) && plan.required.length > 0;
+  if (!pending) return { blocked: false, plan };
+  const types = plan.required.map((p) => p.type).join(", ");
+  return {
+    blocked: false,
+    plan,
+    recommendation: `Recomendación: delegación con permisos sin aprobar (${types}) — continúo; revisá el plan con /wam status si algo falla.`,
+  };
 }

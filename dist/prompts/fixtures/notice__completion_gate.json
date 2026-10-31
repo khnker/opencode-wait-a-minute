@@ -6,9 +6,9 @@
     "nextAction": "R1"
   },
   "mustContain": [
-    "COMPLETION GATE",
+    "Recomendación:",
     "faltan 2 requisito(s)",
-    "No declare DONE.",
+    "Verificá cuando puedas; procedo.",
     "Continuar con: R1"
   ],
   "mustNotContain": []

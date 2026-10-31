@@ -16,7 +16,7 @@ const STATIC = {
   "notice.no_active_task": "[wait-a-minute] No hay tarea activa. Dime qué tarea nueva quieres — no asumo intención previa.",
   "notice.blocked_generic": "⛔ [wait-a-minute] BLOQUEADO: Tienes preguntas sin responder.",
   "notice.new_intent": "[wait-a-minute] Nueva intención detectada. Abriendo tarea nueva.",
-  "injection.delegation": "[wam delegation] Reqs pendientes → delegar en PARALELO via Task (agente: el apropiado según config del entorno). Mutación directa de archivos desde la sesión principal está BLOQUEADA — solo un subagente ejecuta write/edit. Fallback: si un dispatch Task falla (modelo/agente no disponible) → reintentar secuencial → tier más barato → inline con evidencia. Nunca abortar en silencio por fallo de delegación.",
+  "injection.delegation": "[wam delegation] Reqs pendientes → conviene delegar en PARALELO via Task (agente: el apropiado según config del entorno). La mutación directa desde la sesión principal está PERMITIDA: si Task no está disponible o falla, editá/writeá inline. Fallback: reintentar secuencial → tier más barato → inline con evidencia. Nunca abortar en silencio por fallo de delegación.",
 };
 
 for (const [id, expected] of Object.entries(STATIC)) {
@@ -84,7 +84,7 @@ test("characterization: notice.similar_task", () => {
 test("characterization: notice.completion_gate", () => {
   assert.equal(
     loadPrompt("notice.completion_gate", { count: 2, pendingList: " P", nextAction: "next" }),
-    "⛔ [wait-a-minute] COMPLETION GATE: faltan 2 requisito(s). No declare DONE. P Continuar con: next",
+    "⚠️ [wait-a-minute] Recomendación: faltan 2 requisito(s) sin evidencia. P Verificá cuando puedas; procedo. Continuar con: next",
   );
 });
 

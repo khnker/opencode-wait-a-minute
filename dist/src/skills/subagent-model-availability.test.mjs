@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert";
-import { loadModelRegistry, resolveSubagentModel, guardSubagentDispatch } from "./subagent-model-availability.js";
+import { loadModelRegistry, resolveSubagentModel, resolveSubagentTier, guardSubagentDispatch } from "./subagent-model-availability.js";
 
 test("loadModelRegistry - fails open on missing file", () => {
   const registry = loadModelRegistry({ configPath: "/non-existent" });
@@ -41,4 +41,45 @@ test("guardSubagentDispatch - blocks on depth limit", () => {
 test("guardSubagentDispatch - passes through non-task", () => {
   const res = guardSubagentDispatch("other", {}, {});
   assert.strictEqual(res.allowed, true);
+});
+
+test("resolveSubagentTier - known types map unchanged", () => {
+  assert.deepStrictEqual(resolveSubagentTier("fast"), { tier: "fast", unknown: false });
+  assert.deepStrictEqual(resolveSubagentTier("Heavy"), { tier: "heavy", unknown: false });
+  assert.deepStrictEqual(resolveSubagentTier("planner"), { tier: "medium", unknown: false });
+  assert.deepStrictEqual(resolveSubagentTier(null), { tier: "medium", unknown: false });
+});
+
+test("resolveSubagentTier - unknown type defaults to medium and is flagged", () => {
+  assert.deepStrictEqual(resolveSubagentTier("wizard"), { tier: "medium", unknown: true });
+});
+
+test("guardSubagentDispatch - unknown type stays allowed and surfaces a recommendation", () => {
+  const registry = { tiers: { medium: ["model-m"] }, activePreset: "p" };
+  const res = guardSubagentDispatch("task", { subagent_type: "wizard" }, { registry });
+  assert.strictEqual(res.allowed, true);
+  assert.strictEqual(res.unknownSubagentType, true);
+  assert.ok(res.recommendation.includes("wizard"));
+  assert.ok(res.recommendation.includes("medium"));
+});
+
+test("guardSubagentDispatch - known type carries no recommendation", () => {
+  const registry = { tiers: { fast: ["model-a"] }, activePreset: "p" };
+  const res = guardSubagentDispatch("task", { subagent_type: "fast" }, { registry });
+  assert.strictEqual(res.allowed, true);
+  assert.strictEqual(res.unknownSubagentType, undefined);
+  assert.strictEqual(res.recommendation, undefined);
+});
+
+test("guardSubagentDispatch - escalation still walks fast to medium", () => {
+  const registry = { tiers: { fast: ["model-a"], medium: ["model-m"] }, activePreset: "p" };
+  const res = guardSubagentDispatch("task", { subagent_type: "fast" }, { registry, consecutiveFailures: 2 });
+  assert.strictEqual(res.allowed, true);
+  assert.strictEqual(res.baseTier, "fast");
+  assert.strictEqual(res.effectiveTier, "medium");
+  assert.strictEqual(res.escalated, true);
+});
+
+test("guardSubagentDispatch - unknown type never throws", () => {
+  assert.doesNotThrow(() => guardSubagentDispatch("task", { subagent_type: "wizard" }, { registry: { tiers: {} } }));
 });

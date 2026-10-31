@@ -38,6 +38,7 @@ import { ADMISSION } from "./context-router.js";
 import { assembleDesignAxis } from "../design/design-integration.js";
 import { classifyDesignTask, loadDesignContext } from "./design-context.js";
 import { nextActionFrom } from "../state/next-action.js";
+import { readConfigFile } from "../config/wam-config.js";
 
 /**
  * Admission classes are sourced from Context Router.
@@ -147,6 +148,49 @@ function pruneBySection(content, maxChars, reason) {
   }
   if (out.length === 0) return content.slice(0, maxChars) + "\n...[truncado]";
   return out.join("\n\n");
+}
+
+const DEFAULT_SKILLS_MAX_CHARS = 4000;
+const SKILL_CARD_MAX_CHARS = 400;
+const SKILL_CARD_DESCRIPTION_MAX = 160;
+const SKILL_MIN_CHARS = 200;
+
+function resolveSkillSettings(projectPath) {
+  const file = readConfigFile(projectPath);
+  const skills = file.skills && typeof file.skills === "object" ? file.skills : {};
+  const fullBodies =
+    process.env.WAM_SKILLS_FULL === "1" ||
+    file.skillBaseLoad === "full" ||
+    skills.baseLoad === "full";
+  const configured = Number(
+    file.skillsMaxChars ?? file.skillMaxChars ?? skills.maxChars,
+  );
+  return {
+    fullBodies,
+    maxChars: Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_SKILLS_MAX_CHARS,
+  };
+}
+
+function renderSkillCard(id, skill, skillData, projectPath) {
+  const bundled = path.join(projectPath, "skills", id, "SKILL.md");
+  const candidates = [
+    skill.path,
+    skillData?.path,
+    bundled,
+    skillData?.source?.path,
+  ]
+    .filter(Boolean)
+    .map((p) => (path.isAbsolute(p) ? p : path.resolve(projectPath, p)));
+  const skillPath = candidates.find((p) => fs.existsSync(p)) || bundled;
+  const head = `[wam N3 skill-ref] ${id} — `;
+  const tail = `\n  load: read ${skillPath}`;
+  const room = SKILL_CARD_MAX_CHARS - head.length - tail.length;
+  if (room < 1) return `${head}${tail}`.slice(0, SKILL_CARD_MAX_CHARS);
+  const description = String(skill.description || skillData?.description || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, Math.min(SKILL_CARD_DESCRIPTION_MAX, room));
+  return `${head}${description}${tail}`;
 }
 
 /**
@@ -263,7 +307,7 @@ async function _assembleContextImpl({
   };
 
   // -- N0 Global/Policy (MANDATORY) -----------------------------------------
-  const n0Text = "[wam N0 policy] autonomy loop | soft-archive only (U1)";
+  const n0Text = "[wam N0 policy] autonomy loop | 0 friction: advisory only (U1)";
   const n0Spent = reserve("N0", n0Text, ADMISSION.MANDATORY, "global policy");
 
   // -- N2 Task (reservado, obligatorio) -------------------------------------
@@ -451,7 +495,7 @@ if (!isTrivial) {
       }
 
       const emitCapsule = (c) => {
-        const head = `[wam N3 ${c.level || "N3"} ${c.provenance}] ${c.context_id} — ${(c.purpose || "").slice(0, 100)}`;
+        const head = `[wam N3${c.level && c.level !== "N3" ? ` ${c.level}` : ""} ${c.provenance}] ${c.context_id} — ${(c.purpose || "").slice(0, 100)}`;
         const contentMax = 800;
         const truncated = (c.content || "").length > contentMax
           ? c.content.slice(0, contentMax) + `...[truncado: ver /wam ctx get ${c.context_id}]`
@@ -544,7 +588,9 @@ if (!isTrivial) {
         }
       } else {
         const skillBudget = Math.floor(flex * 0.4); // 40% del flex restante para skills
+        const skillSettings = resolveSkillSettings(projectPath);
         let skillSpent = 0;
+        let skillChars = 0;
 
         // Prioritize prompt-matched (on-demand) skills over always-on base skills so
         // a tight budget never starves the task-relevant skills. Base skills only
@@ -589,8 +635,10 @@ if (!isTrivial) {
             continue;
           }
 
+          const isBase = skill.base !== undefined ? !!skill.base : skillData.loadStrategy === "base";
+          const useCard = isBase && !skillSettings.fullBodies;
           const content = skillData.content || "";
-          if (!content.trim()) {
+          if (!useCard && !content.trim()) {
             state.state = "OMITTED";
             state.cause = "no-content";
             rationale.push(`N3: ${skill.id} sin contenido embebido`);
@@ -600,16 +648,32 @@ if (!isTrivial) {
           // D: preservar estructura Markdown del contenido (no aplanar saltos).
           // Si excede skillContentMax, priorizar secciones relevantes (heading-
           // based pruning) antes de truncar el cuerpo.
-          let finalContent = content;
+          let line;
           let truncated = false;
-          if (content.length > skillContentMax) {
-            finalContent = pruneBySection(content, skillContentMax, skill.reason || "");
-            truncated = true;
+          if (useCard) {
+            line = renderSkillCard(skill.id, skill, skillData, projectPath);
+          } else {
+            let finalContent = content;
+            if (content.length > skillContentMax) {
+              finalContent = pruneBySection(content, skillContentMax, skill.reason || "");
+              truncated = true;
+            }
+            const head = `[wam N3 skill] ${skill.id} — ${(skill.reason || "").slice(0, 100)}`;
+            line = `${head}\n${finalContent}`;
           }
 
-          const head = `[wam N3 skill] ${skill.id} — ${(skill.reason || "").slice(0, 100)}`;
-          const line = `${head}\n${finalContent}`;
-          const skillAdmission = skill.base ? ADMISSION.OPTIONAL : ADMISSION.CONDITIONAL;
+          const remaining = skillSettings.maxChars - skillChars;
+          if (line.length > remaining) {
+            if (isBase || remaining < SKILL_MIN_CHARS) {
+              state.state = "OMITTED";
+              state.cause = "skills-max-chars";
+              rationale.push(`N3: ${skill.id} omitida por límite N3 (${skillChars}/${skillSettings.maxChars} chars)`);
+              continue;
+            }
+            line = pruneBySection(line, remaining, skill.reason || "").slice(0, remaining);
+            truncated = true;
+          }
+          const skillAdmission = isBase ? ADMISSION.OPTIONAL : ADMISSION.CONDITIONAL;
           const cost = spend("N3", line, skillAdmission, `skill ${skill.id}`);
           if (cost === 0) {
             // spend() rechazó por presupuesto global; el contenido no entró al pack.
@@ -625,6 +689,7 @@ if (!isTrivial) {
           state.tokenCost = cost;
           state.truncated = truncated;
           skillSpent += cost;
+          skillChars += line.length;
           if (injectedSkills && typeof injectedSkills.add === "function") injectedSkills.add(skill.id);
           rationale.push(`N3: ${skill.id} ${state.state.toLowerCase()} (${cost} tok, reason: ${skill.reason})`);
         }

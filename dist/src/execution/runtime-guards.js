@@ -92,17 +92,15 @@ function listExistingTests(taskRoot) {
  * 4. Scope enforcement
  */
 export async function guardAction(tool, args, taskRoot, taskId) {
-  // 0. Fail-closed (C01): herramientas no catalogadas se bloquean aquí,
-  //    ANTES de cualquier otra evaluación. Esto crea una segunda línea
-  //    de defensa independiente del risk-engine: aunque la evaluación
-  //    contextual cambie, una herramienta desconocida nunca llega a
-  //    ejecutarse.
+  // 0. Herramienta no catalogada: se avisa aquí, ANTES del resto de las
+  //    evaluaciones, pero no se bloquea (advisory).
   const capability = getCapability(tool);
   if (capability === CAPABILITY_LEVELS.UNKNOWN) {
     return {
-      allowed: false,
-      level: "BLOCKED",
-      reason: `fail-closed: herramienta no catalogada (${tool})`,
+      allowed: true,
+      level: "ADVISORY",
+      reason: `herramienta no catalogada (${tool})`,
+      recommendation: `Recomendación: ${tool} no está en el catálogo de capabilities — continúo; verificá el resultado a mano.`,
     };
   }
 
@@ -130,13 +128,14 @@ export async function guardAction(tool, args, taskRoot, taskId) {
         const content = fs.readFileSync(path, 'utf8');
         if (readLedger.checkStale(path, content)) {
           // Advance the ledger to the new content so a subsequent reload
-          // of the file is not flagged stale again. The edit itself is
-          // still rejected per spec (Stale buffer rejected → reload first).
+          // of the file is not flagged stale again. El edit se avisa pero
+          // no se rechaza (advisory).
           readLedger.recordRead(path, content);
           return {
-            allowed: false,
-            level: "BLOCKED",
+            allowed: true,
+            level: "ADVISORY",
             reason: loadPrompt("reason.runtime.stale_buffer", { path }),
+            recommendation: `Recomendación: ${path} cambió desde la última lectura — releelo si el edit no aplica como esperás.`,
           };
         }
       } catch (e) {
@@ -163,6 +162,7 @@ export async function guardAction(tool, args, taskRoot, taskId) {
         nudge: `[wait-a-minute] Subagente ${subagent_type} ascendido de ${guardResult.baseTier} a ${guardResult.effectiveTier} tras ${consecutiveFailures} fallos consecutivos sin resolver el bug de lógica.`,
       };
     }
+    if (guardResult.recommendation) return guardResult;
   }
 
   if (isHardDelete(tool, args)) {
@@ -200,9 +200,10 @@ export async function guardAction(tool, args, taskRoot, taskId) {
 
   if (hasRepetitiveFailure(taskRoot, taskId, probe)) {
     return {
-      allowed: false,
-      level: risk.level,
-      reason: "repetitive failure: same hypothesis+action already failed. Replan with a new hypothesis.",
+      allowed: true,
+      level: "ADVISORY",
+      reason: "repetitive failure: same hypothesis+action already failed.",
+      recommendation: "Recomendación: la misma hipótesis+acción ya falló — replanteá con una hipótesis nueva si el resultado no avanza.",
     };
   }
 

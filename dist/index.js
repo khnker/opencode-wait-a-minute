@@ -4,9 +4,9 @@ import { startExperiment, noteSuccess, noteFailure } from "./src/execution/execu
 import { planAutoContinuation, buildAutoLoopPrompt } from "./src/execution/auto-continuation.js";
 import { migrateLegacyCognition } from "./src/cognition/cognition-store.js";
 import { handleMessage } from "./src/integration/message-handler.js";
-import { injectWamParts } from "./src/integration/part-provenance.js";
+import { injectWamParts, defaultPartId } from "./src/integration/part-provenance.js";
 import { loadWamConfig } from "./src/config/wam-config.js";
-import { ensurePermissionPlan, permissionPreflightLines, grantPermissionPlan, denyPermissionPlan, decidePermission, delegationBlocked } from "./src/policy/permission-preflight.js";
+import { ensurePermissionPlan, permissionPreflightLines, delegationBlocked } from "./src/policy/permission-preflight.js";
 import { configureLogger } from "./src/integration/logger.js";
 import { setLoggingEnabled, setDebugEnabled, registerLogicGate, wamDebug, wamLog, wamWarn, wamError } from "./src/shared/wam-log.js";
 import { evaluateCompletionGate, applyPhaseTransition, isCompletionIntent, COMPLETION_INTENT_REGEX } from "./src/integration/orchestration.js";
@@ -15,7 +15,7 @@ import { activeTaskPath, tasksDir as wamTasksDir, taskDir as wamTaskDir } from "
 
 import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, listDecisions, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
 import { purgeTasks } from "./src/persistence/retention-manager.js";
-import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, selectContextWithCqe, detectFileSearchIntent, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules, setActiveSession } from "./src/context/context.js";
+import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, selectContextWithCqe, detectFileSearchIntent, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules, setActiveSession, applyBootstrapApproval } from "./src/context/context.js";
 import { assembleContext } from "./src/context/assembly.js";
 import { injectCanonicalProjectContext } from "./src/context/canonical-project-context.js";
 import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./src/verification/verification.js";
@@ -168,14 +168,11 @@ const DEFAULT_CONFIG = {
   tierPrompts: {},
 };
 
-// opencode 1.18.25: chat.message output = { message, parts } (sin .system).
+// opencode 1.18.25+: chat.message output = { message, parts } (sin .system).
 // Cada part debe incluir un id único (formato prt_...) o el mensaje falla al guardar
 // (SchemaError: Missing key at ["part"]["id"]), bloqueando la sesión.
-function genPartId() {
-  let s = "prt_";
-  while (s.length < 16) s += Math.floor(Math.random() * 16).toString(16);
-  return s;
-}
+// El generador vive en part-provenance.js y ya no es opcional para los callers.
+const genPartId = defaultPartId;
 
 // Los avisos de WAM viajan como partes synthetic: el modelo los recibe, pero
 // OpenCode no los atribuye al usuario ni los usa como cuerpo de su mensaje.
@@ -514,7 +511,8 @@ function persistLiveContext(taskId, state, root) {
 function projectState(analysis) {
   return {
     contract: {
-      status: "PROPOSED",
+      // Informativo: nunca gatea aprobación humana (0 fricción).
+      status: "APPROVED",
       rigor: analysis.completionContract?.rigor || "NORMAL",
       requirements: analysis.completionContract?.requirements || [],
       verification: analysis.completionContract?.verification || [],
@@ -539,11 +537,7 @@ function projectState(analysis) {
 
 function applyCompletionGate(state, promptText, taskId, waitAMinute, persistTaskState, nextActionFrom, root) {
   const gate = waitAMinute.evaluateCompletionGate(state, promptText);
-  if (gate.blocked) {
-    state.phase = gate.verifying ? "VERIFYING" : "IMPLEMENTING";
-    state.nextAction = nextActionFrom(state);
-    persistTaskState(taskId, state, root);
-  } else if (gate.allDone) {
+  if (gate.allDone) {
     state.phase = "DONE";
     state.nextAction = "Tarea completa — contrato verificado";
     persistTaskState(taskId, state, root);
@@ -962,7 +956,7 @@ refresh();
       const state = getTaskState(taskId, root);
       if (!state || state.phase === "DONE") return;
       const gate = evaluateCompletionGate(state, "");
-      if (!gate.blocked) return;
+      if (!gate.advisory) return;
       if (!client?.session?.messages || !client?.session?.prompt) return;
 
       const response = await client.session.messages({
@@ -1276,13 +1270,15 @@ async function postToolExecution(input, output) {
             const taskId = sessionTasks.get(sid);
             const root = sessionWamRoots.get(sid);
             if (taskId && root) {
-              const state = await ensureWamMemory(root, taskId);
+              await ensureWamMemory(sid, "");
+              const state = getTaskState(taskId, root);
               if (state?.phase === "PROPOSED") {
                 injectCanonicalProjectContext(output, {
                   root,
                   taskId,
                   sessionID: sid,
                   messageID: output?.message?.id || input?.messageID,
+                  idFactory: genPartId,
                 });
               }
             }
@@ -1294,6 +1290,8 @@ async function postToolExecution(input, output) {
       return pending;
     },
     "permission.ask": async (input, output) => {
+      // 0 fricción: WAM nunca pregunta por permisos.
+      output.status = "allow";
       try {
         if (!cfg.permissionPreflight) return;
         const sid = input?.sessionID;
@@ -1306,10 +1304,9 @@ async function postToolExecution(input, output) {
         }
         const root = sessionWamRoots.get(mainSid) || sessionWamRoots.get(sid) || sessionRoots.get(mainSid) || sessionRoots.get(sid) || projectDirectory;
         const taskId = sessionTasks.get(mainSid) || (mainSid === sid ? sessionTasks.get(sid) : null) || readActiveTaskIdFresh(root, { sessionId: mainSid, projectRoot: root });
-        const state = taskId ? getTaskState(taskId, root) : null;
-        if (!state) return;
-        if (decidePermission({ permission: input, plan: state.permissionPreflight }) === "allow") {
-          output.status = "allow";
+        // 0 fricción: el preflight es informativo; siempre permitimos.
+        output.status = "allow";
+        if (taskId) {
           wamDebug(`[wait-a-minute] permission preflight allowed ${input?.type} for ${taskId}`);
         }
       } catch (e) {
@@ -1425,7 +1422,7 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
 
         // Governance Enforcement: block mutating tools when contract is not APPROVED.
         // This prevents user-explicit-execute bypass without proper contract approval.
-        // Defer to the Clarification Gate (ENFORCED BLOCK) when in ASKING so the
+        // Defer to the Clarification Gate (advisory) when in ASKING so the
         // user is directed to answer the blocking unknown, not approve a contract.
         // Sub-sessions (delegated workers, identified by parentID) are NEVER blocked
         // here: they execute the main session's approved plan via Task delegation,
@@ -1477,13 +1474,10 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
          const readDel = enforceReadDelegation(tool, { isSubagent, enforcementEnabled: cfg.enforcement !== false });
          if (!readDel.allowed) {
            const mode = process.env.WAM_READ_DELEGATION || "off";
-            if (mode === "warn") {
+            // 0 fricción: enforce ya no bloquea; la nudge es siempre advisory.
+            if (mode === "warn" || mode === "enforce") {
               queueToolDirective(input, readDel.directive);
-             wamLog(`[wait-a-minute] SOFT READ DELEGATION (${tool}): ${readDel.directive}`);
-            } else if (mode === "enforce") {
-              throw new WamPolicyBlock(readDel.directive, {
-                tool, reason: readDel.reason, level: "BLOCKED", source: "read-delegation",
-              });
+              wamLog(`[wait-a-minute] SOFT READ DELEGATION (${tool}): ${readDel.directive}`);
             }
          }
 
@@ -1496,11 +1490,8 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
               const disc = evaluateDiscovery(tool, input?.args || input?.parameters || output?.args || {});
               if (disc && disc.nudge) {
                 const mode = process.env.WAM_READ_DELEGATION || "warn";
-                if (mode === "enforce") {
-                  throw new WamPolicyBlock(disc.nudge, {
-                    tool, reason: "cqe-first-discovery", level: "BLOCKED", source: "discovery-classifier",
-                  });
-                } else if (mode === "warn") {
+                // 0 fricción: enforce ya no bloquea; el nudge es advisory.
+                if (mode !== "off") {
                   queueToolDirective(input, disc.nudge);
                   wamLog(`[wait-a-minute] CQE-FIRST NUDGE (${tool}): ${disc.nudge}`);
                 }
@@ -1515,10 +1506,10 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
           const plan = ensurePermissionPlan(st, { promptText: input?.description || input?.args?.description || "" });
           if (plan) { try { persistTaskState(taskId, st, taskRoot); } catch {} }
           const verdict = delegationBlocked(st);
-          if (verdict.blocked) {
-            const directive = `[wait-a-minute] PERMISSION PREFLIGHT — delegación bloqueada: aprueba los permisos antes de delegar. ${permissionPreflightLines(verdict.plan).join(" ")}`;
+          // 0 fricción: la delegación nunca se bloquea; solo se recomienda.
+          if (verdict?.recommendation) {
+            const directive = `[wait-a-minute] Recomendación — ${verdict.recommendation}${verdict.plan ? ` ${permissionPreflightLines(verdict.plan).join(" ")}` : ""}`;
             queueToolDirective(input, directive);
-            throw new WamPolicyBlock(directive, { tool, reason: "permission-preflight-pending", level: "high" });
           }
         }
 
@@ -1527,17 +1518,14 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
         // git mutante (commit/push) sigue bloqueado hasta responder la pregunta.
         if (tool === "bash" && READONLY_GIT_RE.test(bashCommandOf(input))) return;
         if (BLOCKED_TOOLS.has(tool)) {
-          if (process.env.WAM_DEBUG_TE) wamLog(`[WAM-DEBUG-TE] BLOCKING ${tool} in ASKING`);
           const u = (st.contract?.unknowns || []).find((x) => x.status === "blocking");
-          const question = u ? `${u.id}: ${u.question}` : "pregunta bloqueante pendiente";
-          const directive = `[wait-a-minute] ENFORCED BLOCK — tarea en ASKING (${question}). Herramienta ${tool} bloqueada. Responder: /wam answer ${u?.id || "U1"} <respuesta>`;
-          queueToolDirective(input, directive);
-          throw new Error(directive);
+          const question = u ? `${u.id}: ${u.question}` : "pregunta pendiente";
+          // 0 fricción: ASKING es advisory; se recomienda y se ejecuta.
+          queueToolDirective(input, `[wait-a-minute] Recomendación: fase ASKING (${question}) — confirmá el objetivo cuando puedas; procedo.`);
         }
       } catch (err) {
         // WamPolicyBlock MUST be re-thrown — never swallowed by generic catch.
         if (err?.wamPolicyBlock === true) throw err;
-        if (typeof err?.message === "string" && err.message.includes("ENFORCED BLOCK")) throw err;
       }
 
       try {
@@ -1776,12 +1764,12 @@ const sel = routeSkillsV2(prompt, {}, waitAMinute.getRegistry(), "STANDARD");
   }
 
   if (sub === "permissions") {
+    // Informativo: WAM ya no pide aprobación de permisos.
+    if (action === "approve" || action === "deny") return "0 fricción: permisos ya están permitidos; nada que aprobar.";
     const st = getTaskState(taskId, root);
     if (!st) return "Sin estado de tarea";
     const plan = ensurePermissionPlan(st, { promptText: "" });
-    if (!plan) return "Sin plan de permisos (contrato no APPROVED)";
-    if (action === "approve") { grantPermissionPlan(st); persistTaskState(taskId, st, root); return `Permisos aprobados: ${plan.granted.join(", ")}`; }
-    if (action === "deny") { denyPermissionPlan(st); persistTaskState(taskId, st, root); return "Permisos denegados: la delegación queda bloqueada."; }
+    if (!plan) return "Sin plan de permisos (informativo)";
     const lines = permissionPreflightLines(plan);
     return lines.length ? lines.join("\n") : `Permisos ya aprobados: ${(plan.granted || []).join(", ")}`;
   }
@@ -2178,7 +2166,7 @@ const waitAMinute = {
     lines.push(`Complejidad: ${result.complexity}`);
     lines.push(`Ambigüedad: ${result.ambiguity}`);
     lines.push(`\nEstrategia: ${result.strategy}`);
-    lines.push(`\n¿Listo para proceder?: ${result.ready ? "SÍ" : "NO"}`);
+    lines.push(`\nListo para proceder: ${result.ready ? "SÍ" : "NO"}`);
     lines.push(`\nConsejo: ${result.advice || ""}`);
 
     return lines.join("\n");
@@ -2241,8 +2229,9 @@ const waitAMinute = {
     if (!fresh.requirements || fresh.requirements.length === 0) {
       return fresh;
     }
-    persistTaskState(taskId, fresh, root);
-    return fresh;
+    const bootstrapped = applyBootstrapApproval(fresh, taskId, root);
+    persistTaskState(taskId, bootstrapped, root);
+    return bootstrapped;
   },
    /**
     * Completion Gate: detecta claims de fin de tarea y bloquea si hay requisitos pendientes.
@@ -2258,16 +2247,14 @@ const waitAMinute = {
     let phase;
     if (gate?.allDone) {
       phase = "DONE";
-    } else if (gate?.blocked && gate?.verifying) {
-      phase = "VERIFYING";
     } else {
       phase = state?.phase || "IMPLEMENTING";
     }
     let nextAction;
     if (gate?.allDone) {
       nextAction = "Tarea completa — contrato verificado";
-    } else if (gate?.blocked) {
-      nextAction = "Continuar con requisitos pendientes";
+    } else if (gate?.advisory) {
+      nextAction = gate.recommendation || state?.nextAction;
     } else {
       nextAction = state?.nextAction;
     }
@@ -2361,11 +2348,11 @@ const waitAMinute = {
   rejectContract: function(taskId, root) {
     const state = getTaskState(taskId, root);
     if (!state) return { ok: false, reason: "Sin estado de tarea" };
-    state.contract = { ...(state.contract || {}), status: "REJECTED" };
-    state.phase = "WAITING";
-    state.nextAction = "Revisar contrato con el usuario";
+    // Informativo: el rechazo se registra pero no bloquea ni cambia de fase.
+    state.contract = { ...(state.contract || {}), status: "APPROVED", rejectedAt: Date.now() };
+    state.nextAction = "Revisar contrato — /wam contract edit si algo no coincide";
     persistTaskState(taskId, state, root);
-    return { ok: true, status: "REJECTED", phase: state.phase };
+    return { ok: true, status: "APPROVED", phase: state.phase, advisory: true };
   },
 
   /** Edita el contrato (JSON patch), vuelve a PROPOSED. */
@@ -2569,9 +2556,9 @@ const waitAMinute = {
    *
    * @param {Object} opts
    * @param {Object} opts.analysis - Resultado de analyze()
-   * @returns {Object} - { mode: 'continue'|'validation-pending', ... }
+   * @returns {Object} - { mode: 'continue', ... } (siempre advisory)
    */
-  presentValidation: async function({ analysis, ctx, meta = {} } = {}) {
+  presentValidation: async function({ analysis, ctx, meta = {}, emit = true } = {}) {
     if (!analysis) {
       return { mode: "continue", advice: "No hay análisis previo" };
     }
@@ -2588,8 +2575,12 @@ const waitAMinute = {
     const blockingAssumptions = (analysis.completionContract?.assumptions || []).filter(
       (a) => a.classification === "DECISION_CRITICAL" && a.status !== "resolved"
     );
+    const advisoryLine =
+      contractStatus === "APPROVED" && !blockingUnknowns.length && !blockingAssumptions.length
+        ? null
+        : `Recomendación — contrato ${contractStatus} (fase ${analysis.phase || "PROPOSED"}); procedo`;
     const validationLines = [
-      `[wam] Intervención activa — contrato ${contractStatus} (fase ${analysis.phase || "PROPOSED"})`,
+      ...(advisoryLine ? [advisoryLine] : []),
       `skills activas: ${skillsLine}`,
       `requisitos: ${(analysis.completionContract?.requirements || []).join("; ") || "—"}`,
       ...(blockingUnknowns.length
@@ -2600,10 +2591,10 @@ const waitAMinute = {
         : []),
       "",
       `Plan: ${analysis.nextAction || "Ejecutar lo pedido con soporte de skills WAM."}`,
-      "/wam contract approve → aprobar | /wam compress → resumen terse",
+      "/wam contract edit → ajustar contrato | /wam compress → resumen terse",
     ];
 
-if (ctx) {
+if (emit !== false && ctx) {
       const text = validationLines.filter((l) => l !== false).join("\n") + "\n";
       const emitMeta = {
         ...(meta.sessionID ? { sessionID: meta.sessionID } : {}),
@@ -2626,13 +2617,13 @@ if (ctx) {
     }
 
     return {
-      mode: mode === "FAST" ? "continue" : "validation-pending",
+      mode: "continue",
       summary,
       validationLines,
       advice:
         mode === "FAST"
-          ? "Tarea trivial - análisis mostrado, proceder directamente"
-          : "Proceder con la implementación",
+          ? "Tarea trivial — procedo; revisá el resumen si algo no coincide"
+          : "Procedo; revisá el resumen si algo no coincide",
     };
   },
 };

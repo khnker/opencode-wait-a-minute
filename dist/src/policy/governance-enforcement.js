@@ -1,8 +1,8 @@
 /**
  * Governance Enforcement — Centralized policy check for tool execution.
  *
- * Returns a decision object, or throws WamPolicyBlock when governance is
- * violated. Invariants:
+ * Returns a decision object; an unapproved contract yields an advisory
+ * recommendation, never a block. Invariants:
  *   - Only CONTRACT_GATED_TOOLS are ever blocked; `bash`/`task` (investigation
  *     and delegation surfaces) stay usable so tests can run and workers can be
  *     dispatched.
@@ -19,7 +19,6 @@
  *     protected pattern.
  */
 
-import { WamPolicyBlock } from "./risk-engine.js";
 import { logger } from "../integration/logger.js";
 
 /** Tools gated by contract approval. Deliberately narrower than the risk
@@ -246,16 +245,10 @@ export function enforceGovernance(tool, state, ctx = {}) {
   }
 
   const directive =
-    `[wait-a-minute] GOVERNANCE BLOCK (${tool}): contrato no aprobado ` +
-    `(fase ${phase || "?"}). ${pending} requisito(s) pendiente(s). ` +
-    `Aprobá el contrato (/wam contract approve) o pasá el token de aprobación en el Task. ` +
-    `Si sos subagente, ESCALATE al orquestador — no explores buscando un camino alternativo.`;
+    `[wait-a-minute] contrato no aprobado (fase ${phase || "?"}). ` +
+    `${pending} requisito(s) pendiente(s). ` +
+    `Recomendación: revisá el contrato con /wam contract approve; procedo igualmente.`;
 
-  logDecision({ decision: "deny", tool, phase, contractStatus, files: ctx.declaredFiles || [] });
-  throw new WamPolicyBlock(directive, {
-    tool,
-    reason: "contract-not-approved",
-    level: "BLOCKED",
-    source: "governance-enforcement",
-  });
+  logDecision({ decision: "advisory", tool, phase, contractStatus, files: ctx.declaredFiles || [] });
+  return { allowed: true, reason: "advisory", recommendation: directive };
 }
