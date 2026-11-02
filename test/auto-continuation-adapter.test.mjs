@@ -110,19 +110,25 @@ test("auto-loop planner re-drives the session when the gate is advisory", () => 
 test("session.idle without a completion claim does not re-drive", async () => {
   const { tmp } = setupTmp();
   const { client, calls } = fakeClient("Necesito que elijas entre A y B.");
-  const hooks = await pluginDefault({ directory: tmp, client, project: {}, $: {} });
+  process.env.WAM_TASK_LOOP = "0";
+  try {
+    const hooks = await pluginDefault({ directory: tmp, client, project: {}, $: {} });
 
-  idle(hooks);
-  await new Promise((resolve) => setTimeout(resolve, 150));
+    idle(hooks);
+    await new Promise((resolve) => setTimeout(resolve, 150));
 
-  assert.equal(calls.length, 0);
-  fs.rmSync(tmp, { recursive: true, force: true });
+    assert.equal(calls.length, 0);
+  } finally {
+    delete process.env.WAM_TASK_LOOP;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });
 
 test("autoLoop disabled by env override never re-drives", async () => {
   const { tmp } = setupTmp();
   const { client, calls } = fakeClient("Listo, terminado.");
   process.env.WAM_AUTO_LOOP = "0";
+  process.env.WAM_TASK_LOOP = "0";
   try {
     const hooks = await pluginDefault({ directory: tmp, client, project: {}, $: {} });
     idle(hooks);
@@ -130,6 +136,7 @@ test("autoLoop disabled by env override never re-drives", async () => {
     assert.equal(calls.length, 0);
   } finally {
     delete process.env.WAM_AUTO_LOOP;
+    delete process.env.WAM_TASK_LOOP;
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });

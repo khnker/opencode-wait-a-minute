@@ -2,6 +2,9 @@ import { analyze, getTaskState, persistTaskState, routeSkillsV2, loadSkillOnDema
 import { createDialogueLlmFromEnv } from "./src/dialogue/llm-observer.js";
 import { startExperiment, noteSuccess, noteFailure } from "./src/execution/execution-engine.js";
 import { planAutoContinuation, buildAutoLoopPrompt } from "./src/execution/auto-continuation.js";
+import { driveTaskLoop } from "./src/adapters/opencode-v1/session-driver.js";
+import { runConfiguredTaskAgentStep } from "./src/execution/task-agent-run.js";
+import { createOpenCodeV1AgentAdapter } from "./src/agents/invocation-adapter.js";
 import { migrateLegacyCognition } from "./src/cognition/cognition-store.js";
 import { handleMessage } from "./src/integration/message-handler.js";
 import { injectWamParts, defaultPartId } from "./src/integration/part-provenance.js";
@@ -11,7 +14,7 @@ import { configureLogger } from "./src/integration/logger.js";
 import { setLoggingEnabled, setDebugEnabled, registerLogicGate, wamDebug, wamLog, wamWarn, wamError } from "./src/shared/wam-log.js";
 import { evaluateCompletionGate, applyPhaseTransition, isCompletionIntent, COMPLETION_INTENT_REGEX } from "./src/integration/orchestration.js";
 import { loadPrompt } from "./src/prompts/loader.js";
-import { activeTaskPath, tasksDir as wamTasksDir, taskDir as wamTaskDir } from "./src/shared/wam-paths.js";
+import { activeTaskPath, sessionTaskPath, tasksDir as wamTasksDir, taskDir as wamTaskDir } from "./src/shared/wam-paths.js";
 
 import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, listDecisions, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
 import { purgeTasks } from "./src/persistence/retention-manager.js";
@@ -282,6 +285,50 @@ function readActiveTaskRecord(root) {
 
 
 
+function readSessionTaskRecord(root, sessionId) {
+  if (!sessionId) return null;
+  try {
+    const raw = fs.readFileSync(sessionTaskPath(root, sessionId), "utf-8").trim();
+    if (!raw) return null;
+    const rec = JSON.parse(raw);
+    if (rec && rec.id && rec.sessionId === sessionId) return rec;
+  } catch {}
+  return null;
+}
+
+function writeSessionTaskId(id, root, sessionId) {
+  if (!sessionId) return;
+  const payload = {
+    id,
+    sessionId,
+    projectRoot: root || process.cwd(),
+    ts: Date.now(),
+  };
+  fs.mkdirSync(path.dirname(sessionTaskPath(root, sessionId)), { recursive: true });
+  fs.writeFileSync(sessionTaskPath(root, sessionId), JSON.stringify(payload));
+}
+
+function readSessionOwnedTaskId(root, sessionId) {
+  if (!sessionId) return null;
+  const suffix = `-sess-${sessionId.slice(-8)}`;
+  const exact = `ses-${sessionId}`;
+  let best = null;
+  try {
+    for (const entry of fs.readdirSync(wamTasksDir(root), { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name !== exact && !entry.name.endsWith(suffix)) continue;
+      const statePath = path.join(wamTaskDir(root, entry.name), "task.json");
+      try {
+        const mtimeMs = fs.statSync(statePath).mtimeMs;
+        if (!best || mtimeMs > best.mtimeMs) best = { id: entry.name, mtimeMs };
+      } catch {}
+    }
+  } catch {
+    return null;
+  }
+  return best?.id || null;
+}
+
 function writeActiveTaskId(id, root, options = {}) {
   // Ownership: include sessionId + projectRoot + ts for session isolation.
   // Legacy format {id,ts} remains readable; new format adds ownership fields.
@@ -294,6 +341,7 @@ function writeActiveTaskId(id, root, options = {}) {
   try {
     fs.mkdirSync(path.dirname(ACTIVE_FILE(root)), { recursive: true });
     fs.writeFileSync(ACTIVE_FILE(root), JSON.stringify(payload));
+    if (options.sessionId) writeSessionTaskId(id, root, options.sessionId);
   } catch (err) {
     // Critical write: surface error to caller for handling — never silent
     wamError(`[WAM] writeActiveTaskId failed for ${id} at ${root}:`, err.message);
@@ -377,19 +425,27 @@ const GENERIC_SLUGS = new Set([
 ]);
 
 function readActiveTaskIdFresh(root, options = {}) {
+  const sessionId = options.sessionId;
+  // A session's own binding survives another session overwriting the global
+  // pointer (e.g. a delegated subagent) and survives process restarts.
+  if (sessionId) {
+    const scoped = readSessionTaskRecord(root, sessionId);
+    if (scoped && (!options.projectRoot || !scoped.projectRoot || scoped.projectRoot === root)) return scoped.id;
+    const owned = readSessionOwnedTaskId(root, sessionId);
+    if (owned) return owned;
+  }
   const rec = readActiveTaskRecord(root);
   if (!rec) return null;
   // Si el registro tiene sessionId y el caller pasa sessionId, deben coincidir estrictamente.
   // Si pertenecen a sesiones distintas, nunca se adopta (evita que sesiones nuevas hereden tareas previas por TTL).
-  if (options.sessionId && rec.sessionId) {
-    if (rec.sessionId !== options.sessionId) return null;
+  if (sessionId && rec.sessionId) {
+    if (rec.sessionId !== sessionId) return null;
     if (options.projectRoot && rec.projectRoot && rec.projectRoot !== root) return null;
     return rec.id;
   }
   const ttlMs = options.ttlMs || 60000;
   if (!rec.ts) return null;
   if (Date.now() - rec.ts > ttlMs) return null;
-  if (options.sessionId && rec.sessionId && rec.sessionId !== options.sessionId) return null;
   if (options.projectRoot && rec.projectRoot && rec.projectRoot !== root) return null;
   return rec.id;
 }
@@ -739,7 +795,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
   configureLogger({ enabled: wamConfig.logging });
   setLoggingEnabled(wamConfig.logging);
   setDebugEnabled(wamConfig.debug);
-  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement, debug: wamConfig.debug, autoLoop: wamConfig.autoLoop, permissionPreflight: wamConfig.permissionPreflight, contextProjection: wamConfig.contextProjection };
+  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement, debug: wamConfig.debug, autoLoop: wamConfig.autoLoop, permissionPreflight: wamConfig.permissionPreflight, contextProjection: wamConfig.contextProjection, taskLoop: wamConfig.taskLoop };
   // Audit which WAM logic gates are loaded so WAM_DEBUG=1 output is self-describing.
   registerLogicGate("skills", { loaded: wamConfig.skills, source: "wam-config", note: "skill discovery/routing/injection" });
   registerLogicGate("logging", { loaded: wamConfig.logging, source: "wam-config", note: "file + console log emission" });
@@ -778,6 +834,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
   const sessionAutoCompact = new Map(); // sessionID → { at, total, armed }
   const sessionAutoCompactInFlight = new Set(); // sessionIDs with a summarize call in flight
   const autoContinueInFlight = new Set(); // sessionID → auto-loop prompt en vuelo
+  const agentRunInFlight = new Set(); // taskId → agent pass en vuelo
   const client = pluginInput?.client;
 
   try {
@@ -941,6 +998,46 @@ refresh();
     return root;
   };
 
+  async function maybeTaskLoop(sessionID) {
+    if (!sessionID || !cfg.taskLoop?.enabled) return;
+    if (bypassed || sessionBypasses.has(sessionID)) return;
+    if (autoContinueInFlight.has(sessionID)) return;
+    if (sessionParents.get(sessionID)) return;
+    const root = sessionWamRoots.get(sessionID) || sessionRoots.get(sessionID) || projectDirectory;
+    const taskId = sessionTasks.get(sessionID) || readActiveTaskIdFresh(root, { sessionId: sessionID, projectRoot: root });
+    if (!taskId) return;
+
+    let agent = null;
+    const agentConfig = cfg.taskLoop.agents;
+    if (agentConfig?.enabled) {
+      if (agentRunInFlight.has(taskId)) return;
+      agentRunInFlight.add(taskId);
+      try {
+        const task = getTaskState(taskId, root);
+        if (task) {
+          const adapter = createOpenCodeV1AgentAdapter({
+            client,
+            directory: root,
+            parentSessionID: sessionID,
+          });
+          const step = await runConfiguredTaskAgentStep({
+            task,
+            adapter,
+            config: agentConfig,
+            persist: (updated) => persistTaskState(taskId, updated, root),
+          });
+          agent = step ? step.outcome : (task.agentRun || null);
+        }
+      } catch (e) {
+        wamWarn(`[wait-a-minute] agent task step failed for ${taskId}:`, e?.message);
+      } finally {
+        agentRunInFlight.delete(taskId);
+      }
+    }
+
+    driveTaskLoop({ sessionId: sessionID, projectRoot: root, taskId, client, agent, config: cfg.taskLoop, qualityConfig: cfg.qualityContracts });
+  }
+
   // Automatic post-DONE loop: when the assistant claims completion and the
   // gate still has pending work, send the validation back into the session
   // instead of waiting for the user to type "Listo, continúa".
@@ -997,6 +1094,7 @@ refresh();
       }))
         .catch((e) => wamDebug("[wait-a-minute] auto-loop prompt failed:", e?.message))
         .finally(() => autoContinueInFlight.delete(sessionID));
+      return true;
     } catch (e) {
       wamDebug("[wait-a-minute] auto-loop error:", e?.message);
     }
@@ -1143,7 +1241,11 @@ async function postToolExecution(input, output) {
       try {
         const props = event?.properties || {};
         if (event?.type === "session.idle") {
-          void maybeAutoContinue(props.sessionID);
+          void maybeAutoContinue(props.sessionID)
+            .then((acted) => {
+              if (!acted) void maybeTaskLoop(props.sessionID).catch((e) => wamDebug("[wait-a-minute] task loop error:", e?.message));
+            })
+            .catch((e) => wamDebug("[wait-a-minute] idle dispatch error:", e?.message));
           return;
         }
         if (event?.type === "message.updated") {
@@ -1787,7 +1889,7 @@ const sel = routeSkillsV2(prompt, {}, waitAMinute.getRegistry(), "STANDARD");
   }
 
   if (sub === "resume") {
-    return JSON.stringify(waitAMinute.resumeTask(action || taskId, root));
+    return JSON.stringify(waitAMinute.resumeTask(action || taskId, root, sessionID));
   }
 
   if (sub === "strategy") {
@@ -1902,7 +2004,7 @@ const sel = routeSkillsV2(prompt, {}, waitAMinute.getRegistry(), "STANDARD");
     if (action === "switch") {
       const id = rest.join(" ");
       if (!id) return "Uso: /wam task switch <taskId>";
-      writeActiveTaskId(id);
+      writeActiveTaskId(id, root, { sessionId: sessionID, projectRoot: root });
       const st = getTaskState(id);
       return st
         ? `Tarea activa: ${id} [${st.phase}] — ${st.nextAction || ""}`
@@ -2262,11 +2364,11 @@ const waitAMinute = {
   },
 
   /** Aprueba el contrato: PROPOSED → APPROVED, fase → IMPLEMENTING. */
-  resumeTask: function(taskId, root) {
+  resumeTask: function(taskId, root, sessionId = null) {
     const state = getTaskState(taskId, root);
     if (!state) return { ok: false, reason: "Sin estado de tarea para: " + taskId };
     if (state.phase === "DONE") return { ok: false, reason: "Tarea DONE — no se reabre automáticamente. Crea una nueva." };
-    if (!String(taskId).startsWith("ses-")) writeActiveTaskId(taskId, root);
+    if (!String(taskId).startsWith("ses-")) writeActiveTaskId(taskId, root, { sessionId, projectRoot: root });
     try {
       updateLiveContext(taskId, state, root);
     } catch {}
@@ -2637,5 +2739,6 @@ WaitAMinutePlugin.slugifyTaskPrompt = slugifyTaskPrompt;
 WaitAMinutePlugin.effectiveTaskId = effectiveTaskId;
 WaitAMinutePlugin.isContinuationPrompt = isContinuationPrompt;
 WaitAMinutePlugin.writeActiveTaskId = writeActiveTaskId;
+WaitAMinutePlugin.readActiveTaskIdFresh = readActiveTaskIdFresh;
 
 export default WaitAMinutePlugin;

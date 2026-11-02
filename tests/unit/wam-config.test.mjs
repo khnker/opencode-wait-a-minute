@@ -16,6 +16,9 @@ const ENV_KEYS = [
   "WAM_AUTO_LOOP", "WAM_DISABLE_AUTO_LOOP",
   "WAM_PERMISSION_PREFLIGHT", "WAM_DISABLE_PERMISSION_PREFLIGHT",
   "WAM_CONTEXT_PROJECTION",
+  "WAM_TASK_LOOP", "WAM_TASK_LOOP_MAX_ITERATIONS", "WAM_TASK_LOOP_MAX_NO_PROGRESS",
+  "WAM_TASK_LOOP_AGENTS", "WAM_AGENT_MAX_REVISIONS", "WAM_AGENT_MAX_REPLANS",
+  "WAM_AGENT_MAX_HISTORY",
 ];
 let saved = {};
 
@@ -83,7 +86,7 @@ test("WAM_GOVERNANCE=off / WAM_BYPASS disable enforcement", () => {
 
 test("config file is honored", () => {
   const cfg = loadWamConfig(tmpProject({ skills: false, logging: false, enforcement: false }));
-  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false, debug: true, autoLoop: true, permissionPreflight: true, contextProjection: "active" });
+  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false, debug: true, autoLoop: true, permissionPreflight: true, contextProjection: "active", taskLoop: { enabled: true, maxIterations: 10, maxNoProgress: 3, agents: { enabled: false, maxRevisionCycles: 2, maxReplanCycles: 1, maxHistory: 5 } }, qualityContracts: { enabled: false } });
 });
 
 test("contextProjection defaults to active and honors env/file overrides", () => {
@@ -190,6 +193,62 @@ test("autoLoop defaults to true and honors file/env overrides", () => {
   delete process.env.WAM_AUTO_LOOP;
   process.env.WAM_DISABLE_AUTO_LOOP = "1";
   assert.equal(loadWamConfig(tmpProject()).autoLoop, false);
+});
+
+test("taskLoop defaults to enabled and honors file/env overrides", () => {
+  assert.equal(loadWamConfig(tmpProject()).taskLoop.enabled, true);
+  assert.equal(loadWamConfig(tmpProject({ taskLoop: { enabled: false } })).taskLoop.enabled, false);
+  process.env.WAM_TASK_LOOP = "0";
+  assert.equal(loadWamConfig(tmpProject()).taskLoop.enabled, false);
+  delete process.env.WAM_TASK_LOOP;
+  assert.equal(loadWamConfig(tmpProject()).taskLoop.maxIterations, 10);
+  assert.equal(loadWamConfig(tmpProject({ taskLoop: { maxIterations: 5 } })).taskLoop.maxIterations, 5);
+  process.env.WAM_TASK_LOOP_MAX_ITERATIONS = "7";
+  assert.equal(loadWamConfig(tmpProject()).taskLoop.maxIterations, 7);
+  delete process.env.WAM_TASK_LOOP_MAX_ITERATIONS;
+});
+
+test("task loop agents are opt-in and honor file/env overrides", () => {
+  assert.deepEqual(loadWamConfig(tmpProject()).taskLoop.agents, {
+    enabled: false,
+    maxRevisionCycles: 2,
+    maxReplanCycles: 1,
+    maxHistory: 5,
+  });
+  assert.equal(
+    loadWamConfig(tmpProject({ taskLoop: { agents: { enabled: true } } })).taskLoop.agents.enabled,
+    true,
+  );
+  assert.equal(
+    loadWamConfig(tmpProject({ taskLoop: { agents: { enabled: true } } })).taskLoop.agents.maxRevisionCycles,
+    2,
+  );
+  assert.equal(
+    loadWamConfig(tmpProject({ taskLoop: { agents: { maxRevisionCycles: 0 } } })).taskLoop.agents.maxRevisionCycles,
+    0,
+  );
+
+  process.env.WAM_TASK_LOOP_AGENTS = "1";
+  process.env.WAM_AGENT_MAX_REVISIONS = "0";
+  process.env.WAM_AGENT_MAX_REPLANS = "3";
+  process.env.WAM_AGENT_MAX_HISTORY = "1";
+  const cfg = loadWamConfig(tmpProject({ taskLoop: { agents: { enabled: false } } }));
+  assert.deepEqual(cfg.taskLoop.agents, {
+    enabled: true,
+    maxRevisionCycles: 0,
+    maxReplanCycles: 3,
+    maxHistory: 1,
+  });
+});
+
+test("qualityContracts default to disabled and honor file/env overrides", () => {
+  assert.equal(loadWamConfig(tmpProject()).qualityContracts.enabled, false);
+  assert.equal(loadWamConfig(tmpProject({ qualityContracts: { enabled: true } })).qualityContracts.enabled, true);
+  process.env.WAM_QUALITY_CONTRACTS = "1";
+  assert.equal(loadWamConfig(tmpProject()).qualityContracts.enabled, true);
+  process.env.WAM_QUALITY_CONTRACTS = "0";
+  assert.equal(loadWamConfig(tmpProject({ qualityContracts: { enabled: true } })).qualityContracts.enabled, false);
+  delete process.env.WAM_QUALITY_CONTRACTS;
 });
 
 test("permissionPreflight defaults to true and honors file/env overrides", () => {

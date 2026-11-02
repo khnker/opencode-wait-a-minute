@@ -132,10 +132,21 @@ export function canTransitionPhase(from, to) {
  * PURE: toma state + promptText, retorna gate result sin side effects.
  * @param {Object} state - Estado de la tarea
  * @param {string} promptText - Texto del prompt del usuario
+ * @param {{ quality?: Object }} [options] - Quality contract evaluation, when enabled
  * @returns {{ blocked: boolean, allDone?: boolean, verifying?: boolean, pending?: string[], autoApprove?: boolean }}
  */
-export function evaluateCompletionGate(state, promptText) {
+export function evaluateCompletionGate(state, promptText, options = {}) {
   const gate = evaluateCompletionGateStrict(state, promptText);
+  const quality = options?.quality;
+  if (quality && quality.enabled !== false && quality.sufficient === false) {
+    return {
+      ...gate,
+      blocked: false,
+      advisory: true,
+      ok: false,
+      pending: [...(gate.pending || []), ...(Array.isArray(quality.reasons) ? quality.reasons : [])],
+    };
+  }
   if (!gate.blocked) return gate;
   return {
     ...gate,

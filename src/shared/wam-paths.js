@@ -28,3 +28,12 @@ export function activeTaskPath(root) {
   if (file) return path.resolve(file);
   return path.join(wamStateDir(root), "active-task");
 }
+
+export function sessionTasksDir(root) {
+  return path.join(wamStateDir(root), "session-tasks");
+}
+
+export function sessionTaskPath(root, sessionId) {
+  const safe = String(sessionId).replace(/[^A-Za-z0-9_-]/g, "_");
+  return path.join(sessionTasksDir(root), `${safe}.json`);
+}

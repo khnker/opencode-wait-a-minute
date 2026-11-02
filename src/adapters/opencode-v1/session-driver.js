@@ -1,0 +1,148 @@
+/** Host adapter — drives the pure task loop and persists before prompting. */
+import { decideNextAction, buildTaskLoopPrompt, TASK_LOOP_DECISIONS } from "../../execution/task-loop.js";
+import { migrateLegacyPhase } from "../../execution/execution-state.js";
+import { evaluateCompletionGate } from "../../integration/orchestration.js";
+import { getTaskState } from "../../skills/engine.js";
+import { collectTaskEvidence, evaluateEvidenceSufficiency, resolveQualityContract } from "../../quality/task-quality-contract.js";
+import { normalizeSessionEvent } from "./event-normalizer.js";
+import {
+  createLoopState,
+  loadLoopState,
+  applyLoopDecision,
+  recordLoopDecision,
+  withLoopLock,
+} from "../../state/loop-state.js";
+
+export const DEFAULT_TASK_LOOP_CONFIG = Object.freeze({
+  enabled: false,
+  maxIterations: 10,
+  maxNoProgress: 3,
+});
+
+const inFlight = new Set();
+const ACTIONABLE = new Set(["CONTINUE", "REPLAN", "VERIFY"]);
+
+export function buildLoopPrompt(result) {
+  return buildTaskLoopPrompt(result);
+}
+
+export function driveTaskLoop({
+  event = null,
+  sessionId = null,
+  projectRoot,
+  taskId,
+  turnId = null,
+  client = null,
+  config = DEFAULT_TASK_LOOP_CONFIG,
+  qualityConfig = null,
+  agent = null,
+  now = Date.now(),
+  deps = {},
+} = {}) {
+  const normalized = event ? normalizeSessionEvent(event) : null;
+  if (event && !normalized) return { prompted: false, decision: null, reason: "not-session-idle" };
+
+  const sid = sessionId || normalized?.sessionId || null;
+  if (!sid || !taskId || !projectRoot) return { prompted: false, decision: null, reason: "incomplete-identity" };
+  if (!config?.enabled) return { prompted: false, decision: null, reason: "disabled" };
+  if (inFlight.has(sid)) return { prompted: false, decision: null, reason: "in-flight" };
+
+  const loadTask = deps.loadTask || getTaskState;
+  const evaluateGate = deps.evaluateGate || evaluateCompletionGate;
+  const decide = deps.decide || decideNextAction;
+  const loadLoop = deps.loadLoop || loadLoopState;
+  const record = deps.record || recordLoopDecision;
+
+  try {
+    return withLoopLock(taskId, projectRoot, () => {
+      const task = loadTask(taskId, projectRoot);
+      if (!task) return { prompted: false, decision: null, reason: "no-task" };
+
+      const loaded = loadLoop(taskId, projectRoot);
+      const loop = loaded?.state || createLoopState({
+        taskId,
+        sessionId: sid,
+        maxIterations: config.maxIterations,
+        maxNoProgress: config.maxNoProgress,
+        now,
+      });
+
+      if (turnId && loop.lastTurnId === turnId) {
+        return { prompted: false, decision: null, reason: "duplicate-turn", state: loop };
+      }
+
+      let quality = null;
+      if (qualityConfig?.enabled === true) {
+        const resolved = resolveQualityContract(task);
+        const evaluation = evaluateEvidenceSufficiency(resolved, collectTaskEvidence(task), { now });
+        quality = {
+          enabled: true,
+          kind: resolved.kind,
+          sufficient: evaluation.sufficient,
+          score: evaluation.score,
+          missing: evaluation.missing,
+          stale: evaluation.stale,
+          contradictions: evaluation.contradictions,
+          reasons: evaluation.reasons,
+        };
+      }
+
+      const gate = evaluateGate(task, "", quality ? { quality } : {}) || {};
+      const pending = Array.isArray(gate.pending) ? gate.pending : [];
+      const taskState = task.state || migrateLegacyPhase(task.phase) || "INITIALIZING";
+      const reqs = Array.isArray(task.requirements) ? task.requirements : [];
+      const verified = reqs.filter((r) => r.status === "verified" || r.status === "done").length;
+      const fingerprint = `${taskState}:${verified}/${reqs.length}:${pending.length}`;
+
+      const progress = {
+        advanced: loop.lastProgressFingerprint !== null && fingerprint !== loop.lastProgressFingerprint,
+        regressed: deps.regressed === true,
+        repeatedRejectedHypothesis: deps.repeatedRejectedHypothesis === true,
+        fingerprint,
+      };
+      const authorization = {
+        pendingAuth: task.pendingAuthorization || null,
+        denied: task.pendingAuthorization?.status === "denied",
+        contractApproved: task.contract?.status === "APPROVED" ? true : (task.contract?.status ? false : undefined),
+      };
+      const budget = {
+        exhausted: (loop.iteration || 0) >= (loop.maxIterations ?? config.maxIterations),
+      };
+
+      const result = decide({ task, loop, progress, completionGate: gate, authorization, budget, quality: quality || {}, agent });
+      if (!result?.decision || !TASK_LOOP_DECISIONS.includes(result.decision)) {
+        throw new Error("session-driver: invalid loop decision");
+      }
+
+      const nextState = applyLoopDecision(loop, result, { turnId: turnId ?? loop.lastTurnId, now });
+      const saved = record(taskId, projectRoot, nextState, result, {
+        eventId: `${nextState.runId}:${nextState.sequence + 1}`,
+        turnId,
+        now,
+        quality,
+      });
+
+      const actionable = ACTIONABLE.has(result.decision);
+      if (!actionable || typeof client?.session?.prompt !== "function") {
+        return { prompted: false, decision: result.decision, reason: result.reason, state: saved.state };
+      }
+
+      inFlight.add(sid);
+      try {
+        const call = client.session.prompt({
+          sessionID: sid,
+          path: { id: sid },
+          query: { directory: projectRoot },
+          body: buildLoopPrompt(result),
+        });
+        Promise.resolve(call).catch(() => {}).finally(() => inFlight.delete(sid));
+      } catch (err) {
+        inFlight.delete(sid);
+        throw err;
+      }
+      return { prompted: true, decision: result.decision, reason: result.reason, state: saved.state };
+    });
+  } catch (error) {
+    return { prompted: false, decision: null, reason: "error", error };
+  }
+}

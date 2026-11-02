@@ -66,3 +66,20 @@ test("non-completion prompts still evaluate real state", () => {
     "evalúa el estado real aunque el prompt no pida completar"
   );
 });
+
+test("insufficient quality evidence marks the gate incomplete without blocking", () => {
+  const gate = evaluateCompletionGate(baseState, "done", {
+    quality: { enabled: true, sufficient: false, reasons: ["missing:r1:missing-evidence:TEST_RESULT"] },
+  });
+  assert.equal(gate.blocked, false);
+  assert.equal(gate.ok, false);
+  assert.ok(gate.pending.includes("missing:r1:missing-evidence:TEST_RESULT"));
+});
+
+test("sufficient quality evidence leaves the gate result unchanged", () => {
+  const gate = evaluateCompletionGate(baseState, "done", {
+    quality: { enabled: true, sufficient: true, reasons: [] },
+  });
+  assert.equal(gate.ok, undefined);
+  assert.equal(gate.blocked, false);
+});

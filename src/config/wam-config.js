@@ -13,6 +13,8 @@
  *   - debug:       emit structured WAM-DEBUG traces for auditing logic   (default false)
  *   - autoLoop:    auto-continue after a rejected post-DONE review       (default true)
  *   - permissionPreflight: request access permissions before delegating  (default true)
+ *   - taskLoop:    drive the execution loop after session.idle           (default enabled)
+ *   - qualityContracts: enforce task-specific evidence requirements      (default disabled)
  *
  * Env overrides:
  *   - skills:      WAM_SKILLS=<bool>       | WAM_DISABLE_SKILLS=1
@@ -21,6 +23,8 @@
  *   - debug:       WAM_DEBUG=1 | WAM_DEBUG=true | WAM_LOG_LEVEL=debug | WAM_DISABLE_DEBUG=1
  *   - autoLoop:    WAM_AUTO_LOOP=<bool> | WAM_DISABLE_AUTO_LOOP=1
  *   - permissionPreflight: WAM_PERMISSION_PREFLIGHT=<bool> | WAM_DISABLE_PERMISSION_PREFLIGHT=1
+ *   - task loop agents: WAM_TASK_LOOP_AGENTS=1, WAM_AGENT_MAX_REVISIONS=<int>,
+ *     WAM_AGENT_MAX_REPLANS=<int>, WAM_AGENT_MAX_HISTORY=<int>
  *
  * Config file path override: WAM_CONFIG=<absolute-path-to-config.json>
  *
@@ -38,6 +42,18 @@ export const DEFAULT_WAM_CONFIG = Object.freeze({
   autoLoop: true,
   permissionPreflight: true,
   contextProjection: "active",
+  taskLoop: Object.freeze({
+    enabled: true,
+    maxIterations: 10,
+    maxNoProgress: 3,
+    agents: Object.freeze({
+      enabled: false,
+      maxRevisionCycles: 2,
+      maxReplanCycles: 1,
+      maxHistory: 5,
+    }),
+  }),
+  qualityContracts: Object.freeze({ enabled: false }),
 });
 
 const TRUE_VALUES = new Set(["1", "true", "on", "yes", "enabled", "enable"]);
@@ -59,6 +75,18 @@ function firstDefined(...values) {
 
 function invert(value) {
   return value === undefined ? undefined : !value;
+}
+
+function parsePositiveInt(value) {
+  if (value === undefined || value === null || value === "") return undefined;
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
+function parseNonNegativeInt(value) {
+  if (value === undefined || value === null || value === "") return undefined;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 ? n : undefined;
 }
 
 function governanceEnvOverride() {
@@ -145,6 +173,11 @@ export function loadWamConfig(baseDir = process.cwd()) {
     DEFAULT_WAM_CONFIG.permissionPreflight,
   );
 
+  const fileTaskLoop = file.taskLoop && typeof file.taskLoop === "object" ? file.taskLoop : {};
+  const fileTaskLoopAgents =
+    fileTaskLoop.agents && typeof fileTaskLoop.agents === "object" ? fileTaskLoop.agents : {};
+  const fileQualityContracts = file.qualityContracts && typeof file.qualityContracts === "object" ? file.qualityContracts : {};
+
   return {
     skills,
     logging,
@@ -157,5 +190,51 @@ export function loadWamConfig(baseDir = process.cwd()) {
       typeof file.contextProjection === "string" ? file.contextProjection : undefined,
       DEFAULT_WAM_CONFIG.contextProjection,
     ),
+    taskLoop: {
+      enabled: firstDefined(
+        parseBoolean(process.env.WAM_TASK_LOOP),
+        parseBoolean(fileTaskLoop.enabled),
+        DEFAULT_WAM_CONFIG.taskLoop.enabled,
+      ),
+      maxIterations: firstDefined(
+        parsePositiveInt(process.env.WAM_TASK_LOOP_MAX_ITERATIONS),
+        parsePositiveInt(fileTaskLoop.maxIterations),
+        DEFAULT_WAM_CONFIG.taskLoop.maxIterations,
+      ),
+      maxNoProgress: firstDefined(
+        parsePositiveInt(process.env.WAM_TASK_LOOP_MAX_NO_PROGRESS),
+        parsePositiveInt(fileTaskLoop.maxNoProgress),
+        DEFAULT_WAM_CONFIG.taskLoop.maxNoProgress,
+      ),
+      agents: {
+        enabled: firstDefined(
+          parseBoolean(process.env.WAM_TASK_LOOP_AGENTS),
+          parseBoolean(fileTaskLoopAgents.enabled),
+          DEFAULT_WAM_CONFIG.taskLoop.agents.enabled,
+        ),
+        maxRevisionCycles: firstDefined(
+          parseNonNegativeInt(process.env.WAM_AGENT_MAX_REVISIONS),
+          parseNonNegativeInt(fileTaskLoopAgents.maxRevisionCycles),
+          DEFAULT_WAM_CONFIG.taskLoop.agents.maxRevisionCycles,
+        ),
+        maxReplanCycles: firstDefined(
+          parseNonNegativeInt(process.env.WAM_AGENT_MAX_REPLANS),
+          parseNonNegativeInt(fileTaskLoopAgents.maxReplanCycles),
+          DEFAULT_WAM_CONFIG.taskLoop.agents.maxReplanCycles,
+        ),
+        maxHistory: firstDefined(
+          parseNonNegativeInt(process.env.WAM_AGENT_MAX_HISTORY),
+          parseNonNegativeInt(fileTaskLoopAgents.maxHistory),
+          DEFAULT_WAM_CONFIG.taskLoop.agents.maxHistory,
+        ),
+      },
+    },
+    qualityContracts: {
+      enabled: firstDefined(
+        parseBoolean(process.env.WAM_QUALITY_CONTRACTS),
+        parseBoolean(fileQualityContracts.enabled),
+        DEFAULT_WAM_CONFIG.qualityContracts.enabled,
+      ),
+    },
   };
 }

@@ -1,0 +1,20 @@
+{
+  "schema": "wam.autonomy.benchmark/1",
+  "runId": "golden-001",
+  "configId": "wam-full",
+  "taskId": "fixture-impl-01",
+  "taskKind": "implementation",
+  "model": { "id": "example-model", "version": "2026-10-01" },
+  "wam": { "version": "0.0.0", "flags": { "taskLoop": true, "qualityContracts": true } },
+  "seed": 42,
+  "startedAt": "2026-11-02T10:00:00.000Z",
+  "endedAt": "2026-11-02T10:05:00.000Z",
+  "tokens": { "input": 1200, "output": 800, "cacheRead": 0, "cacheWrite": 0, "total": 2000 },
+  "iterations": 3,
+  "decisions": { "continue": 2, "verify": 1, "replan": 0, "waitUser": 0, "block": 0, "stopBudget": 0, "stopStagnation": 0 },
+  "outcome": { "taskSuccess": true, "verifiedSuccess": true, "humanInterventions": 0, "recovered": false, "replanned": false },
+  "quality": { "sufficient": true, "missing": 0, "stale": 0, "contradictions": 0, "falseAcceptance": false, "falseBlock": false },
+  "review": { "findings": 1, "defectsFound": 1, "severity": { "critical": 0, "high": 1, "medium": 0, "low": 0 }, "falseAcceptsPrevented": 1 },
+  "context": { "injectedTokens": 500, "relevantTokens": 450, "relevanceScore": 0.9 },
+  "costPerOutcome": 2000
+}
