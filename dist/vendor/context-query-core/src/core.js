@@ -6,6 +6,10 @@ import { EvidenceEvaluator } from './evidence-evaluator.js';
 import { QueryPlanner } from './query-planner.js';
 import { Orchestrator } from './orchestrator.js';
 
+function isCqpParseError(err) {
+  return err instanceof Error && err.name === 'CqpError';
+}
+
 function scopedBase(repoRoot) {
   const hash = crypto.createHash('sha1').update(repoRoot).digest('hex').slice(0, 12);
   return path.join(os.tmpdir(), 'context-query-core', hash);
@@ -47,7 +51,15 @@ export function createEngine(config = {}) {
       const isCqp = /^(FIND|SEARCH|SELECT|LIST)\b/i.test(trimmed);
 
       if (isCqp) {
-        return runCQP(trimmed, mergedOpts);
+        try {
+          return runCQP(trimmed, mergedOpts);
+        } catch (err) {
+          if (!isCqpParseError(err)) throw err;
+          // Natural-language queries can start with a CQP verb ("select the
+          // config file", "list files in src"). Degrade to intent parsing
+          // instead of failing the whole retrieval.
+          return runIntent(trimmed, mergedOpts);
+        }
       }
       return runIntent(trimmed, mergedOpts);
     },

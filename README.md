@@ -185,6 +185,30 @@ Point WAM at an arbitrary config file:
 WAM_CONFIG=/path/to/config.json opencode ...
 ```
 
+`WAM_CONFIG` replaces the config file location entirely: the global config is
+not merged in that mode.
+
+### Global config
+
+WAM also reads a user-wide config file so the same settings apply to every
+project. Resolution order for the global file (first match wins):
+
+1. `WAM_GLOBAL_CONFIG=<path>`
+2. `$XDG_CONFIG_HOME/wam/config.json`
+3. `~/.config/wam/config.json`
+
+Effective precedence (highest first):
+
+1. Environment variables (`WAM_*`)
+2. Project file `<projectRoot>/.wam/config.json`
+3. Global file
+4. Built-in defaults
+
+Global and project files are deep-merged: plain objects are combined, project
+values win, and arrays/scalars replace. A missing or malformed global file is
+ignored (`{}`). For example, a global `taskLoop.agents.enabled` combines with a
+project `taskLoop.agents.maxRevisionCycles`.
+
 Expected trace categories (each prefixed `[WAM-DEBUG <ISO-timestamp>] [<category>]`):
 
 | Category | What it reports |

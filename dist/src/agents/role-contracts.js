@@ -86,6 +86,11 @@ export const ROLE_DEFINITIONS = Object.freeze({
   }),
 });
 
+export const REVIEW_ARTIFACT_LIMITS = Object.freeze({
+  maxEntries: 8,
+  maxContentChars: 20000,
+});
+
 const REQUEST_KEYS = Object.freeze([
   "taskId",
   "invocationId",
@@ -101,6 +106,8 @@ const REQUEST_INPUT_KEYS = Object.freeze([
   "evidence",
   "constraints",
   "priorFindings",
+  "reviewArtifacts",
+  "approvedStrategy",
 ]);
 
 const RESULT_KEYS = Object.freeze([
@@ -156,6 +163,61 @@ function checkNonEmptyField(item, field, path, issues) {
   }
 }
 
+const APPROVED_STRATEGY_KEYS = Object.freeze([
+  "version",
+  "source",
+  "approvedBy",
+  "decisions",
+  "constraints",
+]);
+
+const APPROVED_STRATEGY_DECISION_KEYS = Object.freeze([
+  "id",
+  "description",
+  "rationale",
+]);
+
+// Local structural check to avoid importing approved-strategy.js (circular).
+function checkApprovedStrategy(value, path, issues) {
+  if (!isObject(value)) {
+    issues.push(`${path} must be an object`);
+    return;
+  }
+  checkUnknownKeys(value, APPROVED_STRATEGY_KEYS, `${path}.`, issues);
+  if (value.version !== 1) {
+    issues.push(`${path}.version must be 1`);
+  }
+  if (value.source !== "ARCHITECT") {
+    issues.push(`${path}.source must be "ARCHITECT"`);
+  }
+  if (value.approvedBy !== "ORCHESTRATOR") {
+    issues.push(`${path}.approvedBy must be "ORCHESTRATOR"`);
+  }
+  if (!Array.isArray(value.decisions)) {
+    issues.push(`${path}.decisions must be an array`);
+  } else {
+    value.decisions.forEach((decision, index) => {
+      const decisionPath = `${path}.decisions[${index}]`;
+      if (!isObject(decision)) {
+        issues.push(`${decisionPath} must be an object`);
+        return;
+      }
+      checkUnknownKeys(
+        decision,
+        APPROVED_STRATEGY_DECISION_KEYS,
+        `${decisionPath}.`,
+        issues
+      );
+      for (const field of APPROVED_STRATEGY_DECISION_KEYS) {
+        if (!isNonEmptyString(decision[field])) {
+          issues.push(`${decisionPath}.${field} must be a non-empty string`);
+        }
+      }
+    });
+  }
+  checkStringArray(value.constraints, `${path}.constraints`, issues);
+}
+
 function checkStringArray(value, path, issues, { nonEmpty = false } = {}) {
   if (!Array.isArray(value)) {
     issues.push(`${path} must be an array`);
@@ -200,6 +262,34 @@ function validateDecision(item, path, issues) {
   checkId(item, path, issues);
   checkNonEmptyField(item, "description", path, issues);
   checkNonEmptyField(item, "rationale", path, issues);
+}
+
+function validateReviewArtifacts(value, path, issues) {
+  if (value === undefined) return;
+  if (!Array.isArray(value)) {
+    issues.push(`${path} must be an array`);
+    return;
+  }
+  if (value.length > REVIEW_ARTIFACT_LIMITS.maxEntries) {
+    issues.push(`${path} must contain at most ${REVIEW_ARTIFACT_LIMITS.maxEntries} entries`);
+  }
+  value.forEach((item, index) => {
+    const itemPath = `${path}[${index}]`;
+    if (!isObject(item)) {
+      issues.push(`${itemPath} must be an object`);
+      return;
+    }
+    if (!isNonEmptyString(item.ref)) {
+      issues.push(`${itemPath}.ref must be a non-empty string`);
+    }
+    if (!isNonEmptyString(item.content)) {
+      issues.push(`${itemPath}.content must be a non-empty string`);
+    } else if (item.content.length > REVIEW_ARTIFACT_LIMITS.maxContentChars) {
+      issues.push(
+        `${itemPath}.content must contain at most ${REVIEW_ARTIFACT_LIMITS.maxContentChars} characters`
+      );
+    }
+  });
 }
 
 function validateCollection(items, path, issues, validateItem) {
@@ -325,11 +415,23 @@ export function validateAgentRequest(request) {
     checkStringArray(request.input.artifacts, "input.artifacts", issues);
     checkStringArray(request.input.evidence, "input.evidence", issues);
     checkStringArray(request.input.constraints, "input.constraints", issues);
+    if (request.input.approvedStrategy !== undefined) {
+      checkApprovedStrategy(
+        request.input.approvedStrategy,
+        "input.approvedStrategy",
+        issues
+      );
+    }
     validateCollection(
       request.input.priorFindings,
       "input.priorFindings",
       issues,
       validateFinding
+    );
+    validateReviewArtifacts(
+      request.input.reviewArtifacts,
+      "input.reviewArtifacts",
+      issues
     );
   }
 

@@ -30,10 +30,13 @@ import { observeDialogueTurn } from "../dialogue/index.js";
 import { getIntentDictionary, saveIntentDictionary } from "../dialogue/intent-dictionary.js";
 import { loadHistoryEntries, retrieveIntentHistory } from "../context/intent-history.js";
 import { applyContextBudget } from "../context/context-budget.js";
+import { classifyExecutionIntent } from "../execution/task-intent.js";
+import { shouldRunTaskAgentPass } from "../execution/task-agent-run.js";
 import { filterNewContext } from "../context/context-dedupe.js";
 import { recordContextPack, recordDelegationEvidence, injectedSkillIds } from "../context/context-pack-evidence.js";
 import { activeTaskPath } from "../shared/wam-paths.js";
 import { loadConversationMemory, recordTurn, formatMemoryForContext } from "../persistence/conversation-memory.js";
+import { nextActionFrom } from "../state/next-action.js";
 
 const SESSION_INJECTED_SKILLS = new Map();
 const MAX_TRACKED_SESSIONS = 200;
@@ -246,6 +249,14 @@ export async function handleMessage(input, output, deps) {
     const promptText = extractPrompt(input, output);
     if (!promptText.trim()) return;
 
+    // Resolve the parent before injecting anything. Worker sessions are
+    // implementation executors; they must not receive WAM task context,
+    // delegation directives or auto-loop continuations.
+    if (typeof resolveSessionBase === "function" && input?.sessionID) {
+      try { await resolveSessionBase(input.sessionID); } catch {}
+    }
+    if (typeof isSubagentSession === "function" && isSubagentSession(input?.sessionID)) return;
+
     // Ensure WAM memory for this session
     const wamRoot = await ensureWamMemory(input.sessionID, promptText);
 
@@ -265,9 +276,13 @@ export async function handleMessage(input, output, deps) {
     // promptText is passed so a brand-new session can derive a descriptive
     // task-<slug> id from the user's prompt instead of falling back to the
     // monolithic ses-<sessionID> / default-task namespaces.
+    const previousTaskId = input.sessionID
+      ? sessionTasks.get(input.sessionID) || readActiveTaskIdFresh(wamRoot, { sessionId: input.sessionID, projectRoot: wamRoot })
+      : null;
     let taskId, fallbackKind;
     {
-      const resolved = effectiveTaskId(input, sessionTasks, wamRoot, promptText, typeof isSubagentSession === "function" ? isSubagentSession(input?.sessionID) : false);
+      const isTaskDone = (id) => getTaskState(id, wamRoot)?.phase === "DONE";
+      const resolved = effectiveTaskId(input, sessionTasks, wamRoot, promptText, typeof isSubagentSession === "function" ? isSubagentSession(input?.sessionID) : false, isTaskDone);
       taskId = resolved.taskId;
       fallbackKind = resolved.fallbackKind;
     }
@@ -280,7 +295,8 @@ export async function handleMessage(input, output, deps) {
       // active (refresh: el binding 1 sesión = 1 task nunca debe expirar por
       // falta de escritura). Namespaces genéricos (session/default) son
       // deterministas y no necesitan persistencia.
-      if ((fallbackKind === "slug-session-bound" || fallbackKind === "cached" || fallbackKind === "active") && typeof writeActiveTaskId === "function") {
+      const rebound = Boolean(previousTaskId) && previousTaskId !== taskId;
+      if ((fallbackKind === "slug-session-bound" || fallbackKind === "cached" || fallbackKind === "active" || rebound) && typeof writeActiveTaskId === "function") {
         try {
           writeActiveTaskId(taskId, wamRoot, { sessionId: input.sessionID, projectRoot: wamRoot });
         } catch (err) {
@@ -465,6 +481,24 @@ export async function handleMessage(input, output, deps) {
 
     const state = waitAMinute.buildPersistedState(taskId, analysis, wamRoot);
     state.lastAction = promptText;
+    const trivialPrompt = typeof waitAMinute.isTrivial === "function"
+      ? waitAMinute.isTrivial(promptText)
+      : false;
+    state.executionIntent = classifyExecutionIntent(promptText, { isTrivial: trivialPrompt });
+    const agentLoopEnabled = cfg?.taskLoop?.agents?.enabled === true && deps.agentPassAvailable !== false;
+    if (agentLoopEnabled && state.executionIntent !== "INLINE" && shouldRunTaskAgentPass(state)) {
+      state.executionGate = {
+        active: true,
+        reason: state.executionIntent === "ANALYZE" ? "analysis-loop" : "agent-loop",
+        startedAt: new Date().toISOString(),
+      };
+    } else if (state.executionGate?.active) {
+      state.executionGate = {
+        ...state.executionGate,
+        active: false,
+        completedAt: new Date().toISOString(),
+      };
+    }
     const intentLane = classifyIntentLane(promptText, {
       phase: state.phase,
       contractStatus: state.contract?.status,
@@ -481,6 +515,10 @@ export async function handleMessage(input, output, deps) {
         complete: deps.dialogueComplete || null,
       });
       state.dialogue = dialogueTurn.state;
+      if (state.contract?.status === "APPROVED" && state.phase === "PROPOSED") {
+        state.phase = "IMPLEMENTING";
+        state.nextAction = nextActionFrom(state);
+      }
       if (dialogueTurn.learned) saveIntentDictionary(wamRoot, dictionary);
       if (state.requirements?.length) persistTaskState(taskId, state, wamRoot);
     } catch (err) {
@@ -723,13 +761,31 @@ export async function handleMessage(input, output, deps) {
           contextInject.push(`\n[wam cqe file_context: ${cqeFiles.length} archivos en ${cqeMs}ms, fuente ${cqeMeta.source || "?"}]\n${shown.join("\n")}`);
           contextInject.push(`cqe: ${cqeFiles.length} archivos en ${cqeMs}ms (fuente ${cqeMeta.source || "?"}) — top: ${(cqeFiles.slice(0, 3).map((f) => f?.path || "?")).join(", ")}`);
         } else {
-          const reason = cqeMeta.fallbackReason || (cqeMeta.cqeError ? `error: ${cqeMeta.cqeError}` : "sin resultados");
-          contextInject.push(`[wam cqe] sin resultados (${reason}) en ${cqeMs}ms — contexto nativo prevalece`);
+          const code = cqeMeta.failureCode || (cqeMeta.fallbackReason === "error" ? "error" : cqeMeta.empty ? "empty" : null);
+          if (code && code !== "empty") {
+            const hint = cqeMeta.failureHint ? ` — ${cqeMeta.failureHint}` : "";
+            const detail = cqeMeta.cqeError ? ` (${cqeMeta.cqeError})` : "";
+            contextInject.push(`[wam cqe] fallo (${code}) en ${cqeMs}ms${detail} — contexto nativo prevalece${hint}`);
+          } else {
+            contextInject.push(`[wam cqe] sin resultados en ${cqeMs}ms — contexto nativo prevalece`);
+          }
         }
         if (cqePack.cqeMeta) {
           const cqeTarget = updatedState || state;
           if (cqeTarget) {
             cqeTarget.cqeCalls = (cqeTarget.cqeCalls || 0) + 1;
+            const stats = cqeTarget.cqeStats && typeof cqeTarget.cqeStats === "object" ? cqeTarget.cqeStats : {};
+            const rawBucket = cqeFiles.length > 0 ? "ok" : (cqeMeta.failureCode || (cqeMeta.empty ? "empty" : "error"));
+            const bucket = ["ok", "empty", "error", "timeout", "busy", "warming"].includes(rawBucket) ? rawBucket : "error";
+            cqeTarget.cqeStats = {
+              calls: (stats.calls || 0) + 1,
+              ok: (stats.ok || 0) + (bucket === "ok" ? 1 : 0),
+              empty: (stats.empty || 0) + (bucket === "empty" ? 1 : 0),
+              error: (stats.error || 0) + (bucket === "error" ? 1 : 0),
+              timeout: (stats.timeout || 0) + (bucket === "timeout" ? 1 : 0),
+              busy: (stats.busy || 0) + (bucket === "busy" ? 1 : 0),
+              warming: (stats.warming || 0) + (bucket === "warming" ? 1 : 0),
+            };
             try { persistTaskState(taskId, cqeTarget, wamRoot); } catch {}
           }
         }

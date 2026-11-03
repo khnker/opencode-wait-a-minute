@@ -4,6 +4,7 @@ import { startExperiment, noteSuccess, noteFailure } from "./src/execution/execu
 import { planAutoContinuation, buildAutoLoopPrompt } from "./src/execution/auto-continuation.js";
 import { driveTaskLoop } from "./src/adapters/opencode-v1/session-driver.js";
 import { runConfiguredTaskAgentStep } from "./src/execution/task-agent-run.js";
+import { isExecutionGateActive, isMutatingToolCall, executionGateDirective } from "./src/execution/execution-gate.js";
 import { createOpenCodeV1AgentAdapter } from "./src/agents/invocation-adapter.js";
 import { migrateLegacyCognition } from "./src/cognition/cognition-store.js";
 import { handleMessage } from "./src/integration/message-handler.js";
@@ -468,16 +469,53 @@ function readActiveTaskIdFresh(root, options = {}) {
  * (rechazo por ownership). Los registros legacy sin sessionId mantienen el
  * TTL de 60s para no adoptar tareas obsoletas de sesiones previas.
  */
-function effectiveTaskId(input, sessionTasks, wamRoot, promptText, isSubagent = false) {
+function effectiveTaskId(
+  input,
+  sessionTasks,
+  wamRoot,
+  promptText,
+  isSubagent = false,
+  isTaskDone = (id) => getTaskState(id, wamRoot)?.phase === "DONE",
+) {
   // Priority 1: Explicit taskId (must not be generic)
   if (input?.taskId && !GENERIC_TASK.test(input.taskId)) {
     return { taskId: input.taskId, fallbackKind: "explicit" };
   }
-  
+
+  // A DONE task must not absorb a brand-new instruction: only continuation /
+  // auto-loop prompts keep reusing it. The default predicate reads task state;
+  // callers may inject a pure predicate for tests.
+  if (typeof isTaskDone !== "function") {
+    throw new TypeError("effectiveTaskId requires an isTaskDone predicate");
+  }
+  const isNewInstruction = !isContinuationPrompt(promptText);
+  const skippedDone = new Set();
+  const reuse = (taskId) => {
+    if (isNewInstruction && isTaskDone(taskId)) {
+      skippedDone.add(taskId);
+      return false;
+    }
+    return true;
+  };
+  // A derived fallback can collide with the DONE task it is replacing
+  // (e.g. session/default namespaces). Keep it new instead of reusing it.
+  const freshDerived = (taskId) => {
+    const taken = (id) =>
+      skippedDone.has(id) || (isNewInstruction && isTaskDone(id));
+    if (!taken(taskId)) return taskId;
+    let suffix = 2;
+    let candidate = `${taskId}-${suffix}`;
+    while (taken(candidate) || fs.existsSync(taskDir(wamRoot, candidate))) {
+      suffix += 1;
+      candidate = `${taskId}-${suffix}`;
+    }
+    return candidate;
+  };
+
   // Priority 2: Session-specific cached task (strict session binding)
   const cached = sessionTasks?.get?.(input?.sessionID);
-  if (cached) return { taskId: cached, fallbackKind: "cached" };
-  
+  if (cached && reuse(cached)) return { taskId: cached, fallbackKind: "cached" };
+
   // Priority 3: Session-owned active task. A matching sessionId adopts the
   // task without TTL (survives restarts); a legacy record without sessionId
   // adopts only within the 60s TTL; another session's record is rejected.
@@ -485,7 +523,8 @@ function effectiveTaskId(input, sessionTasks, wamRoot, promptText, isSubagent = 
     sessionId: input?.sessionID,
     projectRoot: wamRoot,
   });
-  if (fresh) return { taskId: fresh, fallbackKind: "active" };
+  if (fresh && reuse(fresh)) return { taskId: fresh, fallbackKind: "active" };
+
   
   // Priority 4: Derive slug ONLY for new task creation (not continuation)
   // Prompts NO continuación y con sustantivo descriptivo → derivar slug.
@@ -501,20 +540,21 @@ function effectiveTaskId(input, sessionTasks, wamRoot, promptText, isSubagent = 
         // Keep the in-memory result stable but signal the caller that this
         // is a degraded fallback. message-handler logs a warning when it
         // sees slug-session-bound without sessionID.
-        return { taskId: `task-${slug}-sess-nosess`, fallbackKind: "slug-session-bound-nosession" };
+        return { taskId: freshDerived(`task-${slug}-sess-nosess`), fallbackKind: "slug-session-bound-nosession" };
       }
-      return { taskId: `task-${slug}-sess-${input.sessionID.slice(-8)}`, fallbackKind: "slug-session-bound" };
+      return { taskId: freshDerived(`task-${slug}-sess-${input.sessionID.slice(-8)}`), fallbackKind: "slug-session-bound" };
     }
   }
-  
+
   // Priority 5: Session-namespaced fallback (explicit session binding)
   if (input?.sessionID) {
-    return { taskId: `ses-${input.sessionID}`, fallbackKind: "session" };
+    return { taskId: freshDerived(`ses-${input.sessionID}`), fallbackKind: "session" };
   }
-  
+
   // Último recurso: default-task. El caller debería saludar al usuario y
   // pedirle que describa la tarea para sacarlo de este namespace genérico.
-  return { taskId: "default-task", fallbackKind: "default" };
+  return { taskId: freshDerived("default-task"), fallbackKind: "default" };
+
 }
 /**
  * Predicado puro: true cuando el prompt es de continuación, vacío, genérico
@@ -534,7 +574,7 @@ function isContinuationPrompt(text) {
   // Mensajes de ejecución de herramienta (tool.execute.before): solo nombre
   // de herramienta o salida técnica → no es una nueva tarea.
   if (/^(tool|bash|read|write|edit|grep|glob|ls|node|npm|python|git)\b/i.test(trimmed)) return true;
-  if (/^\[tool\b/i.test(trimmed)) return true;
+  if (/^\[(tool|wam)\b/i.test(trimmed)) return true;
   return false;
 }
 
@@ -815,6 +855,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
   const sessionRoots = new Map();
   const sessionWamRoots = new Map(); // sessionID -> wamRoot resuelto en chat.message (unifica read/write del gate)
   const sessionParents = new Map(); // sessionID → parentID (subagentes Task tienen parent)
+  const sessionTitles = new Map(); // sessionID → title (distingue agentes WAM de subagentes del main)
   const sessionResolved = new Set(); // sessionIDs cuyo parentID se resolvió (distingue main de subagente)
   const processedMessages = new Map(); // messageID+kind → processed (chat.message idempotency)
   // tool.execute.before no puede escribir al modelo: encola la directiva por
@@ -962,10 +1003,14 @@ refresh();
     if (sessionRoots.has(sessionID)) return sessionRoots.get(sessionID);
     let base = projectDirectory;
     try {
-      const info = client?.session?.get && sessionID ? await client.session.get({ sessionID, path: { id: sessionID } }) : null;
+      const response = client?.session?.get && sessionID ? await client.session.get({ sessionID, path: { id: sessionID } }) : null;
+      const info = response?.data ?? response;
       if (info?.location?.directory) base = info.location.directory;
+      else if (info?.directory) base = info.directory;
       const parent = info?.parentID || info?.parent_id || info?.parent?.id;
       if (parent) sessionParents.set(sessionID, parent);
+      const title = info?.title || info?.name;
+      if (title) sessionTitles.set(sessionID, String(title));
       if (info) sessionResolved.add(sessionID);
     } catch {
       // fallback: cwd del server (sesión no resuelta → fail-open, no se gatea)
@@ -998,7 +1043,59 @@ refresh();
     return root;
   };
 
-  async function maybeTaskLoop(sessionID) {
+  function clearExecutionGate(taskId, root) {
+    try {
+      const task = getTaskState(taskId, root);
+      if (!task?.executionGate?.active) return;
+      task.executionGate = {
+        ...task.executionGate,
+        active: false,
+        completedAt: new Date().toISOString(),
+      };
+      persistTaskState(taskId, task, root);
+    } catch (e) {
+      wamWarn(`[wait-a-minute] failed to clear execution gate for ${taskId}:`, e?.message);
+    }
+  }
+
+  async function runTaskAgentPass(sessionID, { root, taskId } = {}) {
+    if (!sessionID) return null;
+    if (bypassed || sessionBypasses.has(sessionID)) return null;
+    if (sessionParents.get(sessionID)) return null;
+    const agentConfig = cfg.taskLoop?.agents;
+    if (agentConfig?.enabled !== true) return null;
+    const passRoot = root || sessionWamRoots.get(sessionID) || sessionRoots.get(sessionID) || projectDirectory;
+    const passTaskId = taskId || sessionTasks.get(sessionID) || readActiveTaskIdFresh(passRoot, { sessionId: sessionID, projectRoot: passRoot });
+    if (!passTaskId) return null;
+    if (agentRunInFlight.has(passTaskId)) return null;
+    agentRunInFlight.add(passTaskId);
+    try {
+      const task = getTaskState(passTaskId, passRoot);
+      if (!task) return null;
+      const adapter = createOpenCodeV1AgentAdapter({
+        client,
+        directory: passRoot,
+        parentSessionID: sessionID,
+      });
+      const step = await runConfiguredTaskAgentStep({
+        task,
+        taskId: passTaskId,
+        adapter,
+        config: agentConfig,
+        persist: (updated) => persistTaskState(passTaskId, updated, passRoot),
+      });
+      const agent = step ? step.outcome : (task.agentRun || null);
+      return { taskId: passTaskId, root: passRoot, agent };
+    } catch (e) {
+      wamWarn(`[wait-a-minute] agent task step failed for ${passTaskId}:`, e?.message);
+      return { taskId: passTaskId, root: passRoot, agent: null };
+    } finally {
+      agentRunInFlight.delete(passTaskId);
+      clearExecutionGate(passTaskId, passRoot);
+    }
+  }
+
+  async function maybeTaskLoop(sessionID, { skipAgent = false, agent = null } = {}) {
     if (!sessionID || !cfg.taskLoop?.enabled) return;
     if (bypassed || sessionBypasses.has(sessionID)) return;
     if (autoContinueInFlight.has(sessionID)) return;
@@ -1007,32 +1104,10 @@ refresh();
     const taskId = sessionTasks.get(sessionID) || readActiveTaskIdFresh(root, { sessionId: sessionID, projectRoot: root });
     if (!taskId) return;
 
-    let agent = null;
-    const agentConfig = cfg.taskLoop.agents;
-    if (agentConfig?.enabled) {
+    if (!skipAgent && cfg.taskLoop.agents?.enabled) {
       if (agentRunInFlight.has(taskId)) return;
-      agentRunInFlight.add(taskId);
-      try {
-        const task = getTaskState(taskId, root);
-        if (task) {
-          const adapter = createOpenCodeV1AgentAdapter({
-            client,
-            directory: root,
-            parentSessionID: sessionID,
-          });
-          const step = await runConfiguredTaskAgentStep({
-            task,
-            adapter,
-            config: agentConfig,
-            persist: (updated) => persistTaskState(taskId, updated, root),
-          });
-          agent = step ? step.outcome : (task.agentRun || null);
-        }
-      } catch (e) {
-        wamWarn(`[wait-a-minute] agent task step failed for ${taskId}:`, e?.message);
-      } finally {
-        agentRunInFlight.delete(taskId);
-      }
+      const pass = await runTaskAgentPass(sessionID, { root, taskId });
+      agent = pass?.agent ?? null;
     }
 
     driveTaskLoop({ sessionId: sessionID, projectRoot: root, taskId, client, agent, config: cfg.taskLoop, qualityConfig: cfg.qualityContracts });
@@ -1295,6 +1370,7 @@ async function postToolExecution(input, output) {
         sessionTasks,
         sessionStore,
         cfg,
+        agentPassAvailable: Boolean(client?.session?.create && client?.session?.prompt),
         dialogueComplete,
         resolveSessionBase,
         wamRootFor,
@@ -1383,6 +1459,11 @@ async function postToolExecution(input, output) {
                   idFactory: genPartId,
                 });
               }
+              if (isExecutionGateActive(state)) {
+                void runTaskAgentPass(sid, { root, taskId })
+                  .then((pass) => maybeTaskLoop(sid, { skipAgent: true, agent: pass?.agent ?? null }))
+                  .catch((err) => wamWarn(`[wait-a-minute] early agent pass failed for ${taskId}:`, err?.message));
+              }
             }
           } catch (err) {
             wamDebug("cpc", "injection failed", { error: err?.message });
@@ -1448,8 +1529,10 @@ async function postToolExecution(input, output) {
         // Mismo root que chat.message (wamRootFor/ensureWamMemory): si el gate
         // leyera resolveSessionBase() y chat.message escribiera en otro root,
         // el estado leido no coincidiria con el escrito (misfire o bypass).
-        taskRoot = sessionWamRoots.get(sid) || await resolveSessionBase(sid);
-        taskId = sessionTasks.get(sid) || readActiveTaskIdFresh(taskRoot, { sessionId: sid, projectRoot: taskRoot }) || (sid ? `ses-${sid.slice(-10)}` : "default-task");
+        const resolvedRoot = await resolveSessionBase(sid);
+        const taskOwnerSid = sessionParents.get(sid) || sid;
+        taskRoot = sessionWamRoots.get(taskOwnerSid) || sessionWamRoots.get(sid) || resolvedRoot;
+        taskId = sessionTasks.get(taskOwnerSid) || sessionTasks.get(sid) || readActiveTaskIdFresh(taskRoot, { sessionId: taskOwnerSid, projectRoot: taskRoot }) || (sid ? `ses-${sid.slice(-10)}` : "default-task");
         st = getTaskState(taskId, taskRoot);
         // Fallback: try the active task from disk if first lookup failed
         if (!st && !sid) {
@@ -1526,15 +1609,30 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
         // This prevents user-explicit-execute bypass without proper contract approval.
         // Defer to the Clarification Gate (advisory) when in ASKING so the
         // user is directed to answer the blocking unknown, not approve a contract.
-        // Sub-sessions (delegated workers, identified by parentID) are NEVER blocked
-        // here: they execute the main session's approved plan via Task delegation,
-        // not their own contracts. Blocking them breaks flujo sin fricción.
+        // The execution gate blocks the main session and its generic delegated
+        // workers; only WAM role sessions (titles "WAM <ROLE>") are exempt because
+        // they are the loop itself. Reading the parent's task state prevents a
+        // worker from bypassing the gate through Task delegation.
         // Governance Enforcement centralizado (src/policy/governance-enforcement.js).
-        // Exento: subagentes (parentID), sesiones no resueltas (fail-open),
-        // override explícito (WAM_GOVERNANCE=off), fase terminal, ASKING, y
-        // cambios triviales declarados. Solo se gatea la sesión main con un
-        // contrato tracked y no aprobado.
+        // Exento de governance: subagentes (parentID), sesiones no resueltas
+        // (fail-open), override explícito (WAM_GOVERNANCE=off), fase terminal,
+        // ASKING, y cambios triviales declarados.
         const isSubagent = sessionParents.has(sid);
+        const isWamAgent = /^WAM\s+[A-Z]+\b/.test(sessionTitles.get(sid) || "");
+        if (
+          !isWamAgent &&
+          isExecutionGateActive(st) &&
+          isMutatingToolCall(tool, input?.args || input?.parameters || output?.args || {})
+        ) {
+          const directive = executionGateDirective(st.executionGate);
+          queueToolDirective(input, directive);
+          throw new WamPolicyBlock(directive, {
+            tool,
+            reason: "agent-execution-gate",
+            level: "BLOCKED",
+            source: "early-agent-loop",
+          });
+        }
         try {
           const contractFiles = st?.contract?.files || st?.contract?.declaredFiles || [];
           const declaredFiles = contractFiles.length ? contractFiles : targetFilesOf(input);
@@ -2306,6 +2404,10 @@ const waitAMinute = {
         lastAction: existing.lastAction,
         nextAction: nextActionFrom(existing),
       };
+      if (merged.contract?.status === "APPROVED" && merged.phase === "PROPOSED") {
+        merged.phase = "IMPLEMENTING";
+        merged.nextAction = "Implementar requisitos del contrato aprobado";
+      }
       persistTaskState(taskId, merged, root);
       return merged;
     }

@@ -34,10 +34,28 @@ export function decideAgentLoopAction(agent) {
       reason: verdict === "REPLAN_REQUIRED" ? "agent-replan-exhausted" : "agent-revision-exhausted",
     };
   }
+  if (status === "REVISION_REQUIRED") {
+    return { decision: "CONTINUE", reason: "agent-revision-required" };
+  }
+  if (status === "REPLAN_REQUIRED") {
+    return { decision: "REPLAN", reason: "agent-replan-required" };
+  }
   if (status === "COMPLETED" && verdict === "ACCEPTED") {
     return { decision: "VERIFY", reason: "agent-review-accepted" };
   }
   return null;
+}
+
+/**
+ * Agent outcomes that must be resolved before quality, completion-gate, budget
+ * and iteration decisions: hard stops (BLOCK/WAIT_USER) plus reviewer
+ * rejections (CONTINUE/REPLAN). An ACCEPTED review maps to VERIFY and stays
+ * after the completion gate, which remains authoritative when satisfied.
+ */
+const AGENT_PRE_GATE_DECISIONS = new Set(["BLOCK", "WAIT_USER", "CONTINUE", "REPLAN"]);
+
+function isAgentPreGateAction(action) {
+  return Boolean(action) && AGENT_PRE_GATE_DECISIONS.has(action.decision);
 }
 
 const CHECKPOINT_STATUS = {
@@ -122,6 +140,9 @@ export function decideNextAction({
   } else if (taskState === "BLOCKED" || task.blocked) {
     decision = "BLOCK";
     reason = "task-blocked";
+  } else if (isAgentPreGateAction(agentAction)) {
+    decision = agentAction.decision;
+    reason = agentAction.reason;
   } else if (qualityReplans) {
     decision = "REPLAN";
     reason = "quality-contradiction";

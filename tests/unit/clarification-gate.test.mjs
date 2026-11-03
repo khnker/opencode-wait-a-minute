@@ -60,7 +60,7 @@ test("AC5: prompt de implementación en ASKING se intercepta y NO se consume com
   cleanup(taskId);
 });
 
-test("E2E-04: respuesta natural resuelve la pregunta → re-análisis → PROPOSED", async () => {
+test("E2E-04: respuesta natural resuelve la pregunta → re-análisis → IMPLEMENTING", async () => {
   const hooks = await freshHooks();
   const taskId = `cg-e2e4-${Date.now()}`;
   await enterAsking(hooks, taskId);
@@ -69,9 +69,25 @@ test("E2E-04: respuesta natural resuelve la pregunta → re-análisis → PROPOS
   assert.ok(emitted.includes("question answered"), "confirmación de respuesta");
   assert.ok(emitted.includes("Ready → Proceed"), "ready");
   const st = getTaskState(taskId);
-  assert.equal(st.phase, "PROPOSED", "fase PROPOSED (nunca APPROVED directo)");
+  assert.equal(st.phase, "IMPLEMENTING", "contrato aprobado sin bloqueos → IMPLEMENTING");
   assert.ok(st.contract.unknowns.every((u) => u.status === "answered"), "preguntas resueltas");
   assert.ok(!st.contract.unknowns.some((u) => u.status === "blocking"), "nada bloquea");
+  cleanup(taskId);
+});
+
+test("primer mensaje con contrato aprobado → IMPLEMENTING", async () => {
+  const hooks = await freshHooks();
+  const taskId = `cg-approved-${Date.now()}`;
+  await send(
+    hooks,
+    "Implementa un cambio mínimo: crea /tmp/opencode/wam-loop-e2e.txt con el texto ok y verifica que exista. No toques el repositorio.",
+    taskId,
+    "cg-approved"
+  );
+  const st = getTaskState(taskId);
+  assert.equal(st.contract.status, "APPROVED", "contrato aprobado en el primer mensaje");
+  assert.equal(st.phase, "IMPLEMENTING", "no queda atascado en PROPOSED");
+  assert.match(st.nextAction, /Implementa|Verificar/, "nextAction refleja la fase de implementación");
   cleanup(taskId);
 });
 
@@ -136,7 +152,7 @@ test("tool.execute.before: mutantes bloqueadas en ASKING, read-only permitidas",
   await hooks["tool.execute.before"]({ tool: "grep", output: {} });
   // resuelta la pregunta → fuera de ASKING → ya no bloquea
   await send(hooks, "soft delete", taskId);
-  assert.equal(getTaskState(taskId).phase, "PROPOSED", "resuelta");
+  assert.equal(getTaskState(taskId).phase, "IMPLEMENTING", "resuelta y aprobada");
   const done = await hooks["tool.execute.before"]({ tool: "bash", output: {} });
   assert.equal(done, undefined, "sin ASKING activo no bloquea");
   cleanup(taskId);

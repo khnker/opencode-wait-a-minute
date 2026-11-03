@@ -31,6 +31,39 @@ Analyst > Architect > Builder > Reviewer feedback pipeline.
 - `estimatedTokens`: `ceil(total JSON characters / 4)` across requests and
   results.
 
+## Real collaboration benchmark
+
+`real-collaboration.mjs` runs the same `runAgentFeedbackOrchestration` pipeline
+with an adapter supplied by the caller, so a real model/adapter can be measured
+without changing the benchmark. CI and tests stay offline: they inject a
+deterministic scripted adapter, and no model is called unless you opt in.
+
+```bash
+WAM_AGENT_BENCH_ADAPTER=/absolute/path/to/my-adapter.mjs npm run bench:agents:real
+```
+
+The module named by `WAM_AGENT_BENCH_ADAPTER` must export
+`createAdapterFactory` (preferred) or a default function with this contract:
+
+```js
+export function createAdapterFactory({ scenario }) {
+  // scenario: { id, seed, objective, maxRevisionCycles, maxReplanCycles, expected }
+  return {
+    // request is the validated AgentRequest produced by the orchestrator
+    async invoke(request) {
+      // { result: AgentResult, metadata?: { sessionID } }
+      return { result, metadata: { sessionID: "my-session" } };
+    },
+  };
+}
+```
+
+The factory is called once per scenario so each run gets a fresh adapter. The
+CLI prints a JSON report with per-scenario metrics and exits nonzero when the
+variable/export is missing or a scenario misses its expected outcome. Scenarios
+are `accepted-first-pass` and `revision-accepted`; each has a distinct seed and
+objective.
+
 ## Limitations
 
 - Token counts are estimates, not provider billing.

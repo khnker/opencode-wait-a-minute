@@ -27,6 +27,43 @@ const MIN_TIMEOUT_MS = 1;
 const MAX_TIMEOUT_MS = 30000;
 const MAX_ENGINES = 8;
 
+const FAILURE_CODES = new Set([
+  'timeout',
+  'root-not-found',
+  'engine-unavailable',
+  'import-failed',
+  'busy',
+  'warming',
+  'empty',
+  'error',
+]);
+
+export const CQE_FAILURE_HINTS = {
+  timeout: 'la consulta excedió el tiempo; el índice puede estar frío',
+  'root-not-found': 'el repoRoot no existe; verifica el directorio de trabajo',
+  'engine-unavailable': 'el motor CQE no pudo inicializarse',
+  'import-failed': 'falló la carga de context-query-core; revisa la dependencia',
+  busy: 'otra consulta CQE está en curso; se reintenta en el próximo turno',
+  warming: 'el índice aún se está construyendo; se reintenta en el próximo turno',
+  empty: 'la consulta no produjo coincidencias',
+  error: 'error de ejecución de CQE; revisa WAM_LOGGING para el detalle',
+};
+
+/**
+ * Map a CQE failure to a stable, testable code.
+ * Precedence is deterministic so the injected prompt and counters agree.
+ */
+export function classifyCqeFailure(err, { timedOut = false, fallbackReason = null } = {}) {
+  if (fallbackReason && FAILURE_CODES.has(fallbackReason)) return fallbackReason;
+  if (timedOut) return 'timeout';
+  const message = err && err.message ? String(err.message) : err ? String(err) : '';
+  if (/CQE_TIMEOUT/.test(message)) return 'timeout';
+  if (/CQE_ROOT_NOT_FOUND/.test(message)) return 'root-not-found';
+  if (/CQE_ENGINE_UNAVAILABLE/.test(message)) return 'engine-unavailable';
+  if (/ERR_MODULE_NOT_FOUND|Cannot find (module|package)|import/i.test(message)) return 'import-failed';
+  return 'error';
+}
+
 /**
  * Diagnostic logger for CQE failures. Activated only when debug mode is on
  * (WAM_DEBUG=1, WAM_DEBUG=true, or WAM_LOG_LEVEL=debug). Keeps the plugin
@@ -480,6 +517,7 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
     empty: false,
     timedOut,
     cqeError: cqeError ? cqeError.message : null,
+    failureCode: cqeError ? classifyCqeFailure(cqeError, { timedOut }) : null,
     nativeTotalItems: nativeResult.total,
   };
 
@@ -516,7 +554,7 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
         source: 'wam-native',
         cqeResult,
         fallbackUsed: true,
-        metadata: { ...metadata, totalItems: nativeResult.total, empty: fallbackReason == null, fallbackReason: fallbackReason || 'empty' },
+        metadata: { ...metadata, totalItems: nativeResult.total, empty: fallbackReason == null, fallbackReason: fallbackReason || 'empty', failureCode: fallbackReason || 'empty' },
       };
     }
     const limited = constraints.maxResults > 0 ? normalized.slice(0, constraints.maxResults) : normalized;
@@ -528,7 +566,7 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
       source: 'cqe',
       cqeResult,
       fallbackUsed: false,
-      metadata: { ...metadata, totalItems: normalized.length },
+      metadata: { ...metadata, totalItems: normalized.length, failureCode: null },
     };
   }
 
@@ -544,8 +582,8 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
     metadata: {
       ...metadata,
       totalItems: nativeResult.total,
-      ...(shadowFailed ? { fallbackReason: 'error' } : {}),
-      ...(shadowEmpty ? { fallbackReason: 'empty', empty: true } : {}),
+      ...(shadowFailed ? { fallbackReason: 'error', failureCode: metadata.failureCode || 'error' } : {}),
+      ...(shadowEmpty ? { fallbackReason: 'empty', empty: true, failureCode: 'empty' } : {}),
     },
   };
 }

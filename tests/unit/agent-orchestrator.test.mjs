@@ -4,8 +4,11 @@ import assert from "node:assert/strict";
 import {
   AGENT_PIPELINE,
   AgentOrchestrationError,
+  requireApprovedStrategy,
+  runAgentFeedbackOrchestration,
   runAgentOrchestration,
 } from "../../src/agents/orchestrator.js";
+import { RoleContractError } from "../../src/agents/role-contracts.js";
 
 const TASK_ID = "task-1";
 const CRITERIA = [
@@ -341,6 +344,277 @@ test("fails loud when the context selector returns an invalid selection", async 
       baseOptions(adapter, { contextSelector: () => ({ input: {} }) }),
     ),
     /invalid selection/,
+  );
+  assert.equal(adapter.calls.length, 0);
+});
+
+test("wraps a mismatched adapter result identity with cause and context", async () => {
+  const adapter = {
+    async invoke(request) {
+      return {
+        result: makeResult(request.role, {
+          taskId: request.taskId,
+          invocationId: "other-invocation",
+        }),
+        metadata: { sessionID: "ses-adapter" },
+      };
+    },
+  };
+
+  await assert.rejects(
+    () => runAgentOrchestration(baseOptions(adapter)),
+    (error) =>
+      error instanceof AgentOrchestrationError &&
+      error.cause?.name === "RoleContractError" &&
+      /ANALYST/.test(error.message) &&
+      /task-1:ANALYST:1/.test(error.message),
+  );
+});
+
+test("supplies review artifacts to the reviewer only", async () => {
+  const adapter = createAdapter();
+  const diff = "diff --git a/src/auth.js b/src/auth.js\n+rate limit";
+
+  const outcome = await runAgentOrchestration(
+    baseOptions(adapter, {
+      reviewArtifacts: [{ ref: "src/auth.js", content: diff }],
+    }),
+  );
+
+  const reviewer = adapter.calls.find((call) => call.role === "REVIEWER");
+  assert.deepEqual(reviewer.input.reviewArtifacts, [
+    { ref: "src/auth.js", content: diff },
+  ]);
+  for (const role of ["ANALYST", "ARCHITECT", "BUILDER"]) {
+    const call = adapter.calls.find((entry) => entry.role === role);
+    assert.equal("reviewArtifacts" in call.input, false);
+  }
+  assert.equal(outcome.status, "COMPLETED");
+  assert.equal(outcome.verdict, "ACCEPTED");
+});
+
+test("omits reviewArtifacts when none are supplied", async () => {
+  const adapter = createAdapter();
+
+  await runAgentOrchestration(baseOptions(adapter));
+
+  for (const call of adapter.calls) {
+    assert.equal("reviewArtifacts" in call.input, false);
+  }
+});
+
+test("fails loud on invalid review artifacts", async () => {
+  const adapter = createAdapter();
+
+  await assert.rejects(
+    () =>
+      runAgentOrchestration(
+        baseOptions(adapter, { reviewArtifacts: [{ ref: "", content: "x" }] }),
+      ),
+    (error) =>
+      error instanceof AgentOrchestrationError &&
+      error.cause instanceof RoleContractError,
+  );
+  assert.equal(adapter.calls.length, 0);
+});
+
+function callFor(adapter, role) {
+  return adapter.calls.find((call) => call.role === role);
+}
+
+test("supplies the ARCHITECT strategy to the BUILDER only", async () => {
+  const adapter = createAdapter({
+    ARCHITECT: {
+      decisions: [
+        {
+          id: "D1",
+          description: "Use an auth middleware",
+          rationale: "centralized enforcement",
+        },
+      ],
+    },
+  });
+
+  await runAgentOrchestration(baseOptions(adapter));
+
+  const strategy = callFor(adapter, "BUILDER").input.approvedStrategy;
+  assert.deepEqual(strategy, {
+    version: 1,
+    source: "ARCHITECT",
+    approvedBy: "ORCHESTRATOR",
+    decisions: [
+      {
+        id: "D1",
+        description: "Use an auth middleware",
+        rationale: "centralized enforcement",
+      },
+    ],
+    constraints: [
+      "keep backward compatibility",
+      "Decision D1: Use an auth middleware (centralized enforcement)",
+    ],
+  });
+  assert.equal(Object.isFrozen(strategy), true);
+  assert.equal(callFor(adapter, "ANALYST").input.approvedStrategy, undefined);
+  assert.equal(callFor(adapter, "REVIEWER").input.approvedStrategy, undefined);
+});
+
+test("replaces the approved strategy on replan", async () => {
+  let architectCalls = 0;
+  let reviewerCalls = 0;
+  const adapter = createAdapter({
+    ARCHITECT: () => {
+      architectCalls += 1;
+      return {
+        decisions: [
+          {
+            id: `D${architectCalls}`,
+            description: `Strategy ${architectCalls}`,
+            rationale: "iteration",
+          },
+        ],
+      };
+    },
+    REVIEWER: () => {
+      reviewerCalls += 1;
+      return reviewerCalls === 1
+        ? {
+            review: {
+              verdict: "REPLAN_REQUIRED",
+              findings: [
+                {
+                  id: "R1",
+                  description: "wrong approach",
+                  severity: "HIGH",
+                  evidence: ["ev-r1"],
+                  correctiveAction: "replan",
+                },
+              ],
+              limitations: [],
+            },
+          }
+        : {};
+    },
+  });
+
+  await runAgentFeedbackOrchestration({
+    ...baseOptions(adapter),
+    maxReplanCycles: 1,
+  });
+
+  const builders = adapter.calls.filter((call) => call.role === "BUILDER");
+  assert.equal(builders.length, 2);
+  assert.deepEqual(
+    builders[0].input.approvedStrategy.decisions.map((decision) => decision.id),
+    ["D1"],
+  );
+  assert.deepEqual(
+    builders[1].input.approvedStrategy.decisions.map((decision) => decision.id),
+    ["D2"],
+  );
+});
+
+test("rejects a BUILDER invocation without an approved strategy", () => {
+  assert.throws(
+    () => requireApprovedStrategy(null, `${TASK_ID}:BUILDER:1`),
+    (error) =>
+      error instanceof AgentOrchestrationError &&
+      /requires an approved strategy/.test(error.message),
+  );
+});
+
+test("enforces maxInvocations before the next adapter call", async () => {
+  const adapter = createAdapter();
+  const options = baseOptions(adapter, {
+    resourceLimits: { maxInvocations: 2 },
+  });
+
+  await assert.rejects(
+    () => runAgentOrchestration(options),
+    (error) =>
+      error instanceof AgentOrchestrationError &&
+      /invocation limit exceeded \(3 > 2\)/.test(error.message) &&
+      /ANALYST|ARCHITECT|BUILDER/.test(error.message),
+  );
+  assert.deepEqual(
+    adapter.calls.map((request) => request.role),
+    ["ANALYST", "ARCHITECT"],
+  );
+});
+
+test("rejects a hanging adapter with an invocation timeout", async () => {
+  const adapter = {
+    calls: [],
+    invoke(request) {
+      this.calls.push(request);
+      return new Promise(() => {});
+    },
+  };
+  const options = baseOptions(adapter, {
+    resourceLimits: { maxInvocationMs: 10 },
+  });
+
+  await assert.rejects(
+    () => runAgentOrchestration(options),
+    (error) =>
+      error instanceof AgentOrchestrationError &&
+      /invocation timed out after 10ms/.test(error.message) &&
+      /ANALYST/.test(error.message),
+  );
+  assert.equal(adapter.calls.length, 1);
+});
+
+test("rejects an oversized adapter result with a resource cause", async () => {
+  const adapter = createAdapter({
+    ANALYST: { summary: "x".repeat(70000) },
+  });
+
+  await assert.rejects(
+    () => runAgentOrchestration(baseOptions(adapter)),
+    (error) =>
+      error instanceof AgentOrchestrationError &&
+      error.cause instanceof RoleContractError &&
+      error.cause.issues.some((issue) =>
+        issue.startsWith("result exceeds maxResultBytes"),
+      ),
+  );
+  assert.deepEqual(
+    adapter.calls.map((request) => request.role),
+    ["ANALYST"],
+  );
+});
+
+test("keeps the valid pipeline flow unchanged with explicit limits", async () => {
+  const adapter = createAdapter();
+
+  const outcome = await runAgentOrchestration(
+    baseOptions(adapter, {
+      resourceLimits: { maxInvocations: 16, maxInvocationMs: 300000 },
+    }),
+  );
+
+  assert.deepEqual(
+    adapter.calls.map((request) => request.role),
+    AGENT_PIPELINE,
+  );
+  assert.equal(outcome.status, "COMPLETED");
+  assert.equal(outcome.results.length, AGENT_PIPELINE.length);
+});
+
+test("fails loud on invalid resource limits", async () => {
+  const adapter = createAdapter();
+
+  await assert.rejects(
+    () =>
+      runAgentOrchestration(
+        baseOptions(adapter, { resourceLimits: { maxFindings: 0 } }),
+      ),
+    (error) =>
+      error instanceof AgentOrchestrationError &&
+      error.cause instanceof RoleContractError &&
+      error.cause.issues.includes(
+        "resourceLimits.maxFindings must be a positive integer",
+      ),
   );
   assert.equal(adapter.calls.length, 0);
 });

@@ -9,6 +9,7 @@ import {
   parseAgentResultText,
   toolPolicyForRole,
 } from "../../src/agents/invocation-adapter.js";
+import { RoleContractError } from "../../src/agents/role-contracts.js";
 
 function requestFor(role = "ANALYST") {
   return {
@@ -128,9 +129,16 @@ test("builds a role prompt with objective, criteria and output shape", () => {
   assert.match(prompt.system, /Do not include a `review` field/);
   assert.match(prompt.system, /"role": "BUILDER"/);
   assert.doesNotMatch(prompt.system, /"review":/);
+  assert.doesNotMatch(prompt.system, /"decisions":/);
   assert.match(prompt.text, /Objective: Perform the BUILDER pass/);
   assert.match(prompt.text, /AC1 \[mandatory\]: The change is correct/);
   assert.match(prompt.text, /evidence: \{\"tests\":\[\"unit test\"\]\}/);
+});
+
+test("architect prompt includes decisions because the role can propose them", () => {
+  const prompt = buildAgentPrompt(requestFor("ARCHITECT"));
+  assert.match(prompt.system, /"decisions":/);
+  assert.doesNotMatch(prompt.system, /"review":/);
 });
 
 test("reviewer prompt requires a review result", () => {
@@ -217,6 +225,18 @@ test("accepts a fenced model response", async () => {
   const invocation = await adapter.invoke(request);
 
   assert.equal(invocation.result.review.verdict, "ACCEPTED");
+});
+
+test("normalizes omitted optional collections for a mutating role", async () => {
+  const request = requestFor("BUILDER");
+  const raw = resultFor(request);
+  delete raw.decisions;
+  const client = fakeClient({ prompted: responseWith(raw) });
+  const adapter = createOpenCodeV1AgentAdapter({ client });
+
+  const invocation = await adapter.invoke(request);
+
+  assert.deepEqual(invocation.result.decisions, []);
 });
 
 test("rejects a result with a different invocation identity", async () => {
@@ -329,4 +349,21 @@ test("rejects invalid requests before creating a session", async () => {
     /unknown role/,
   );
   assert.equal(client.calls.create.length, 0);
+});
+
+test("rejects a result whose identity does not match the request", async () => {
+  const request = requestFor("ANALYST");
+  const client = fakeClient({
+    prompted: responseWith(resultFor(request, { invocationId: "other-invocation" })),
+  });
+  const adapter = createOpenCodeV1AgentAdapter({ client });
+
+  await assert.rejects(
+    () => adapter.invoke(request),
+    (error) =>
+      error instanceof AgentInvocationError &&
+      error.code === AGENT_INVOCATION_ERROR_CODES.INVALID_RESULT &&
+      error.sessionID === "ses-child" &&
+      error.cause instanceof RoleContractError,
+  );
 });

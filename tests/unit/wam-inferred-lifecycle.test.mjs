@@ -41,14 +41,14 @@ test("WAM inferred lifecycle: PROPOSED → APPROVED → IMPLEMENTING → VERIFYI
   const out1 = await runHook("I want to implement X", taskId, "s1");
   const st1 = getTaskState(taskId);
   assert.ok(st1, "task state created after user prompt");
-  assert.equal(st1.phase, "PROPOSED", "phase = PROPOSED after first prompt");
+  assert.equal(st1.phase, "IMPLEMENTING", "phase = IMPLEMENTING after first prompt");
   assert.equal(st1.contract.status, "APPROVED", "contract starts APPROVED — no approval wait");
   assert.ok(st1.requirements.length > 0, "requirements synthesized");
   assert.ok(partText(out1).length > 0, "WAM emits a part (contract proposal)");
 
   // 2. Agent says "I implemented X" (continuation, contract already APPROVED).
-  //    Contracts start APPROVED, so this approval is idempotent on status and
-  //    only promotes the phase — there is no approval wait to unblock.
+  //    Contracts start APPROVED and the first prompt already promotes the phase,
+  //    so this approval is fully idempotent — there is no approval wait to unblock.
   pluginDefault.approveContract(taskId);
   const st2 = getTaskState(taskId);
   assert.equal(st2.contract.status, "APPROVED", "contract.status stays APPROVED (idempotent approval)");

@@ -184,6 +184,7 @@ function runNodeTestStreamed(files) {
         WAM_LOG_FILE: path.join(os.tmpdir(), `wam-test-${process.pid}.log`),
         WAM_METRICS_DIR: path.join(os.tmpdir(), `wam-metrics-${process.pid}`),
         WAM_SESSION_DIR: path.join(os.tmpdir(), `wam-sessions-${process.pid}`),
+        WAM_GLOBAL_CONFIG: path.join(os.tmpdir(), `wam-global-missing-${process.pid}.json`),
       },
     });
 

@@ -13,6 +13,7 @@ const ENV_KEYS = [
   "WAM_LOGGING", "WAM_SILENT", "WAM_DISABLE_LOGGING",
   "WAM_ENFORCEMENT", "WAM_GOVERNANCE", "WAM_BYPASS",
   "WAM_DEBUG", "WAM_DISABLE_DEBUG", "WAM_LOG_LEVEL", "WAM_CONFIG",
+  "WAM_GLOBAL_CONFIG",
   "WAM_AUTO_LOOP", "WAM_DISABLE_AUTO_LOOP",
   "WAM_PERMISSION_PREFLIGHT", "WAM_DISABLE_PERMISSION_PREFLIGHT",
   "WAM_CONTEXT_PROJECTION",
@@ -25,6 +26,11 @@ let saved = {};
 beforeEach(() => {
   saved = {};
   for (const k of ENV_KEYS) { saved[k] = process.env[k]; delete process.env[k]; }
+  // Isolate tests from any real global config on the host machine.
+  process.env.WAM_GLOBAL_CONFIG = path.join(
+    os.tmpdir(),
+    `wam-global-missing-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.json`,
+  );
 });
 
 afterEach(() => {
@@ -41,6 +47,13 @@ function tmpProject(configObj) {
     fs.writeFileSync(path.join(dir, ".wam", "config.json"), JSON.stringify(configObj));
   }
   return dir;
+}
+
+function tmpGlobal(configObj) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wam-global-"));
+  const file = path.join(dir, "config.json");
+  if (configObj) fs.writeFileSync(file, JSON.stringify(configObj));
+  return file;
 }
 
 test("defaults are all enabled", () => {
@@ -259,4 +272,52 @@ test("permissionPreflight defaults to true and honors file/env overrides", () =>
   delete process.env.WAM_PERMISSION_PREFLIGHT;
   process.env.WAM_DISABLE_PERMISSION_PREFLIGHT = "1";
   assert.equal(loadWamConfig(tmpProject()).permissionPreflight, false);
+});
+
+test("global config is honored", () => {
+  process.env.WAM_GLOBAL_CONFIG = tmpGlobal({
+    skills: false,
+    debug: false,
+    taskLoop: { agents: { enabled: true } },
+  });
+  const cfg = loadWamConfig(tmpProject());
+  assert.equal(cfg.skills, false);
+  assert.equal(cfg.debug, false);
+  assert.equal(cfg.taskLoop.agents.enabled, true);
+  assert.equal(
+    cfg.taskLoop.agents.maxRevisionCycles,
+    DEFAULT_WAM_CONFIG.taskLoop.agents.maxRevisionCycles,
+  );
+});
+
+test("project config overrides global with deep merge", () => {
+  process.env.WAM_GLOBAL_CONFIG = tmpGlobal({
+    skills: false,
+    logging: false,
+    taskLoop: { agents: { enabled: true, maxRevisionCycles: 7 } },
+  });
+  const cfg = loadWamConfig(tmpProject({
+    logging: true,
+    taskLoop: { agents: { maxRevisionCycles: 4 } },
+  }));
+  assert.equal(cfg.skills, false, "global value retained");
+  assert.equal(cfg.logging, true, "project value wins");
+  assert.equal(cfg.taskLoop.agents.enabled, true, "global nested value retained");
+  assert.equal(cfg.taskLoop.agents.maxRevisionCycles, 4, "project nested value wins");
+});
+
+test("missing global config falls back to defaults", () => {
+  process.env.WAM_GLOBAL_CONFIG = path.join(
+    os.tmpdir(),
+    `wam-global-absent-${process.pid}-${Date.now()}.json`,
+  );
+  assert.deepEqual(loadWamConfig(tmpProject()), { ...DEFAULT_WAM_CONFIG });
+});
+
+test("WAM_CONFIG suppresses the global config", () => {
+  process.env.WAM_GLOBAL_CONFIG = tmpGlobal({ skills: false, logging: false });
+  process.env.WAM_CONFIG = tmpGlobal({ skills: true });
+  const cfg = loadWamConfig(tmpProject());
+  assert.equal(cfg.skills, true);
+  assert.equal(cfg.logging, true, "global file must not be merged when WAM_CONFIG is set");
 });

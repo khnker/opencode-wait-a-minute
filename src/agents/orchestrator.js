@@ -1,5 +1,13 @@
-import { AGENT_ROLES, assertAgentRequest } from "./role-contracts.js";
+import {
+  AGENT_ROLES,
+  RoleContractError,
+  assertAgentRequest,
+} from "./role-contracts.js";
+import { assertInvocationResult } from "./result-boundary.js";
 import { selectRoleContext } from "./context-isolation.js";
+import { assertReviewArtifacts } from "./review-artifacts.js";
+import { buildApprovedStrategy } from "./approved-strategy.js";
+import { resolveResourceLimits } from "./resource-policy.js";
 
 export const AGENT_PIPELINE = Object.freeze([
   AGENT_ROLES.ANALYST,
@@ -25,9 +33,12 @@ const EXPECTED_OUTPUT = Object.freeze({
 const STOP_STATUSES = new Set(["BLOCKED", "NEEDS_INPUT", "FAILED"]);
 
 export class AgentOrchestrationError extends Error {
-  constructor(issues) {
+  constructor(issues, { cause } = {}) {
     const list = Array.isArray(issues) ? issues : [issues];
-    super(`Agent orchestration violation: ${list.join("; ")}`);
+    super(
+      `Agent orchestration violation: ${list.join("; ")}`,
+      cause === undefined ? undefined : { cause },
+    );
     this.name = "AgentOrchestrationError";
     this.issues = Object.freeze([...list]);
   }
@@ -43,6 +54,7 @@ function validateOrchestrationInput({
   evidence,
   constraints,
   priorFindings,
+  reviewArtifacts,
   maxChars,
   maxCharsPerSource,
   maxRevisionCycles,
@@ -69,6 +81,7 @@ function validateOrchestrationInput({
     evidence,
     constraints,
     priorFindings,
+    reviewArtifacts,
   })) {
     if (!Array.isArray(value)) issues.push(`${name} must be an array`);
   }
@@ -105,6 +118,39 @@ function reviewFindingConstraint(finding) {
   return `Review finding (${finding.severity}${criterion}): ${finding.description} | corrective action: ${finding.correctiveAction}${evidence}`;
 }
 
+export function requireApprovedStrategy(approvedStrategy, invocationId) {
+  if (!approvedStrategy || typeof approvedStrategy !== "object") {
+    throw new AgentOrchestrationError(
+      `BUILDER invocation ${invocationId} requires an approved strategy from ARCHITECT`,
+    );
+  }
+  return approvedStrategy;
+}
+
+async function invokeWithTimeout(adapter, request, role, invocationId, timeoutMs) {
+  if (!timeoutMs) {
+    return adapter.invoke(request);
+  }
+
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        new AgentOrchestrationError(
+          `invocation timed out after ${timeoutMs}ms for role ${role} (${invocationId})`,
+        ),
+      );
+    }, timeoutMs);
+  });
+  const invocation = Promise.resolve().then(() => adapter.invoke(request));
+
+  try {
+    return await Promise.race([invocation, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function executeOrchestration({
   taskId,
   objective,
@@ -113,13 +159,26 @@ async function executeOrchestration({
   evidence = [],
   constraints = [],
   priorFindings = [],
+  reviewArtifacts = [],
   adapter,
   contextSelector = selectRoleContext,
   maxChars,
   maxCharsPerSource,
   maxRevisionCycles = 0,
   maxReplanCycles = 0,
+  mode = "IMPLEMENT",
+  resourceLimits,
 } = {}) {
+  let limits;
+  try {
+    limits = resolveResourceLimits(resourceLimits);
+  } catch (cause) {
+    throw new AgentOrchestrationError(cause.issues ?? cause.message, { cause });
+  }
+  if (mode !== "IMPLEMENT" && mode !== "ANALYZE") {
+    throw new AgentOrchestrationError(`unknown orchestration mode: ${String(mode)}`);
+  }
+
   validateOrchestrationInput({
     taskId,
     objective,
@@ -130,16 +189,25 @@ async function executeOrchestration({
     evidence,
     constraints,
     priorFindings,
+    reviewArtifacts,
     maxChars,
     maxCharsPerSource,
     maxRevisionCycles,
     maxReplanCycles,
   });
 
+  let normalizedReviewArtifacts;
+  try {
+    normalizedReviewArtifacts = assertReviewArtifacts(reviewArtifacts);
+  } catch (cause) {
+    throw new AgentOrchestrationError(cause.issues ?? cause.message, { cause });
+  }
+
   const results = [];
   const handoffs = [];
   const context = [];
   const baseConstraints = [...constraints];
+  let approvedStrategy = null;
   const accumulated = {
     artifacts: [...artifacts],
     evidence: [...evidence],
@@ -149,6 +217,7 @@ async function executeOrchestration({
   const invocationCounts = Object.fromEntries(
     AGENT_PIPELINE.map((role) => [role, 0]),
   );
+  let totalInvocations = 0;
   const cycles = { revisions: 0, replans: 0 };
 
   const finish = (status, stoppedAt, verdict = null, extra = {}) => ({
@@ -171,6 +240,12 @@ async function executeOrchestration({
 
   const invokeRole = async (role, nextRole = null, kind = "pipeline") => {
     const invocationId = nextInvocationId(role);
+    totalInvocations += 1;
+    if (totalInvocations > limits.maxInvocations) {
+      throw new AgentOrchestrationError(
+        `invocation limit exceeded (${totalInvocations} > ${limits.maxInvocations}) for role ${role} (${invocationId})`,
+      );
+    }
     const roleObjective = `${ROLE_INSTRUCTIONS[role]}: ${objective}`;
     const selection = contextSelector({
       role,
@@ -194,17 +269,52 @@ async function executeOrchestration({
       role,
       objective: roleObjective,
       acceptanceCriteria,
-      input: selection.input,
+      input: {
+        ...selection.input,
+        ...(role === AGENT_ROLES.REVIEWER &&
+        normalizedReviewArtifacts.length > 0
+          ? { reviewArtifacts: normalizedReviewArtifacts }
+          : {}),
+        ...(role === AGENT_ROLES.BUILDER
+          ? {
+              approvedStrategy: requireApprovedStrategy(
+                approvedStrategy,
+                invocationId,
+              ),
+            }
+          : {}),
+      },
       expectedOutput: EXPECTED_OUTPUT[role],
     };
     assertAgentRequest(request);
 
-    const invocation = await adapter.invoke(request);
+    const invocation = await invokeWithTimeout(
+      adapter,
+      request,
+      role,
+      invocationId,
+      limits.maxInvocationMs,
+    );
     if (!invocation?.result) {
       throw new AgentOrchestrationError(`adapter returned no result for ${role}`);
     }
-    const { result } = invocation;
-    const metadata = invocation.metadata ?? {};
+    let validated;
+    try {
+      validated = assertInvocationResult({
+        request,
+        invocation,
+        resourceLimits: limits,
+      });
+    } catch (cause) {
+      if (cause instanceof RoleContractError) {
+        throw new AgentOrchestrationError(
+          `invalid result for role ${role} (${invocationId}): ${cause.message}`,
+          { cause },
+        );
+      }
+      throw cause;
+    }
+    const { result, metadata } = validated;
 
     results.push({ role, invocationId, result, metadata });
     context.push({ role, metadata: selection.metadata });
@@ -299,6 +409,36 @@ async function executeOrchestration({
     return null;
   };
 
+  if (mode === "ANALYZE") {
+    let result = await invokeRole(AGENT_ROLES.ANALYST, AGENT_ROLES.ARCHITECT);
+    let terminal = terminalResult(result, AGENT_ROLES.ANALYST);
+    if (terminal) return terminal;
+
+    result = await invokeRole(AGENT_ROLES.ARCHITECT, AGENT_ROLES.REVIEWER);
+    terminal = terminalResult(result, AGENT_ROLES.ARCHITECT);
+    if (terminal) return terminal;
+
+    const review = await runReviewer();
+    if (review.terminal) return review.terminal;
+    if (review.verdict === "ACCEPTED") {
+      return finish("COMPLETED", null, review.verdict);
+    }
+    if (review.verdict === "BLOCKED") {
+      return finish("BLOCKED", AGENT_ROLES.REVIEWER, review.verdict);
+    }
+    if (
+      review.verdict !== "REVISION_REQUIRED" &&
+      review.verdict !== "REPLAN_REQUIRED"
+    ) {
+      throw new AgentOrchestrationError(
+        `unknown reviewer verdict: ${String(review.verdict)}`,
+      );
+    }
+    return finish(review.verdict, AGENT_ROLES.REVIEWER, review.verdict, {
+      exhausted: true,
+    });
+  }
+
   let result = await invokeRole(AGENT_ROLES.ANALYST, AGENT_ROLES.ARCHITECT);
   let terminal = terminalResult(result, AGENT_ROLES.ANALYST);
   if (terminal) return terminal;
@@ -306,6 +446,10 @@ async function executeOrchestration({
   result = await invokeRole(AGENT_ROLES.ARCHITECT, AGENT_ROLES.BUILDER);
   terminal = terminalResult(result, AGENT_ROLES.ARCHITECT);
   if (terminal) return terminal;
+  approvedStrategy = buildApprovedStrategy({
+    decisions: result.decisions,
+    constraints: accumulated.constraints,
+  });
 
   result = await invokeRole(AGENT_ROLES.BUILDER, AGENT_ROLES.REVIEWER);
   terminal = terminalResult(result, AGENT_ROLES.BUILDER);
@@ -340,6 +484,10 @@ async function executeOrchestration({
       );
       terminal = terminalResult(result, AGENT_ROLES.ARCHITECT);
       if (terminal) return terminal;
+      approvedStrategy = buildApprovedStrategy({
+        decisions: result.decisions,
+        constraints: accumulated.constraints,
+      });
     }
 
     result = await invokeRole(

@@ -190,6 +190,17 @@ test("decideAgentLoopAction maps terminal agent outcomes", () => {
   );
 });
 
+test("decideAgentLoopAction surfaces a non-exhausted reviewer rejection", () => {
+  assert.deepEqual(
+    decideAgentLoopAction({ status: "REVISION_REQUIRED", verdict: "REVISION_REQUIRED" }),
+    { decision: "CONTINUE", reason: "agent-revision-required" },
+  );
+  assert.deepEqual(
+    decideAgentLoopAction({ status: "REPLAN_REQUIRED", verdict: "REPLAN_REQUIRED" }),
+    { decision: "REPLAN", reason: "agent-replan-required" },
+  );
+});
+
 test("decideNextAction accepts an agent outcome but budget still wins", () => {
   const base = {
     task: { state: "EXECUTING" },
@@ -301,6 +312,18 @@ test("runConfiguredTaskAgentStep stays inert when agents are disabled", async ()
   assert.deepEqual(persisted, []);
 });
 
+test("runTaskAgentStep supplies taskId for a persisted snapshot without id", async () => {
+  const task = baseTask();
+  delete task.id;
+  const adapter = makeAdapter();
+  const result = await runTaskAgentStep({ task, taskId: TASK_ID, adapter });
+
+  assert.ok(adapter.calls.length > 0);
+  assert.ok(adapter.calls.every((call) => call.taskId === TASK_ID));
+  assert.equal(result.outcome.status, "COMPLETED");
+  assert.equal(result.outcome.verdict, "ACCEPTED");
+});
+
 test("runConfiguredTaskAgentStep applies limits and persists the updated task", async () => {
   let persisted = null;
   const result = await runConfiguredTaskAgentStep({
@@ -333,4 +356,43 @@ test("runConfiguredTaskAgentStep skips accepted terminal runs", async () => {
 
   assert.equal(result, null);
   assert.equal(adapter.calls.length, 0);
+});
+
+test("buildTaskAgentInput collects reviewArtifacts, diff and patch", () => {
+  const input = buildTaskAgentInput(
+    baseTask({
+      reviewArtifacts: [{ ref: "meta", content: "context" }],
+      diff: { path: "src/a.js", diff: "+a" },
+      patch: "--- a\n+++ b",
+    }),
+  );
+
+  assert.deepEqual(input.reviewArtifacts, [
+    { ref: "meta", content: "context" },
+    { ref: "src/a.js", content: "+a" },
+    { ref: "patch", content: "--- a\n+++ b" },
+  ]);
+});
+
+test("buildTaskAgentInput defaults to an empty reviewArtifacts array", () => {
+  assert.deepEqual(buildTaskAgentInput(baseTask()).reviewArtifacts, []);
+});
+
+test("routes task.diff into the reviewer request only", async () => {
+  const adapter = makeAdapter();
+  const diff = "diff --git a/src/auth.js b/src/auth.js\n+rate limit";
+
+  const result = await runTaskAgentStep({
+    task: baseTask({ diff }),
+    adapter,
+  });
+
+  const reviewer = adapter.calls.find((call) => call.role === "REVIEWER");
+  assert.deepEqual(reviewer.input.reviewArtifacts, [
+    { ref: "diff", content: diff },
+  ]);
+  for (const call of adapter.calls.filter((entry) => entry.role !== "REVIEWER")) {
+    assert.equal("reviewArtifacts" in call.input, false);
+  }
+  assert.equal(result.outcome.status, "COMPLETED");
 });

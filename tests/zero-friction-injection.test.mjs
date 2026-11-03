@@ -13,7 +13,8 @@ import { loadPrompt } from "../src/prompts/loader.js";
 test("delegation directive is advisory: direct mutation stays allowed", () => {
   const text = loadPrompt("injection.delegation");
   assert.doesNotMatch(text, /BLOQUEADA/);
-  assert.match(text, /PERMITIDA/);
+  assert.match(text, /puede editar\/escribir inline/);
+  assert.match(text, /sin pedir permiso/);
   assert.match(text, /inline/);
 });
 

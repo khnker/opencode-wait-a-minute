@@ -81,7 +81,8 @@
     "perf:sanity": "node scripts/performance-sanity.mjs",
     "wam:next": "node scripts/autonomous-task-runner.mjs --all",
     "bench:lifecycle": "node benchmarks/lifecycle-token-savings.mjs",
-    "bench:guards": "node benchmarks/guard-metrics-suite.mjs"
+    "bench:guards": "node benchmarks/guard-metrics-suite.mjs",
+    "bench:agents:real": "node benchmarks/agent-orchestration/real-collaboration.mjs"
   },
   "repository": {
     "type": "git",

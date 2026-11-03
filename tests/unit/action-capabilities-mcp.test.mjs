@@ -22,9 +22,8 @@ import { evaluateAction } from "../../src/policy/risk-engine.js";
 
 describe("action-capabilities: scope boundary", () => {
   it("runtime/meta tools are out of scope and bypass fail-closed", () => {
-    assert.equal(getEffectiveCapability("task"), CAPABILITY_LEVELS.SAFE);
     assert.equal(getEffectiveCapability("skill"), CAPABILITY_LEVELS.SAFE);
-    for (const tool of ["compress", "delegate_task", "call_agent"]) {
+    for (const tool of ["compress", "delegate_task", "call_agent", "skill"]) {
       assert.equal(OUT_OF_SCOPE_TOOLS.has(tool), true, `${tool} must be out of scope`);
       assert.equal(getEffectiveCapability(tool), CAPABILITY_LEVELS.SAFE);
       assert.equal(isMutatingCapability(tool), false);
@@ -36,6 +35,14 @@ describe("action-capabilities: scope boundary", () => {
     assert.equal(getCapability("compress"), CAPABILITY_LEVELS.UNKNOWN);
     assert.equal(getCapability("delegate_task"), CAPABILITY_LEVELS.UNKNOWN);
     assert.equal(getCapability("call_agent"), CAPABILITY_LEVELS.UNKNOWN);
+  });
+
+  it("task is governed by the envelope as GUARDED, never downgraded to SAFE", () => {
+    assert.equal(OUT_OF_SCOPE_TOOLS.has("task"), false, "task must stay in scope");
+    assert.equal(getCapability("task"), CAPABILITY_LEVELS.GUARDED);
+    assert.equal(getEffectiveCapability("task"), CAPABILITY_LEVELS.GUARDED);
+    assert.equal(isMutatingCapability("task"), true);
+    assert.equal(evaluateAction("task", { description: "delegate work" }).level, "GUARDED");
   });
 });
 

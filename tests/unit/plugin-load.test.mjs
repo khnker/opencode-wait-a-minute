@@ -555,7 +555,7 @@ test("flujo sin fricción: sesión principal SÍ muta con reqs pendientes (bloqu
   // sesión principal: session.get sin parentID
   const hooks = await pluginDefault({
     directory: tmp,
-    client: { session: { get: async ({ sessionID }) => ({ location: { directory: tmp }, parentID: sessionID === "sub-1" ? "parent" : undefined }) } },
+    client: { session: { get: async ({ sessionID }) => ({ data: { directory: tmp, parentID: sessionID === "sub-1" ? "parent" : undefined } }) } },
     project: {}, $: {},
   });
   const taskId = `hard-${Date.now()}`;
@@ -576,6 +576,24 @@ test("flujo sin fricción: sesión principal SÍ muta con reqs pendientes (bloqu
   // subagente (parentID) → write permitido
   const okSub = await hooks["tool.execute.before"]({ sessionID: "sub-1", tool: "write", callID: "c3" }, { args: {} }).then(() => true).catch((e) => e.message);
   assert.equal(okSub, true, "subagente ejecutor puede mutar: " + okSub);
+  try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
+});
+
+test("subagent session receives no WAM injection", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wam-sub-"));
+  const hooks = await pluginDefault({
+    directory: tmp,
+    client: { session: { get: async ({ sessionID }) => ({ data: { directory: tmp, parentID: "parent" } }) } },
+    project: {}, $: {},
+  });
+  const out = { parts: [], system: [] };
+  await hooks["chat.message"](
+    { sessionID: "sub-1", parts: [{ type: "text", text: "implementa el cambio" }] },
+    out,
+  );
+
+  assert.equal(out.parts.length, 0, "subagente no recibe contexto ni directivas WAM");
+  assert.equal(out.system.length, 0, "subagente no recibe system WAM");
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
 });
 

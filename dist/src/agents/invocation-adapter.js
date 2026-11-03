@@ -5,6 +5,7 @@ import {
   getRoleCapabilities,
   getRoleDefinition,
 } from "./role-contracts.js";
+import { assertResultIdentity, normalizeAgentResult } from "./result-boundary.js";
 
 export const AGENT_INVOCATION_ERROR_CODES = Object.freeze({
   SESSION_CREATE_FAILED: "SESSION_CREATE_FAILED",
@@ -92,13 +93,15 @@ function buildResultShape(request) {
         criterionId: "optional string",
       },
     ],
-    decisions: [{ id: "string", description: "string", rationale: "string" }],
     artifacts: ["string"],
     evidence: ["string"],
     openQuestions: ["string"],
     recommendations: ["string"],
     limitations: ["string"],
   };
+  if (getRoleCapabilities(request.role).proposeDecisions === true) {
+    shape.decisions = [{ id: "string", description: "string", rationale: "string" }];
+  }
   if (request.role === AGENT_ROLES.REVIEWER) {
     shape.review = {
       verdict: "ACCEPTED|REVISION_REQUIRED|REPLAN_REQUIRED|BLOCKED",
@@ -195,18 +198,6 @@ export function parseAgentResultText(text) {
   }
 }
 
-function assertResultIdentity(result, request) {
-  const issues = [];
-  if (result.taskId !== request.taskId) issues.push("taskId does not match the request");
-  if (result.invocationId !== request.invocationId) issues.push("invocationId does not match the request");
-  if (result.role !== request.role) issues.push("role does not match the request");
-  if (issues.length) {
-    throw new AgentInvocationError(`agent result identity mismatch: ${issues.join("; ")}`, {
-      code: AGENT_INVOCATION_ERROR_CODES.INVALID_RESULT,
-    });
-  }
-}
-
 function responseText(parts) {
   if (!Array.isArray(parts)) return "";
   return parts
@@ -288,7 +279,9 @@ export function createOpenCodeV1AgentAdapter({
 
       const data = response?.data ?? response;
       try {
-        const result = parseAgentResultText(responseText(data?.parts));
+        const result = normalizeAgentResult(
+          parseAgentResultText(responseText(data?.parts)),
+        );
         assertAgentResult(result);
         assertResultIdentity(result, request);
         return { result, metadata: { sessionID: session.id } };
@@ -297,11 +290,14 @@ export function createOpenCodeV1AgentAdapter({
           if (!cause.sessionID) cause.sessionID = session.id;
           throw cause;
         }
-        throw new AgentInvocationError("agent returned an invalid result", {
-          code: AGENT_INVOCATION_ERROR_CODES.INVALID_RESULT,
-          cause,
-          sessionID: session.id,
-        });
+        throw new AgentInvocationError(
+          `agent returned an invalid result${cause instanceof Error ? `: ${cause.message}` : ""}`,
+          {
+            code: AGENT_INVOCATION_ERROR_CODES.INVALID_RESULT,
+            cause,
+            sessionID: session.id,
+          },
+        );
       }
     },
   };

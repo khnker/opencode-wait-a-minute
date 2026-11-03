@@ -8,9 +8,10 @@
  */
 import path from 'node:path';
 import fs from 'node:fs';
-import { buildIndex, queryIndex, catalogPathFor } from './index-layer/index.js';
+import { buildIndex, freshness, queryIndex, catalogPathFor } from './index-layer/index.js';
 
-const built = new Map(); // cwd → true
+const RECONCILE_TTL_MS = 5000;
+const built = new Map(); // cwd → last reconcile timestamp (ms)
 
 function safeQueryIndex(cwd, type, name, limit) {
   try {
@@ -22,21 +23,29 @@ function safeQueryIndex(cwd, type, name, limit) {
   }
 }
 
-export function ensureIndex(cwd, { forceBuild = false } = {}) {
+export function ensureIndex(cwd, { forceBuild = false, ttlMs } = {}) {
   const key = path.resolve(cwd);
-  if (built.has(key) && !forceBuild) return 2; // 2 = reuse
+  const now = Date.now();
+  const ttl = ttlMs ?? Number(process.env.CF_INDEX_TTL_MS ?? RECONCILE_TTL_MS);
+  const last = built.get(key);
+  if (!forceBuild && last !== undefined && now - last < ttl) return 2; // 2 = reuse
+
   const dbPath = catalogPathFor(key);
-  if (!fs.existsSync(dbPath)) {
-    try {
+  try {
+    if (!fs.existsSync(dbPath)) {
       buildIndex(key);
-      built.set(key, true);
+      built.set(key, now);
       return 1; // 1 = build
-    } catch {
-      return 0; // 0 = fallback rg
     }
+    // The catalog is cached on disk. Without this check, files edited after
+    // the first build stay invisible (or keep stale line numbers) forever.
+    const fresh = freshness(key);
+    if (forceBuild || fresh.changed_paths?.length) buildIndex(key);
+    built.set(key, now);
+    return 2;
+  } catch {
+    return 0; // 0 = fallback rg
   }
-  built.set(key, true);
-  return 2;
 }
 
 export function symbolLookup(cwd, name, limit = 10) {

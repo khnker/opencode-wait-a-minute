@@ -7,6 +7,8 @@ import {
   normalizeItem,
   dedupe,
   materializeSnippet,
+  classifyCqeFailure,
+  CQE_FAILURE_HINTS,
 } from "../../../src/context/cqe-adapter.js";
 
 test("normalizeItem — handles valid raw item correctly", () => {
@@ -88,4 +90,30 @@ test("materializeSnippet — reads snippet from valid file", () => {
   assert.ok(res.tokenEstimate > 0);
 
   fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+test("classifyCqeFailure — timeout is stable", () => {
+  assert.equal(classifyCqeFailure(new Error("CQE_TIMEOUT after 10ms")), "timeout");
+  assert.equal(classifyCqeFailure(new Error("boom"), { timedOut: true }), "timeout");
+});
+
+test("classifyCqeFailure — busy/warming/empty take precedence", () => {
+  assert.equal(classifyCqeFailure(null, { fallbackReason: "busy" }), "busy");
+  assert.equal(classifyCqeFailure(null, { fallbackReason: "warming" }), "warming");
+  assert.equal(classifyCqeFailure(null, { fallbackReason: "empty" }), "empty");
+});
+
+test("classifyCqeFailure — distinguishes infrastructure failures", () => {
+  assert.equal(classifyCqeFailure(new Error("CQE_ROOT_NOT_FOUND: /x")), "root-not-found");
+  assert.equal(classifyCqeFailure(new Error("CQE_ENGINE_UNAVAILABLE")), "engine-unavailable");
+  assert.equal(classifyCqeFailure(new Error("Cannot find module 'context-query-core'")), "import-failed");
+  assert.equal(classifyCqeFailure(new Error("unexpected")), "error");
+  assert.equal(classifyCqeFailure(null), "error");
+});
+
+test("CQE_FAILURE_HINTS — every stable code has a hint", () => {
+  for (const code of ["timeout", "root-not-found", "engine-unavailable", "import-failed", "busy", "warming", "empty", "error"]) {
+    assert.equal(typeof CQE_FAILURE_HINTS[code], "string");
+    assert.ok(CQE_FAILURE_HINTS[code].length > 0);
+  }
 });

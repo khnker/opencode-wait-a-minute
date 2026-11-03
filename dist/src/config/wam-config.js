@@ -4,7 +4,16 @@
  * Precedence (highest first):
  *   1. Environment variables (WAM_*)
  *   2. Project config file: <projectRoot>/.wam/config.json
- *   3. Built-in defaults
+ *   3. Global config file (see below)
+ *   4. Built-in defaults
+ *
+ * Global config path (first match wins):
+ *   - WAM_GLOBAL_CONFIG=<path>
+ *   - $XDG_CONFIG_HOME/wam/config.json
+ *   - ~/.config/wam/config.json
+ *
+ * Global and project files are deep-merged (project wins). WAM_CONFIG replaces
+ * the file location entirely and disables the global merge.
  *
  * Supported flags (all booleans):
  *   - skills:      discover, route and inject skills into context        (default true)
@@ -27,11 +36,13 @@
  *     WAM_AGENT_MAX_REPLANS=<int>, WAM_AGENT_MAX_HISTORY=<int>
  *
  * Config file path override: WAM_CONFIG=<absolute-path-to-config.json>
+ * Global config path override: WAM_GLOBAL_CONFIG=<absolute-path-to-config.json>
  *
  * Config file example (.wam/config.json):
  *   { "skills": false, "logging": false, "enforcement": false, "debug": true }
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 export const DEFAULT_WAM_CONFIG = Object.freeze({
@@ -121,13 +132,64 @@ export function readConfigFile(baseDir) {
   }
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * Resolve the global WAM config path.
+ * WAM_GLOBAL_CONFIG wins; else XDG_CONFIG_HOME; else ~/.config/wam/config.json.
+ * @returns {string}
+ */
+export function resolveGlobalConfigPath() {
+  const override = (process.env.WAM_GLOBAL_CONFIG || "").trim();
+  if (override) return override;
+  const xdg = (process.env.XDG_CONFIG_HOME || "").trim();
+  if (xdg) return path.join(xdg, "wam", "config.json");
+  return path.join(os.homedir(), ".config", "wam", "config.json");
+}
+
+/**
+ * Read the global config file. Missing, malformed or non-object content => {}.
+ * @returns {object}
+ */
+export function readGlobalConfigFile() {
+  try {
+    const file = resolveGlobalConfigPath();
+    if (!fs.existsSync(file)) return {};
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    return isPlainObject(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function deepMerge(base, override) {
+  const result = { ...base };
+  for (const [key, value] of Object.entries(override || {})) {
+    if (value === undefined) continue;
+    result[key] =
+      isPlainObject(value) && isPlainObject(result[key])
+        ? deepMerge(result[key], value)
+        : value;
+  }
+  return result;
+}
+
+function readMergedConfigFile(baseDir) {
+  const project = readConfigFile(baseDir);
+  // WAM_CONFIG replaces the file location entirely: never merge the global file.
+  if (process.env.WAM_CONFIG) return project;
+  return deepMerge(readGlobalConfigFile(), project);
+}
+
 /**
  * Resolve the effective WAM config for a project root.
  * @param {string} [baseDir]
  * @returns {{skills: boolean, logging: boolean, enforcement: boolean, debug: boolean, autoLoop: boolean, permissionPreflight: boolean, contextProjection: string}}
  */
 export function loadWamConfig(baseDir = process.cwd()) {
-  const file = readConfigFile(baseDir);
+  const file = readMergedConfigFile(baseDir);
 
   const skills = firstDefined(
     parseBoolean(process.env.WAM_SKILLS),

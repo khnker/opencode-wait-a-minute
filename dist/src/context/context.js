@@ -17,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { generateContract, evaluateContract, mergeAssumptions } from "./sufficiency-contract.js";
-import { retrieveWithCqe } from "./cqe-adapter.js";
+import { retrieveWithCqe, classifyCqeFailure, CQE_FAILURE_HINTS } from "./cqe-adapter.js";
 import { loadDesignContext } from "../design/design-context.js";
 
 export { loadDesignContext };
@@ -624,16 +624,25 @@ export async function selectContextWithCqe(task, opts = {}) {
         source: cqeRes?.source || null,
         fallbackUsed: cqeRes?.fallbackUsed ?? false,
         fallbackReason: cqeRes?.metadata?.fallbackReason || cqeRes?.fallbackReason || null,
+        failureCode: cqeRes?.metadata?.failureCode || null,
+        failureHint: cqeRes?.metadata?.failureCode && cqeRes.metadata.failureCode !== "empty"
+          ? (CQE_FAILURE_HINTS[cqeRes.metadata.failureCode] || null)
+          : null,
+        empty: cqeRes?.metadata?.empty === true,
         timedOut: cqeRes?.metadata?.timedOut ?? cqeRes?.timedOut ?? false,
         cqeError: cqeRes?.metadata?.cqeError || cqeRes?.cqeError || null,
       };
     } catch (err) {
       // Non-fatal: CQE es augmentación best-effort; el contexto nativo prevalece.
+      const failureCode = classifyCqeFailure(err);
       pkg.cqeMeta = {
         elapsedMs: Date.now() - t0,
         source: null,
         fallbackUsed: true,
-        fallbackReason: "exception",
+        fallbackReason: failureCode === "error" ? "exception" : failureCode,
+        failureCode,
+        failureHint: CQE_FAILURE_HINTS[failureCode] || null,
+        empty: false,
         timedOut: false,
         cqeError: err?.message || "exception",
       };

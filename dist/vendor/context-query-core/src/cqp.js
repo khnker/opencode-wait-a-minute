@@ -46,7 +46,12 @@ const BUDGET_LEVELS = [2000, 8000, 20000, 30000];
 const DEFAULT_BUDGET = 8000;
 const DEFAULT_LIMIT = 20;
 
-class CqpError extends Error {}
+class CqpError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'CqpError';
+  }
+}
 
 function mapBudget(n) {
   let mapped = BUDGET_LEVELS[0];

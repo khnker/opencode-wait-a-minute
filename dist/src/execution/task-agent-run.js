@@ -1,4 +1,5 @@
 import { runAgentFeedbackOrchestration } from "../agents/orchestrator.js";
+import { normalizeReviewArtifacts } from "../agents/review-artifacts.js";
 import { decideAgentLoopAction } from "./task-loop.js";
 
 export class AgentTaskIntegrationError extends Error {
@@ -144,6 +145,27 @@ function objectiveFor(task) {
   );
 }
 
+function reviewArtifactValues(task) {
+  const values = [];
+  if (Array.isArray(task.reviewArtifacts)) {
+    values.push(...task.reviewArtifacts);
+  } else if (task.reviewArtifacts !== undefined) {
+    values.push(task.reviewArtifacts);
+  }
+  for (const field of ["diff", "patch"]) {
+    const value = task[field];
+    if (typeof value === "string") {
+      values.push({ ref: field, content: value });
+    } else if (isObject(value)) {
+      values.push({
+        ref: value.ref ?? value.path ?? value.id ?? field,
+        content: value.content ?? value.diff ?? value.patch,
+      });
+    }
+  }
+  return values;
+}
+
 export function buildTaskAgentInput(task) {
   if (!isObject(task)) {
     throw new AgentTaskIntegrationError("task snapshot is required");
@@ -164,6 +186,8 @@ export function buildTaskAgentInput(task) {
     evidence: collectEvidence(task),
     constraints: collectConstraints(task),
     priorFindings: collectPriorFindings(task),
+    reviewArtifacts: normalizeReviewArtifacts(reviewArtifactValues(task)),
+    mode: task.executionIntent === "ANALYZE" ? "ANALYZE" : "IMPLEMENT",
   };
 }
 
@@ -253,6 +277,7 @@ export function shouldRunTaskAgentPass(task) {
 
 export async function runConfiguredTaskAgentStep({
   task,
+  taskId,
   adapter,
   config,
   contextSelector,
@@ -264,6 +289,7 @@ export async function runConfiguredTaskAgentStep({
   if (!shouldRunTaskAgentPass(task)) return null;
   return runTaskAgentStep({
     task,
+    taskId,
     adapter,
     contextSelector,
     maxRevisionCycles: agentConfig.maxRevisionCycles,
@@ -276,6 +302,7 @@ export async function runConfiguredTaskAgentStep({
 
 export async function runTaskAgentStep({
   task,
+  taskId,
   adapter,
   contextSelector,
   maxChars,
@@ -289,7 +316,9 @@ export async function runTaskAgentStep({
   if (persist !== undefined && typeof persist !== "function") {
     throw new AgentTaskIntegrationError("persist must be a function when provided");
   }
-  const input = buildTaskAgentInput(task);
+  const hasIdentity = isObject(task) && (task.id || task.taskId || task.task_id);
+  const snapshot = !hasIdentity && nonEmptyString(taskId) ? { ...task, id: taskId } : task;
+  const input = buildTaskAgentInput(snapshot);
   const outcome = await runAgentFeedbackOrchestration({
     ...input,
     adapter,

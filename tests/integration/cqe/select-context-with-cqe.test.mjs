@@ -44,3 +44,18 @@ test('RT-03: disableCqe opt-out suppresses CQE augmentation', async () => {
     cleanupRepo(dir);
   }
 });
+
+test('RT-04: empty CQE result reports a stable empty failureCode', async () => {
+  const dir = makeFixtureRepo();
+  try {
+    const pkg = await selectContextWithCqe('FIND definitions OF symbol zzz_nonexistent_symbol_zzz', {
+      root: dir,
+    });
+    assert.ok(!pkg.file_context || pkg.file_context.length === 0);
+    assert.equal(pkg.cqeMeta?.failureCode, 'empty');
+    assert.equal(pkg.cqeMeta?.empty, true);
+    assert.equal(pkg.cqeMeta?.failureHint, null);
+  } finally {
+    cleanupRepo(dir);
+  }
+});
