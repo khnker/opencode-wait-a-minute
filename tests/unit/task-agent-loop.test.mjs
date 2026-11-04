@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   AgentTaskIntegrationError,
+  applyAgentFailure,
   applyAgentRun,
   buildTaskAgentInput,
   runConfiguredTaskAgentStep,
@@ -13,6 +14,7 @@ import {
   decideAgentLoopAction,
   decideNextAction,
 } from "../../src/execution/task-loop.js";
+import { agentSignalForLoop } from "../../src/execution/agent-run-state.js";
 
 const TASK_ID = "task-1";
 const REVIEW_FINDING = {
@@ -158,6 +160,81 @@ test("applyAgentRun validates the history cap", () => {
   );
 });
 
+test("an accepted agent run verifies requirements with reviewer evidence", () => {
+  const task = baseTask({
+    requirements: [
+      { id: "req-1", title: "Auth", status: "pending", evidence: [] },
+      { id: "req-2", title: "Logout", status: "done", evidence: ["manual"] },
+    ],
+  });
+  const outcome = {
+    status: "COMPLETED",
+    verdict: "ACCEPTED",
+    cycles: { revisions: 0, replans: 0 },
+    results: [
+      {
+        role: "REVIEWER",
+        result: {
+          status: "COMPLETED",
+          summary: "Independent review accepted the change",
+          evidence: ["tests/auth.test.js"],
+          artifacts: ["src/auth.js"],
+        },
+      },
+    ],
+  };
+
+  const updated = applyAgentRun(task, outcome, { now: 42 });
+
+  assert.equal(updated.requirements[0].status, "verified");
+  assert.equal(updated.requirements[1].status, "verified");
+  assert.match(updated.requirements[0].evidence[0], /reviewer: Independent review accepted the change/);
+  assert.match(updated.requirements[0].evidence[0], /reviewer-evidence: tests\/auth\.test\.js/);
+  assert.match(updated.requirements[0].evidence[0], /artifact: src\/auth\.js/);
+  assert.equal(updated.requirements[0].verifiedAt, 42);
+  assert.equal(updated.requirements[0].updatedAt, 42);
+  assert.equal(task.requirements[0].status, "pending");
+  assert.deepEqual(task.requirements[0].evidence, []);
+  assert.equal(task.requirements[1].status, "done");
+});
+
+test("a non-accepted agent run leaves requirements untouched", () => {
+  const task = baseTask({
+    requirements: [{ id: "req-1", title: "Auth", status: "pending", evidence: [] }],
+  });
+  const outcome = {
+    status: "REVISION_REQUIRED",
+    verdict: "REVISION_REQUIRED",
+    cycles: { revisions: 1, replans: 0 },
+    results: [],
+  };
+
+  const updated = applyAgentRun(task, outcome, { now: 42 });
+
+  assert.deepEqual(updated.requirements, task.requirements);
+  assert.equal(updated.requirements[0].status, "pending");
+});
+
+test("an accepted analysis run does not mark requirements done", () => {
+  const task = baseTask({
+    executionIntent: "ANALYZE",
+    requirements: [{ id: "req-1", title: "Auth", status: "pending", evidence: [] }],
+  });
+  const outcome = {
+    status: "COMPLETED",
+    verdict: "ACCEPTED",
+    cycles: { revisions: 0, replans: 0 },
+    results: [
+      { role: "REVIEWER", result: { status: "COMPLETED", summary: "Analysis accepted", evidence: [] } },
+    ],
+  };
+
+  const updated = applyAgentRun(task, outcome, { now: 42 });
+
+  assert.equal(updated.requirements[0].status, "pending");
+  assert.deepEqual(updated.requirements[0].evidence, []);
+});
+
 test("decideAgentLoopAction maps terminal agent outcomes", () => {
   assert.deepEqual(decideAgentLoopAction({ status: "COMPLETED", verdict: "ACCEPTED" }), {
     decision: "VERIFY",
@@ -209,6 +286,14 @@ test("decideNextAction accepts an agent outcome but budget still wins", () => {
   const accepted = { status: "COMPLETED", verdict: "ACCEPTED" };
 
   assert.equal(decideNextAction({ ...base, agent: accepted }).decision, "VERIFY");
+  assert.equal(
+    decideNextAction({
+      task: { state: "EXECUTING" },
+      completionGate: { blocked: false, allDone: true, completionIntent: false },
+      agent: accepted,
+    }).decision,
+    "COMPLETE",
+  );
   assert.equal(
     decideNextAction({ ...base, agent: { status: "FAILED" } }).decision,
     "BLOCK",
@@ -395,4 +480,25 @@ test("routes task.diff into the reviewer request only", async () => {
     assert.equal("reviewArtifacts" in call.input, false);
   }
   assert.equal(result.outcome.status, "COMPLETED");
+});
+
+test("applyAgentFailure persists a terminal run with the failure reason", () => {
+  const task = baseTask();
+  const updated = applyAgentFailure(task, "child session timed out", { now: 42 });
+
+  assert.equal(updated.agentRun.status, "FAILED");
+  assert.equal(updated.agentRun.failureReason, "child session timed out");
+  assert.equal(updated.agentRun.updatedAt, 42);
+  assert.equal(shouldRunTaskAgentPass(updated), false);
+  assert.equal(task.agentRun, undefined);
+});
+
+test("a failed pass blocks the loop with the persisted reason", () => {
+  const task = baseTask();
+  const updated = applyAgentFailure(task, "child session timed out", { now: 42 });
+  const signal = agentSignalForLoop(null, updated);
+  const action = decideAgentLoopAction(signal);
+
+  assert.equal(action.decision, "BLOCK");
+  assert.equal(action.reason, "agent-failed: child session timed out");
 });

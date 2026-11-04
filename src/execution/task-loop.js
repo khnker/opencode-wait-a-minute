@@ -20,7 +20,12 @@ export function decideAgentLoopAction(agent) {
   const status = agent.status;
   const verdict = agent.verdict ?? null;
   if (status === "FAILED") {
-    return { decision: "BLOCK", reason: "agent-failed" };
+    const detail =
+      typeof agent.failureReason === "string" ? agent.failureReason.trim().replace(/\s+/g, " ") : "";
+    return {
+      decision: "BLOCK",
+      reason: detail ? `agent-failed: ${detail.slice(0, 200)}` : "agent-failed",
+    };
   }
   if (status === "BLOCKED") {
     return { decision: "WAIT_USER", reason: "agent-blocked" };

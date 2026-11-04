@@ -3,7 +3,7 @@ import { createDialogueLlmFromEnv } from "./src/dialogue/llm-observer.js";
 import { startExperiment, noteSuccess, noteFailure } from "./src/execution/execution-engine.js";
 import { planAutoContinuation, buildAutoLoopPrompt } from "./src/execution/auto-continuation.js";
 import { driveTaskLoop } from "./src/adapters/opencode-v1/session-driver.js";
-import { runConfiguredTaskAgentStep, shouldRunTaskAgentPass } from "./src/execution/task-agent-run.js";
+import { runConfiguredTaskAgentStep, shouldRunTaskAgentPass, applyAgentFailure } from "./src/execution/task-agent-run.js";
 import { agentSignalForLoop } from "./src/execution/agent-run-state.js";
 import { isExecutionGateActive, isMutatingToolCall, executionGateDirective, shouldClearExecutionGate } from "./src/execution/execution-gate.js";
 import { createOpenCodeV1AgentAdapter } from "./src/agents/invocation-adapter.js";
@@ -1133,8 +1133,17 @@ refresh();
       const agent = agentSignalForLoop(step?.outcome, task);
       return { taskId: passTaskId, root: passRoot, agent };
     } catch (e) {
-      wamWarn(`[wait-a-minute] agent task step failed for ${passTaskId}:`, e?.message);
-      return { taskId: passTaskId, root: passRoot, agent: null };
+      const message = String(e?.message || e || "agent step failed");
+      wamWarn(`[wait-a-minute] agent task step failed for ${passTaskId}:`, message);
+      try {
+        const latest = getTaskState(passTaskId, passRoot) || task;
+        const failed = applyAgentFailure(latest, message);
+        persistTaskState(passTaskId, failed, passRoot);
+        return { taskId: passTaskId, root: passRoot, agent: agentSignalForLoop(null, failed) };
+      } catch (persistError) {
+        wamWarn(`[wait-a-minute] could not persist agent failure for ${passTaskId}:`, persistError?.message);
+        return { taskId: passTaskId, root: passRoot, agent: null };
+      }
     } finally {
       agentRunInFlight.delete(passTaskId);
       clearExecutionGate(passTaskId, passRoot);

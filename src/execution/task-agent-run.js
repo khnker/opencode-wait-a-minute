@@ -231,6 +231,37 @@ function summaryEntry(outcome, resultCount, now) {
   };
 }
 
+function reviewerEvidence(results) {
+  const reviewer = results.find(
+    (entry) => entry?.role === "REVIEWER" && entry?.status === "COMPLETED",
+  );
+  const parts = [];
+  if (nonEmptyString(reviewer?.summary)) parts.push(`reviewer: ${reviewer.summary}`);
+  for (const item of asArray(reviewer?.evidence)) {
+    parts.push(`reviewer-evidence: ${typeof item === "string" ? item : JSON.stringify(item)}`);
+  }
+  for (const artifact of asArray(reviewer?.artifacts)) {
+    parts.push(`artifact: ${typeof artifact === "string" ? artifact : JSON.stringify(artifact)}`);
+  }
+  return parts.length > 0 ? parts.join("\n") : "agent-run: reviewer accepted";
+}
+
+function markAcceptedRequirementsVerified(requirements, results, now) {
+  if (!Array.isArray(requirements) || requirements.length === 0) return requirements;
+  const evidence = reviewerEvidence(results);
+  return requirements.map((requirement) => {
+    if (!isObject(requirement)) return requirement;
+    if (requirement.status === "verified") return requirement;
+    return {
+      ...requirement,
+      status: "verified",
+      evidence: [...asArray(requirement.evidence), evidence],
+      verifiedAt: now,
+      updatedAt: now,
+    };
+  });
+}
+
 export function applyAgentRun(task, outcome, { now = Date.now(), maxHistory = 5 } = {}) {
   if (!isObject(task)) {
     throw new AgentTaskIntegrationError("task snapshot is required");
@@ -242,6 +273,13 @@ export function applyAgentRun(task, outcome, { now = Date.now(), maxHistory = 5 
     throw new AgentTaskIntegrationError("maxHistory must be a non-negative integer");
   }
   const results = asArray(outcome.results).map(summarizeResult);
+  const accepted =
+    outcome.status === "COMPLETED" &&
+    outcome.verdict === "ACCEPTED" &&
+    task.executionIntent !== "ANALYZE";
+  const requirements = accepted
+    ? markAcceptedRequirementsVerified(task.requirements, results, now)
+    : task.requirements;
   const agentRun = {
     status: outcome.status ?? null,
     verdict: outcome.verdict ?? null,
@@ -261,7 +299,26 @@ export function applyAgentRun(task, outcome, { now = Date.now(), maxHistory = 5 
     ...task,
     agentRun,
     agentHistory,
+    ...(accepted ? { requirements } : {}),
   };
+}
+
+export function applyAgentFailure(task, message, { now = Date.now(), maxHistory = 5 } = {}) {
+  const updated = applyAgentRun(
+    task,
+    {
+      status: "FAILED",
+      verdict: null,
+      stoppedAt: "agent",
+      exhausted: false,
+      results: [],
+      handoffs: [],
+      cycles: task?.agentRun?.cycles,
+    },
+    { now, maxHistory },
+  );
+  updated.agentRun.failureReason = String(message || "agent step failed");
+  return updated;
 }
 
 export function shouldRunTaskAgentPass(task) {

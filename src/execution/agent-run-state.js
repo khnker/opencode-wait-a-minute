@@ -17,6 +17,9 @@ export function agentSignalForLoop(outcome, task) {
     exhausted: run.exhausted === true,
     stale: true,
     surfaced: run.surfaced === true,
+    ...(typeof run.failureReason === "string" && run.failureReason
+      ? { failureReason: run.failureReason }
+      : {}),
     results: Array.isArray(run.results) ? run.results : [],
   };
 }
