@@ -5,11 +5,13 @@ import {
   getRoleCapabilities,
   getRoleDefinition,
 } from "./role-contracts.js";
+import { AGENT_RESOURCE_LIMITS } from "./resource-policy.js";
 import { assertResultIdentity, normalizeAgentResult } from "./result-boundary.js";
 
 export const AGENT_INVOCATION_ERROR_CODES = Object.freeze({
   SESSION_CREATE_FAILED: "SESSION_CREATE_FAILED",
   PROMPT_FAILED: "PROMPT_FAILED",
+  PROMPT_TIMEOUT: "PROMPT_TIMEOUT",
   INVALID_RESULT: "INVALID_RESULT",
 });
 
@@ -47,6 +49,15 @@ export class AgentInvocationError extends Error {
     this.code = code;
     if (sessionID) this.sessionID = sessionID;
   }
+}
+
+function withTimeout(promise, ms, makeError) {
+  if (!(ms > 0)) return promise;
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(makeError()), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 export function toolPolicyForRole(role) {
@@ -241,20 +252,37 @@ export function createOpenCodeV1AgentAdapter({
       const root = overrides.directory || directory;
       const invocationAgent = overrides.agent || agent;
       const query = root ? { query: { directory: root } } : {};
+      const rawTimeout = overrides.toolTimeoutMs === undefined || overrides.toolTimeoutMs === null
+        ? undefined
+        : Number(overrides.toolTimeoutMs);
+      const timeoutMs = rawTimeout === undefined || Number.isNaN(rawTimeout)
+        ? AGENT_RESOURCE_LIMITS.maxInvocationMs
+        : rawTimeout;
+      const signal = timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined;
 
       let session;
       try {
-        const created = await client.session.create({
-          ...query,
-          body: {
-            ...(parentSessionID ? { parentID: parentSessionID } : {}),
-            title: `WAM ${request.role} ${request.taskId} ${request.invocationId}`,
-          },
-        });
+        const created = await withTimeout(
+          client.session.create({
+            ...query,
+            ...(signal ? { signal } : {}),
+            body: {
+              ...(parentSessionID ? { parentID: parentSessionID } : {}),
+              title: `WAM ${request.role} ${request.taskId} ${request.invocationId}`,
+            },
+          }),
+          timeoutMs,
+          () => new AgentInvocationError(
+            `agent session create timeout after ${timeoutMs}ms`,
+            { code: AGENT_INVOCATION_ERROR_CODES.SESSION_CREATE_FAILED },
+          ),
+        );
         if (created?.error) throw created.error;
         session = created?.data ?? created;
         if (!session?.id) throw new Error("session.create returned no session id");
+        try { overrides.onSessionCreated?.(session.id); } catch {}
       } catch (cause) {
+        if (cause instanceof AgentInvocationError) throw cause;
         throw new AgentInvocationError("failed to create agent session", {
           code: AGENT_INVOCATION_ERROR_CODES.SESSION_CREATE_FAILED,
           cause,
@@ -263,13 +291,35 @@ export function createOpenCodeV1AgentAdapter({
 
       let response;
       try {
-        response = await client.session.prompt({
-          path: { id: session.id },
-          ...query,
-          body: promptBody(request, invocationAgent),
-        });
+        response = await withTimeout(
+          client.session.prompt({
+            path: { id: session.id },
+            ...query,
+            ...(signal ? { signal } : {}),
+            body: promptBody(request, invocationAgent),
+          }),
+          timeoutMs,
+          () => new AgentInvocationError(
+            `agent prompt timeout after ${timeoutMs}ms`,
+            { code: AGENT_INVOCATION_ERROR_CODES.PROMPT_TIMEOUT, sessionID: session.id },
+          ),
+        );
         if (response?.error) throw response.error;
       } catch (cause) {
+        if (cause instanceof AgentInvocationError) {
+          if (!cause.sessionID) cause.sessionID = session.id;
+          throw cause;
+        }
+        if (signal?.aborted || cause?.name === "AbortError" || cause?.code === "ABORT_ERR") {
+          throw new AgentInvocationError(
+            `agent prompt timeout after ${timeoutMs}ms`,
+            {
+              code: AGENT_INVOCATION_ERROR_CODES.PROMPT_TIMEOUT,
+              cause,
+              sessionID: session.id,
+            },
+          );
+        }
         throw new AgentInvocationError("failed to prompt agent session", {
           code: AGENT_INVOCATION_ERROR_CODES.PROMPT_FAILED,
           cause,

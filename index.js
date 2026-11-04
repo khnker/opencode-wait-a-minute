@@ -3,7 +3,7 @@ import { createDialogueLlmFromEnv } from "./src/dialogue/llm-observer.js";
 import { startExperiment, noteSuccess, noteFailure } from "./src/execution/execution-engine.js";
 import { planAutoContinuation, buildAutoLoopPrompt } from "./src/execution/auto-continuation.js";
 import { driveTaskLoop } from "./src/adapters/opencode-v1/session-driver.js";
-import { runConfiguredTaskAgentStep, shouldRunTaskAgentPass, applyAgentFailure } from "./src/execution/task-agent-run.js";
+import { runConfiguredTaskAgentStep, shouldRunTaskAgentPass, applyAgentFailure, formatAgentFailure } from "./src/execution/task-agent-run.js";
 import { agentSignalForLoop } from "./src/execution/agent-run-state.js";
 import { isExecutionGateActive, isMutatingToolCall, executionGateDirective, shouldClearExecutionGate } from "./src/execution/execution-gate.js";
 import { createOpenCodeV1AgentAdapter } from "./src/agents/invocation-adapter.js";
@@ -1108,6 +1108,7 @@ refresh();
       const task = getTaskState(passTaskId, passRoot);
       if (!task) return null;
       if (!shouldRunTaskAgentPass(task)) return null;
+      wamDebug(`[wait-a-minute] agent pass running ${passTaskId} (intent=${task.executionIntent ?? "unknown"})`);
       const taskWithGate = {
         ...task,
         executionGate: {
@@ -1133,7 +1134,7 @@ refresh();
       const agent = agentSignalForLoop(step?.outcome, task);
       return { taskId: passTaskId, root: passRoot, agent };
     } catch (e) {
-      const message = String(e?.message || e || "agent step failed");
+      const message = formatAgentFailure(e);
       wamWarn(`[wait-a-minute] agent task step failed for ${passTaskId}:`, message);
       try {
         const latest = getTaskState(passTaskId, passRoot) || task;
@@ -1147,6 +1148,7 @@ refresh();
     } finally {
       agentRunInFlight.delete(passTaskId);
       clearExecutionGate(passTaskId, passRoot);
+      wamDebug(`[wait-a-minute] agent pass settled ${passTaskId} (gate released)`);
     }
   }
 
@@ -1166,7 +1168,7 @@ refresh();
     }
 
     if (!skipAgent && cfg.taskLoop.agents?.enabled) {
-      if (agentRunInFlight.has(taskId)) return;
+      if (agentRunInFlight.has(taskId)) return { reason: "in-flight" };
       const passPromise = runTaskAgentPass(sessionID, { root, taskId });
       taskChildren.trackPromise(taskId, passPromise);
       const pass = await passPromise;

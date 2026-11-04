@@ -6,6 +6,7 @@ import {
   applyAgentFailure,
   applyAgentRun,
   buildTaskAgentInput,
+  formatAgentFailure,
   runConfiguredTaskAgentStep,
   runTaskAgentStep,
   shouldRunTaskAgentPass,
@@ -491,6 +492,18 @@ test("applyAgentFailure persists a terminal run with the failure reason", () => 
   assert.equal(updated.agentRun.updatedAt, 42);
   assert.equal(shouldRunTaskAgentPass(updated), false);
   assert.equal(task.agentRun, undefined);
+});
+
+test("formatAgentFailure includes the error code and cause chain", () => {
+  const error = new Error("failed to prompt agent session", {
+    cause: Object.assign(new Error("The operation was aborted"), { code: "ABORT_ERR" }),
+  });
+  error.code = "PROMPT_FAILED";
+
+  assert.equal(
+    formatAgentFailure(error),
+    "failed to prompt agent session; code=PROMPT_FAILED; cause: The operation was aborted code=ABORT_ERR",
+  );
 });
 
 test("a failed pass blocks the loop with the persisted reason", () => {

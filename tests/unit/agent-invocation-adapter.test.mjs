@@ -305,6 +305,21 @@ test("wraps prompt failures and includes the session id", async () => {
   );
 });
 
+test("classifies an aborted prompt as a timeout", async () => {
+  const abort = Object.assign(new Error("The operation was aborted"), { name: "AbortError" });
+  const client = fakeClient({ promptError: abort });
+  const adapter = createOpenCodeV1AgentAdapter({ client });
+
+  await assert.rejects(
+    () => adapter.invoke(requestFor(), { toolTimeoutMs: 1000 }),
+    (error) => error instanceof AgentInvocationError &&
+      error.code === AGENT_INVOCATION_ERROR_CODES.PROMPT_TIMEOUT &&
+      error.sessionID === "ses-child" &&
+      error.cause === abort &&
+      error.message === "agent prompt timeout after 1000ms",
+  );
+});
+
 test("wraps prompt error responses", async () => {
   const client = fakeClient({ prompted: { error: new Error("rate limited") } });
   const adapter = createOpenCodeV1AgentAdapter({ client });
@@ -366,4 +381,30 @@ test("rejects a result whose identity does not match the request", async () => {
       error.sessionID === "ses-child" &&
       error.cause instanceof RoleContractError,
   );
+});
+
+test("times out a prompt that never resolves", async () => {
+  const request = requestFor("ANALYST");
+  const client = {
+    session: {
+      async create() {
+        return { data: { id: "ses-child" } };
+      },
+      prompt() {
+        return new Promise(() => {});
+      },
+    },
+  };
+  const adapter = createOpenCodeV1AgentAdapter({ client });
+
+  const started = Date.now();
+  await assert.rejects(
+    () => adapter.invoke(request, { toolTimeoutMs: 50 }),
+    (error) =>
+      error instanceof AgentInvocationError &&
+      error.code === AGENT_INVOCATION_ERROR_CODES.PROMPT_TIMEOUT &&
+      error.sessionID === "ses-child" &&
+      /timeout/i.test(error.message),
+  );
+  assert.ok(Date.now() - started < 1000);
 });

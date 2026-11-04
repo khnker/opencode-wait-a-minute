@@ -303,6 +303,25 @@ export function applyAgentRun(task, outcome, { now = Date.now(), maxHistory = 5 
   };
 }
 
+export function formatAgentFailure(error, { maxLength = 300 } = {}) {
+  if (!isObject(error)) return String(error || "agent step failed").slice(0, maxLength);
+  const parts = [
+    nonEmptyString(error.message) ? error.message : "agent step failed",
+  ];
+  if (nonEmptyString(error.code)) parts.push(`code=${error.code}`);
+  let cause = error.cause;
+  for (let depth = 0; cause && depth < 3; depth += 1) {
+    const causeMessage = isObject(cause) && nonEmptyString(cause.message)
+      ? cause.message
+      : String(cause);
+    const causeCode = isObject(cause) && nonEmptyString(cause.code) ? ` code=${cause.code}` : "";
+    parts.push(`cause${depth === 0 ? "" : `[${depth}]`}: ${causeMessage}${causeCode}`);
+    cause = isObject(cause) ? cause.cause : undefined;
+  }
+  const text = parts.join("; ");
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
 export function applyAgentFailure(task, message, { now = Date.now(), maxHistory = 5 } = {}) {
   const updated = applyAgentRun(
     task,
