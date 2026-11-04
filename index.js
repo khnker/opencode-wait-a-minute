@@ -3,14 +3,21 @@ import { createDialogueLlmFromEnv } from "./src/dialogue/llm-observer.js";
 import { startExperiment, noteSuccess, noteFailure } from "./src/execution/execution-engine.js";
 import { planAutoContinuation, buildAutoLoopPrompt } from "./src/execution/auto-continuation.js";
 import { driveTaskLoop } from "./src/adapters/opencode-v1/session-driver.js";
-import { runConfiguredTaskAgentStep } from "./src/execution/task-agent-run.js";
-import { isExecutionGateActive, isMutatingToolCall, executionGateDirective } from "./src/execution/execution-gate.js";
+import { runConfiguredTaskAgentStep, shouldRunTaskAgentPass } from "./src/execution/task-agent-run.js";
+import { agentSignalForLoop } from "./src/execution/agent-run-state.js";
+import { isExecutionGateActive, isMutatingToolCall, executionGateDirective, shouldClearExecutionGate } from "./src/execution/execution-gate.js";
 import { createOpenCodeV1AgentAdapter } from "./src/agents/invocation-adapter.js";
+import { registerSessionLifecycle, unregisterSessionLifecycle } from "./src/integration/session-lifecycle.js";
+import { checkToolPath } from "./src/execution/tool-path-guard.js";
+import { createTaskChildRegistry } from "./src/execution/task-children.js";
 import { migrateLegacyCognition } from "./src/cognition/cognition-store.js";
 import { handleMessage } from "./src/integration/message-handler.js";
+import { splitVisibleRequirements } from "./src/context/requirement-visibility.js";
 import { injectWamParts, defaultPartId } from "./src/integration/part-provenance.js";
+import { enqueueVisibleNotice, drainVisibleNotices, buildVisibleNoticePart, updateVisibleNoticePart } from "./src/integration/visible-notices.js";
+import { stripWrappingQuotes } from "./src/shared/command-args.js";
 import { loadWamConfig } from "./src/config/wam-config.js";
-import { ensurePermissionPlan, permissionPreflightLines, delegationBlocked } from "./src/policy/permission-preflight.js";
+import { ensurePermissionPlan, permissionPreflightLines, delegationBlocked, shouldBlockForPendingPermission } from "./src/policy/permission-preflight.js";
 import { configureLogger } from "./src/integration/logger.js";
 import { setLoggingEnabled, setDebugEnabled, registerLogicGate, wamDebug, wamLog, wamWarn, wamError } from "./src/shared/wam-log.js";
 import { evaluateCompletionGate, applyPhaseTransition, isCompletionIntent, COMPLETION_INTENT_REGEX } from "./src/integration/orchestration.js";
@@ -683,8 +690,7 @@ function delegationLines(state) {
   const lines = [
     loadPrompt("injection.delegation"),
   ];
-  const visible = reqs.slice(0, MAX_VISIBLE_REQS);
-  const overflow = reqs.length - MAX_VISIBLE_REQS;
+  const { visible, overflow } = splitVisibleRequirements(reqs, { pendingFirst: false });
   for (const r of visible) {
     const hint = domainHint(r.title);
     lines.push(loadPrompt("injection.delegation_item", { id: r.id, title: truncate(r.title, 120), hint: hint ? ` [contexto: ${hint}]` : "" }));
@@ -694,8 +700,6 @@ function delegationLines(state) {
   }
   return lines;
 }
-
-const MAX_VISIBLE_REQS = 8;
 
 /**
  * Strategy Continuity: classify whether an action is covered by an active
@@ -802,8 +806,7 @@ function prepareSystemInject(analysis, state, cfg, projectDirectory, waitAMinute
   // Once: contract display, then contractDisplayed flips. After that the agent
   // already has the objective in working memory — no need to repeat.
   if (state.phase === "PROPOSED" && !state.contractDisplayed) {
-    const visible = reqs.slice(0, MAX_VISIBLE_REQS);
-    const overflow = reqs.length - MAX_VISIBLE_REQS;
+    const { visible, overflow } = splitVisibleRequirements(reqs);
     inject.push(
       `Objective: ${objective || "pending"}`,
       `Remaining (${pend.length}/${reqs.length}):`,
@@ -835,7 +838,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
   configureLogger({ enabled: wamConfig.logging });
   setLoggingEnabled(wamConfig.logging);
   setDebugEnabled(wamConfig.debug);
-  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement, debug: wamConfig.debug, autoLoop: wamConfig.autoLoop, permissionPreflight: wamConfig.permissionPreflight, contextProjection: wamConfig.contextProjection, taskLoop: wamConfig.taskLoop };
+  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement, debug: wamConfig.debug, autoLoop: wamConfig.autoLoop, permissionPreflight: wamConfig.permissionPreflight, contextProjection: wamConfig.contextProjection, taskLoop: wamConfig.taskLoop, completionGate: wamConfig.completionGate };
   // Audit which WAM logic gates are loaded so WAM_DEBUG=1 output is self-describing.
   registerLogicGate("skills", { loaded: wamConfig.skills, source: "wam-config", note: "skill discovery/routing/injection" });
   registerLogicGate("logging", { loaded: wamConfig.logging, source: "wam-config", note: "file + console log emission" });
@@ -876,7 +879,39 @@ const WaitAMinutePlugin = async (pluginInput) => {
   const sessionAutoCompactInFlight = new Set(); // sessionIDs with a summarize call in flight
   const autoContinueInFlight = new Set(); // sessionID → auto-loop prompt en vuelo
   const agentRunInFlight = new Set(); // taskId → agent pass en vuelo
+  const taskChildren = createTaskChildRegistry();
   const client = pluginInput?.client;
+
+  const pendingVisibleNotices = new Map();
+
+  function queueVisibleNotice(sessionID, text) {
+    const normalized = String(text ?? "").trim();
+    if (!normalized) return;
+    enqueueVisibleNotice(
+      pendingVisibleNotices,
+      sessionID,
+      normalized.startsWith("[wam]") ? normalized : `[wam] ${normalized}`,
+    );
+  }
+
+  async function flushVisibleNotices(sessionID, messageID) {
+    const notices = drainVisibleNotices(pendingVisibleNotices, sessionID);
+    if (notices.length === 0 || !messageID) return;
+    for (const text of notices) {
+      const part = buildVisibleNoticePart({ sessionID, messageID, text, idFactory: genPartId });
+      try {
+        await updateVisibleNoticePart(client, { sessionID, messageID, part });
+      } catch (e) {
+        wamWarn(`[wait-a-minute] fallo al mostrar aviso: ${e?.message || e}`);
+      }
+    }
+  }
+
+  async function settleTaskChildren(taskId) {
+    await taskChildren.settle(taskId, {
+      abort: (childId) => client?.session?.abort?.({ path: { id: childId } }),
+    });
+  }
 
   try {
     const http = await import("node:http");
@@ -1072,19 +1107,30 @@ refresh();
     try {
       const task = getTaskState(passTaskId, passRoot);
       if (!task) return null;
+      if (!shouldRunTaskAgentPass(task)) return null;
+      const taskWithGate = {
+        ...task,
+        executionGate: {
+          active: true,
+          reason: task.executionIntent === "ANALYZE" ? "analysis-loop" : "agent-loop",
+          startedAt: new Date().toISOString(),
+        },
+      };
+      persistTaskState(passTaskId, taskWithGate, passRoot);
       const adapter = createOpenCodeV1AgentAdapter({
         client,
         directory: passRoot,
         parentSessionID: sessionID,
+        onSessionCreated: (childId) => taskChildren.trackChild(passTaskId, childId),
       });
       const step = await runConfiguredTaskAgentStep({
-        task,
+        task: taskWithGate,
         taskId: passTaskId,
         adapter,
         config: agentConfig,
         persist: (updated) => persistTaskState(passTaskId, updated, passRoot),
       });
-      const agent = step ? step.outcome : (task.agentRun || null);
+      const agent = agentSignalForLoop(step?.outcome, task);
       return { taskId: passTaskId, root: passRoot, agent };
     } catch (e) {
       wamWarn(`[wait-a-minute] agent task step failed for ${passTaskId}:`, e?.message);
@@ -1104,13 +1150,42 @@ refresh();
     const taskId = sessionTasks.get(sessionID) || readActiveTaskIdFresh(root, { sessionId: sessionID, projectRoot: root });
     if (!taskId) return;
 
+    const preState = getTaskState(taskId, root);
+    if (preState?.phase === "DONE") {
+      await settleTaskChildren(taskId);
+      return;
+    }
+
     if (!skipAgent && cfg.taskLoop.agents?.enabled) {
       if (agentRunInFlight.has(taskId)) return;
-      const pass = await runTaskAgentPass(sessionID, { root, taskId });
+      const passPromise = runTaskAgentPass(sessionID, { root, taskId });
+      taskChildren.trackPromise(taskId, passPromise);
+      const pass = await passPromise;
       agent = pass?.agent ?? null;
     }
 
-    driveTaskLoop({ sessionId: sessionID, projectRoot: root, taskId, client, agent, config: cfg.taskLoop, qualityConfig: cfg.qualityContracts });
+    return driveTaskLoop({ sessionId: sessionID, projectRoot: root, taskId, client, agent, config: cfg.taskLoop, qualityConfig: cfg.qualityContracts, enforce: cfg.completionGate?.enforce === true });
+  }
+
+  /**
+   * Dispatch work after a turn finished. The idle event can arrive before the
+   * prompt RPC that produced it resolves, so both `autoContinueInFlight` and
+   * the task-driver's own in-flight guard may still be set. Wait for them to
+   * settle instead of silently dropping the event (which stranded tasks in
+   * IMPLEMENTING with no agent pass).
+   */
+  async function dispatchIdle(sessionID) {
+    if (!sessionID) return;
+    for (let i = 0; i < 40 && autoContinueInFlight.has(sessionID); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const acted = await maybeAutoContinue(sessionID);
+    if (acted) return;
+    for (let i = 0; i < 40; i++) {
+      const result = await maybeTaskLoop(sessionID);
+      if (result?.reason !== "in-flight") return;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
   }
 
   // Automatic post-DONE loop: when the assistant claims completion and the
@@ -1127,8 +1202,8 @@ refresh();
       if (!taskId) return;
       const state = getTaskState(taskId, root);
       if (!state || state.phase === "DONE") return;
-      const gate = evaluateCompletionGate(state, "");
-      if (!gate.advisory) return;
+      const gate = evaluateCompletionGate(state, "", { enforce: cfg.completionGate?.enforce === true });
+      if (!gate.advisory && !gate.blocked) return;
       if (!client?.session?.messages || !client?.session?.prompt) return;
 
       const response = await client.session.messages({
@@ -1315,17 +1390,64 @@ async function postToolExecution(input, output) {
     "event": ({ event } = {}) => {
       try {
         const props = event?.properties || {};
+        if (event?.type === "session.created") {
+          // Register the session eagerly (idempotent). Task-state creation still
+          // happens on the first message, which remains the documented fallback
+          // for clients that do not emit session lifecycle events.
+          const info = props.info || props.session || {};
+          const sid = info.id || props.sessionID || info.sessionID;
+          if (sid) {
+            registerSessionLifecycle({
+              sessionID: sid,
+              directory: info.directory || info.path?.root || null,
+              info,
+              maps: { sessionRoots, sessionWamRoots, sessionParents, sessionTitles, sessionResolved },
+              ensureRoot: (root) => {
+                try { fs.mkdirSync(path.join(root, ".wam"), { recursive: true }); } catch {}
+              },
+            });
+          }
+          return;
+        }
+        if (event?.type === "session.deleted") {
+          const info = props.info || props.session || {};
+          const sid = info.id || props.sessionID || info.sessionID;
+          if (sid) {
+            const root = sessionWamRoots.get(sid) || sessionRoots.get(sid) || null;
+            unregisterSessionLifecycle({
+              sessionID: sid,
+              maps: { sessionRoots, sessionWamRoots, sessionParents, sessionTitles, sessionResolved },
+              removeSessionState: ({ root }) => {
+                if (!root) return;
+                try {
+                  const f = path.join(root, ".wam", `session_${sid}.json`);
+                  if (fs.existsSync(f)) fs.unlinkSync(f);
+                } catch {}
+              },
+              closeSession: ({ sessionId }) => {
+                if (!root) return;
+                const taskId = sessionTasks.get(sessionId);
+                if (taskId) closeSession({ sessionId, taskId }, root);
+              },
+            });
+            sessionTasks.delete(sid);
+            pendingVisibleNotices.delete(sid);
+            sessionAutoCompact.delete(sid);
+            sessionAutoCompactInFlight.delete(sid);
+          }
+          return;
+        }
         if (event?.type === "session.idle") {
-          void maybeAutoContinue(props.sessionID)
-            .then((acted) => {
-              if (!acted) void maybeTaskLoop(props.sessionID).catch((e) => wamDebug("[wait-a-minute] task loop error:", e?.message));
-            })
-            .catch((e) => wamDebug("[wait-a-minute] idle dispatch error:", e?.message));
+          void dispatchIdle(props.sessionID).catch((e) => wamDebug("[wait-a-minute] idle dispatch error:", e?.message));
           return;
         }
         if (event?.type === "message.updated") {
           const info = props.info;
-          if (!info || info.role !== "assistant" || !info.tokens) return;
+          if (!info || info.role !== "assistant") return;
+          if (info.finish || info.time?.completed) {
+            void flushVisibleNotices(info.sessionID, info.id);
+          }
+          if (!info.tokens) return;
           if (!info.finish && !info.time?.completed) return;
           const t = info.tokens;
           const cacheRead = t.cache?.read || 0;
@@ -1381,6 +1503,7 @@ async function postToolExecution(input, output) {
         isContinuationPrompt,
         genPartId,
         emitTextPart,
+        queueVisibleNotice,
         processedMessages,
         readActiveTaskIdFresh,
         writeActiveTaskId,
@@ -1459,11 +1582,9 @@ async function postToolExecution(input, output) {
                   idFactory: genPartId,
                 });
               }
-              if (isExecutionGateActive(state)) {
-                void runTaskAgentPass(sid, { root, taskId })
-                  .then((pass) => maybeTaskLoop(sid, { skipAgent: true, agent: pass?.agent ?? null }))
-                  .catch((err) => wamWarn(`[wait-a-minute] early agent pass failed for ${taskId}:`, err?.message));
-              }
+              // Agent passes run only from session.idle (after the main turn
+              // settles) so ANALYST observes the foreground mutations and never
+              // acts on pre-turn, possibly stale evidence.
             }
           } catch (err) {
             wamDebug("cpc", "injection failed", { error: err?.message });
@@ -1619,6 +1740,28 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
         // ASKING, y cambios triviales declarados.
         const isSubagent = sessionParents.has(sid);
         const isWamAgent = /^WAM\s+[A-Z]+\b/.test(sessionTitles.get(sid) || "");
+        const toolArgs = input?.args || input?.parameters || output?.args || {};
+        const pathCheck = checkToolPath({ tool, args: toolArgs, projectRoot: taskRoot, isChild: isSubagent });
+        if (!pathCheck.allowed) {
+          wamWarn(`[wait-a-minute] rejected ${tool} path outside project root: ${pathCheck.path}`);
+          throw new Error(`[wait-a-minute] tool path outside project root rejected: ${pathCheck.path}`);
+        }
+        if (shouldBlockForPendingPermission({ tool, enforce: cfg.permissionEnforce === true, plan: st?.permissionPreflight })) {
+          wamWarn(`[wait-a-minute] blocked ${tool}: permission preflight is pending`);
+          throw new Error(`[wait-a-minute] blocked ${tool}: permission preflight pending; approve permissions first (/wam permissions approve)`);
+        }
+        if (
+          !isWamAgent &&
+          st &&
+          shouldClearExecutionGate(st, agentRunInFlight.has(taskId))
+        ) {
+          clearExecutionGate(taskId, taskRoot);
+          st.executionGate = {
+            ...st.executionGate,
+            active: false,
+            completedAt: new Date().toISOString(),
+          };
+        }
         if (
           !isWamAgent &&
           isExecutionGateActive(st) &&
@@ -2142,7 +2285,7 @@ const sel = routeSkillsV2(prompt, {}, waitAMinute.getRegistry(), "STANDARD");
       return caps.map((c) => `${c.context_id} [${c.level} ${c.lifecycle}] ${c.provenance} ${(c.purpose || "").slice(0, 60)}`).join("\n");
     }
     if (action === "get") {
-      const q = rest.join(" ");
+      const q = stripWrappingQuotes(rest.join(" "));
       if (!q) return "Uso: /wam ctx get <query>";
       const r = retrieveContext(q, { root });
       if (!r.ok) return r.message;

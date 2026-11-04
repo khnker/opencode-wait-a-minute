@@ -32,7 +32,8 @@ test("BLOCKED agent outranks a satisfied completion gate", () => {
 
   assert.equal(result.decision, "WAIT_USER");
   assert.equal(result.reason, "agent-blocked");
-  assert.deepEqual(result.nextAction, { type: "wait_user" });
+  assert.equal(result.nextAction.type, "wait_user");
+  assert.equal(result.nextAction.reason, "agent-blocked");
   assert.equal(result.checkpoint.status, "WAITING_USER");
 });
 
@@ -41,7 +42,8 @@ test("NEEDS_INPUT agent outranks a satisfied completion gate", () => {
 
   assert.equal(result.decision, "WAIT_USER");
   assert.equal(result.reason, "agent-needs-input");
-  assert.deepEqual(result.nextAction, { type: "wait_user" });
+  assert.equal(result.nextAction.type, "wait_user");
+  assert.equal(result.nextAction.reason, "agent-needs-input");
 });
 
 test("exhausted revision cycle outranks a satisfied completion gate", () => {

@@ -24,6 +24,10 @@ export function isExecutionGateActive(task) {
   return task?.executionGate?.active === true;
 }
 
+export function shouldClearExecutionGate(task, taskInFlight = false) {
+  return isExecutionGateActive(task) && taskInFlight !== true;
+}
+
 export function executionGateDirective(gate) {
   const reason = gate?.reason === "analysis-loop"
     ? "el pipeline de análisis read-only"

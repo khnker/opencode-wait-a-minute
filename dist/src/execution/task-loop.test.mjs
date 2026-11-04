@@ -38,6 +38,22 @@ test("COMPLETE only when the gate has no pending work", () => {
   const explicit = decideNextAction({ task: { state: "EXECUTING" }, completionGate: { ok: true } });
   assert.equal(explicit.decision, "COMPLETE");
 
+  const allDone = decideNextAction({
+    task: { state: "EXECUTING" },
+    completionGate: { blocked: false, allDone: true, completionIntent: false },
+  });
+  assert.equal(allDone.decision, "COMPLETE");
+  assert.equal(allDone.reason, "evidence-complete");
+
+  const accepted = decideNextAction({
+    task: { state: "EXECUTING" },
+    loop: { iteration: 3 },
+    completionGate: { blocked: false, allDone: true, completionIntent: false },
+    agent: { status: "COMPLETED", verdict: "ACCEPTED" },
+  });
+  assert.equal(accepted.decision, "COMPLETE");
+  assert.equal(accepted.reason, "evidence-complete");
+
   const rejected = decideNextAction({ task: { state: "EXECUTING" }, completionGate: { ok: false, pending: [] } });
   assert.equal(rejected.decision, "CONTINUE");
 });
@@ -53,6 +69,7 @@ test("COMPLETED task stops without new work", () => {
   assert.equal(result.stopReason, "already-completed");
   assert.equal(result.checkpoint.status, "COMPLETED");
   assert.equal(result.checkpoint.iteration, 5);
+  assert.equal(result.nextAction.type, "complete");
 });
 
 test("STOPPED loop yields STOP_STAGNATION", () => {
@@ -89,6 +106,14 @@ test("authorization and blocked states win over execution", () => {
   assert.equal(unapproved.decision, "WAIT_USER");
   assert.equal(unapproved.reason, "contract-not-approved");
   assert.equal(unapproved.checkpoint.status, "WAITING_USER");
+
+  const approved = decideNextAction({
+    task: { state: "EXECUTING", contract: { status: "APPROVED" } },
+    authorization: { pendingAuth: { id: "auth-1" }, contractApproved: true },
+    completionGate: { pending: ["req-1"] },
+  });
+  assert.equal(approved.decision, "CONTINUE");
+  assert.equal(approved.reason, "work-remaining");
 
   const blocked = decideNextAction({ task: { state: "EXECUTING", blocked: true } });
   assert.equal(blocked.decision, "BLOCK");
@@ -138,6 +163,30 @@ test("VERIFYING with pending work requires verification", () => {
   assert.equal(result.checkpoint.status, "RUNNING");
 });
 
+test("no-progress wins over pending verification", () => {
+  const result = decideNextAction({
+    task: { state: "VERIFYING" },
+    loop: { iteration: 4, consecutiveNoProgress: 3, maxNoProgress: 3 },
+    completionGate: { pending: ["req-1"], requiresVerification: true },
+  });
+  assert.equal(result.decision, "STOP_STAGNATION");
+  assert.equal(result.reason, "no-progress");
+  assert.equal(result.stopReason, "no-progress");
+  assert.equal(result.checkpoint.status, "STOPPED");
+});
+
+test("progress with pending verification verifies instead of stopping", () => {
+  const result = decideNextAction({
+    task: { state: "VERIFYING" },
+    loop: { iteration: 5, consecutiveNoProgress: 3, maxNoProgress: 3 },
+    progress: { advanced: true },
+    completionGate: { pending: ["req-1"], requiresVerification: true },
+  });
+  assert.notEqual(result.decision, "STOP_STAGNATION");
+  assert.equal(result.decision, "VERIFY");
+  assert.equal(result.reason, "verification-required");
+});
+
 test("no-progress streak stops the loop and progress resets it", () => {
   const stopped = decideNextAction({
     task: { state: "EXECUTING" },
@@ -179,6 +228,33 @@ test("buildTaskLoopPrompt returns a synthetic text part", () => {
   assert.equal(TASK_LOOP_DECISIONS.length, 9);
 });
 
+test("buildTaskLoopPrompt explains authorization and block next steps", () => {
+  const auth = buildTaskLoopPrompt({
+    decision: "WAIT_AUTHORIZATION",
+    reason: "authorization-pending",
+    nextAction: { type: "wait_authorization", id: "auth-1" },
+  });
+  assert.match(auth.parts[0].text, /Authorization pending: auth-1/);
+  assert.match(auth.parts[0].text, /approve or deny/);
+
+  const block = buildTaskLoopPrompt({
+    decision: "BLOCK",
+    reason: "agent-failed",
+    nextAction: { type: "block", reason: "agent-failed" },
+  });
+  assert.match(block.parts[0].text, /Blocked: agent-failed/);
+  assert.match(block.parts[0].text, /resolve the block/);
+
+  const stop = buildTaskLoopPrompt({
+    decision: "STOP_BUDGET",
+    reason: "budget-exhausted",
+    nextAction: { type: "stop", reason: "budget-exhausted" },
+    stopReason: "budget-exhausted",
+  });
+  assert.match(stop.parts[0].text, /Stopped: budget-exhausted/);
+  assert.match(stop.parts[0].text, /resume command/);
+});
+
 test("quality contradictions replan even when the gate looks complete", () => {
   const result = decideNextAction({
     task: { state: "EXECUTING" },
@@ -208,4 +284,47 @@ test("disabled quality evaluation leaves existing decisions untouched", () => {
   });
   assert.equal(result.decision, "COMPLETE");
   assert.equal(result.reason, "evidence-complete");
+});
+
+test("exhausted WAIT_USER carries the reviewer findings and pending items", () => {
+  const result = decideNextAction({
+    task: { state: "EXECUTING" },
+    completionGate: { ok: false, pending: ["req-1"] },
+    agent: {
+      status: "COMPLETED",
+      verdict: "REVISION_REQUIRED",
+      exhausted: true,
+      results: [
+        {
+          role: "REVIEWER",
+          findings: [{ id: "F-R1", summary: "The replacement link uses the Sin categoría sentinel" }],
+        },
+      ],
+    },
+  });
+
+  assert.equal(result.decision, "WAIT_USER");
+  assert.equal(result.reason, "agent-revision-exhausted");
+  assert.deepEqual(result.nextAction.pending, ["req-1"]);
+  assert.deepEqual(result.nextAction.findings, [
+    "F-R1: The replacement link uses the Sin categoría sentinel",
+  ]);
+
+  const payload = buildTaskLoopPrompt(result);
+  assert.match(payload.parts[0].text, /Reviewer findings/);
+  assert.match(payload.parts[0].text, /F-R1/);
+  assert.match(payload.parts[0].text, /req-1/);
+
+  const fresh = decideNextAction({
+    task: { state: "EXECUTING" },
+    agent: {
+      status: "COMPLETED",
+      verdict: "REVISION_REQUIRED",
+      exhausted: true,
+      results: [
+        { role: "REVIEWER", result: { findings: [{ id: "F-R2", description: "nested shape" }] } },
+      ],
+    },
+  });
+  assert.deepEqual(fresh.nextAction.findings, ["F-R2: nested shape"]);
 });

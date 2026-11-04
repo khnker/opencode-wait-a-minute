@@ -5,6 +5,7 @@ import {
   executionGateDirective,
   isExecutionGateActive,
   isMutatingToolCall,
+  shouldClearExecutionGate,
 } from "../../src/execution/execution-gate.js";
 
 test("blocks native mutation tools", () => {
@@ -35,4 +36,12 @@ test("detects an active gate and renders a directive", () => {
     /pipeline de análisis read-only/,
   );
   assert.match(executionGateDirective({ reason: "agent-loop" }), /loop de agentes/);
+});
+
+test("clears an active gate only when no pass is in flight", () => {
+  const active = { executionGate: { active: true } };
+  assert.equal(shouldClearExecutionGate(active, false), true);
+  assert.equal(shouldClearExecutionGate(active, true), false);
+  assert.equal(shouldClearExecutionGate({ executionGate: { active: false } }, false), false);
+  assert.equal(shouldClearExecutionGate(null, false), false);
 });

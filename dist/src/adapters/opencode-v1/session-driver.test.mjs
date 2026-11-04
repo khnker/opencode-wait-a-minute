@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { driveTaskLoop, buildLoopPrompt, DEFAULT_TASK_LOOP_CONFIG } from "./session-driver.js";
+import { agentSignalForLoop, resetAuthorizationSurface } from "../../execution/agent-run-state.js";
 import { createLoopState, loadLoopState, readLoopEvents, loopStatePath } from "../../state/loop-state.js";
 
 const CONFIG = { enabled: true, maxIterations: 10, maxNoProgress: 3 };
@@ -106,9 +107,9 @@ test("agent outcome is handed to the decision", (t) => {
   assert.equal(out.prompted, false);
 });
 
-test("WAIT_AUTHORIZATION records but does not prompt", (t) => {
+test("WAIT_AUTHORIZATION prompts with the pending authorization", (t) => {
   const root = tmpRoot(t);
-  const sid = "ses-auth";
+  const sid = "ses-auth-once";
   const calls = [];
   let records = 0;
 
@@ -129,10 +130,11 @@ test("WAIT_AUTHORIZATION records but does not prompt", (t) => {
     },
   });
 
-  assert.equal(out.prompted, false);
+  assert.equal(out.prompted, true);
   assert.equal(out.decision, "WAIT_AUTHORIZATION");
   assert.equal(records, 1);
-  assert.equal(calls.length, 0);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].body.parts[0].text, /Authorization pending: auth-1/);
 });
 
 test("duplicate turn is ignored", (t) => {
@@ -323,4 +325,361 @@ test("quality contracts allow completion when evidence is sufficient", (t) => {
     },
   });
   assert.equal(out.decision, "COMPLETE");
+});
+
+test("COMPLETE persists the task as DONE", (t) => {
+  const root = tmpRoot(t);
+  const persisted = [];
+  const task = {
+    id: "task-1",
+    phase: "IMPLEMENTING",
+    requirements: [{ id: "req-1", status: "verified", evidence: [{ evidence: "hola.txt" }] }],
+  };
+
+  const out = driveTaskLoop({
+    projectRoot: root,
+    taskId: "task-1",
+    sessionId: "ses-complete",
+    config: CONFIG,
+    deps: {
+      loadTask: () => task,
+      evaluateGate: () => ({ blocked: false, allDone: true, completionIntent: false }),
+      persistTask: (...args) => persisted.push(args),
+    },
+  });
+
+  assert.equal(out.decision, "COMPLETE");
+  assert.equal(persisted.length, 1);
+  assert.equal(persisted[0][1].phase, "DONE");
+  assert.equal(persisted[0][1].nextAction, "Tarea completa — contrato verificado");
+});
+
+test("exhausted WAIT_USER surfaces once and persists the marker", async (t) => {
+  const root = tmpRoot(t);
+  const sid = "ses-exhausted";
+  const calls = [];
+  let task = {
+    state: "EXECUTING",
+    requirements: [{ id: "req-1", status: "pending" }],
+    agentRun: {
+      status: "COMPLETED",
+      verdict: "REVISION_REQUIRED",
+      exhausted: true,
+      cycles: { revisions: 1, replans: 0 },
+      results: [{ role: "REVIEWER", findings: [{ id: "F-R1", summary: "sentinel query" }] }],
+    },
+  };
+  let loop = createLoopState({ taskId: "task-1", sessionId: sid });
+
+  const run = () =>
+    driveTaskLoop({
+      projectRoot: root,
+      taskId: "task-1",
+      sessionId: sid,
+      client: fakeClient(calls),
+      config: CONFIG,
+      agent: agentSignalForLoop(null, task),
+      deps: {
+        loadTask: () => task,
+        evaluateGate: () => ({ pending: ["req-1"] }),
+        loadLoop: () => ({ state: loop, corrupt: false }),
+        record: (_taskId, _root, nextState) => {
+          loop = nextState;
+          return { state: nextState, appended: true };
+        },
+        persistTask: (_taskId, nextTask) => {
+          task = nextTask;
+        },
+      },
+    });
+
+  const first = run();
+  assert.equal(first.decision, "WAIT_USER");
+  assert.equal(first.prompted, true);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].body.parts[0].text, /F-R1/);
+  assert.equal(task.agentRun.surfaced, true);
+
+  await new Promise((resolve) => setImmediate(resolve));
+  const second = run();
+  assert.equal(second.prompted, false);
+  assert.equal(calls.length, 1);
+});
+
+test("non-agent WAIT_USER surfaces on the transition only", async (t) => {
+  const root = tmpRoot(t);
+  const sid = "ses-contract";
+  const calls = [];
+  const task = { state: "PROPOSED", contract: { status: "PROPOSED" } };
+  let loop = createLoopState({ taskId: "task-2", sessionId: sid });
+
+  const run = () =>
+    driveTaskLoop({
+      projectRoot: root,
+      taskId: "task-2",
+      sessionId: sid,
+      client: fakeClient(calls),
+      config: CONFIG,
+      deps: {
+        loadTask: () => task,
+        evaluateGate: () => ({ ok: false, pending: [] }),
+        loadLoop: () => ({ state: loop, corrupt: false }),
+        record: (_taskId, _root, nextState) => {
+          loop = nextState;
+          return { state: nextState, appended: true };
+        },
+      },
+    });
+
+  const first = run();
+  assert.equal(first.decision, "WAIT_USER");
+  assert.equal(first.reason, "contract-not-approved");
+  assert.equal(first.prompted, true);
+  assert.equal(calls.length, 1);
+
+  await new Promise((resolve) => setImmediate(resolve));
+  const second = run();
+  assert.equal(second.prompted, false);
+  assert.equal(calls.length, 1);
+});
+
+test("pending authorization surfaces once and persists the marker", async (t) => {
+  const root = tmpRoot(t);
+  const sid = "ses-auth-transition";
+  const calls = [];
+  let task = {
+    state: "EXECUTING",
+    requirements: [],
+    pendingAuthorization: { id: "auth-1", status: "pending" },
+  };
+  let loop = createLoopState({ taskId: "task-auth", sessionId: sid });
+
+  const run = () =>
+    driveTaskLoop({
+      projectRoot: root,
+      taskId: "task-auth",
+      sessionId: sid,
+      client: fakeClient(calls),
+      config: CONFIG,
+      deps: {
+        loadTask: () => task,
+        evaluateGate: () => ({ ok: false, pending: [] }),
+        loadLoop: () => ({ state: loop, corrupt: false }),
+        record: (_taskId, _root, nextState) => {
+          loop = nextState;
+          return { state: nextState, appended: true };
+        },
+        persistTask: (_taskId, nextTask) => {
+          task = nextTask;
+        },
+      },
+    });
+
+  const first = run();
+  assert.equal(first.decision, "WAIT_AUTHORIZATION");
+  assert.equal(first.prompted, true);
+  assert.match(calls[0].body.parts[0].text, /Authorization pending: auth-1/);
+  assert.equal(task.authorizationSurfacedId, "auth-1");
+
+  await new Promise((resolve) => setImmediate(resolve));
+  const second = run();
+  assert.equal(second.prompted, false);
+  assert.equal(calls.length, 1);
+});
+
+test("failed agent BLOCK surfaces once and persists the marker", async (t) => {
+  const root = tmpRoot(t);
+  const sid = "ses-failed";
+  const calls = [];
+  let task = {
+    state: "EXECUTING",
+    requirements: [],
+    agentRun: { status: "FAILED", exhausted: false },
+  };
+  let loop = createLoopState({ taskId: "task-failed", sessionId: sid });
+
+  const run = () =>
+    driveTaskLoop({
+      projectRoot: root,
+      taskId: "task-failed",
+      sessionId: sid,
+      client: fakeClient(calls),
+      config: CONFIG,
+      agent: agentSignalForLoop(null, task),
+      deps: {
+        loadTask: () => task,
+        evaluateGate: () => ({ ok: false, pending: [] }),
+        loadLoop: () => ({ state: loop, corrupt: false }),
+        record: (_taskId, _root, nextState) => {
+          loop = nextState;
+          return { state: nextState, appended: true };
+        },
+        persistTask: (_taskId, nextTask) => {
+          task = nextTask;
+        },
+      },
+    });
+
+  const first = run();
+  assert.equal(first.decision, "BLOCK");
+  assert.equal(first.reason, "agent-failed");
+  assert.equal(first.prompted, true);
+  assert.match(calls[0].body.parts[0].text, /Blocked: agent-failed/);
+  assert.equal(task.agentRun.surfaced, true);
+
+  await new Promise((resolve) => setImmediate(resolve));
+  const second = run();
+  assert.equal(second.prompted, false);
+  assert.equal(calls.length, 1);
+});
+
+test("approved contract ignores a pending authorization", (t) => {
+  const root = tmpRoot(t);
+  const sid = "ses-auth-approved";
+
+  const out = driveTaskLoop({
+    projectRoot: root,
+    taskId: "task-auth-approved",
+    sessionId: sid,
+    config: CONFIG,
+    deps: {
+      loadTask: () => ({
+        state: "EXECUTING",
+        contract: { status: "APPROVED" },
+        pendingAuthorization: { id: "auth-1", status: "pending" },
+        requirements: [],
+      }),
+      evaluateGate: () => ({ pending: ["req-1"] }),
+      loadLoop: () => ({
+        state: createLoopState({ taskId: "task-auth-approved", sessionId: sid }),
+        corrupt: false,
+      }),
+      record: (_taskId, _root, nextState) => ({ state: nextState, appended: true }),
+    },
+  });
+
+  assert.equal(out.decision, "CONTINUE");
+  assert.equal(out.reason, "work-remaining");
+});
+
+test("pending authorization re-surfaces after the user turn resets the marker", async (t) => {
+  const root = tmpRoot(t);
+  const sid = "ses-auth-reset";
+  const calls = [];
+  const task = {
+    state: "EXECUTING",
+    contract: { status: "PROPOSED" },
+    pendingAuthorization: { id: "auth-1", status: "pending" },
+    requirements: [],
+  };
+  let loop = createLoopState({ taskId: "task-auth-reset", sessionId: sid });
+
+  const run = () =>
+    driveTaskLoop({
+      projectRoot: root,
+      taskId: "task-auth-reset",
+      sessionId: sid,
+      client: fakeClient(calls),
+      config: CONFIG,
+      deps: {
+        loadTask: () => task,
+        evaluateGate: () => ({ pending: ["req-1"] }),
+        loadLoop: () => ({ state: loop, corrupt: false }),
+        record: (_taskId, _root, nextState) => {
+          loop = nextState;
+          return { state: nextState, appended: true };
+        },
+        persistTask: (_taskId, nextTask) => {
+          Object.assign(task, nextTask);
+        },
+      },
+    });
+
+  const first = run();
+  assert.equal(first.decision, "WAIT_AUTHORIZATION");
+  assert.equal(first.prompted, true);
+  assert.equal(task.authorizationSurfacedId, "auth-1");
+  assert.equal(calls.length, 1);
+
+  resetAuthorizationSurface(task);
+  await new Promise((resolve) => setImmediate(resolve));
+  const second = run();
+  assert.equal(second.prompted, true);
+  assert.equal(calls.length, 2);
+});
+
+test("stopped loop surfaces once and stays silent", async (t) => {
+  const root = tmpRoot(t);
+  const sid = "ses-stopped";
+  const calls = [];
+  const task = { state: "EXECUTING", requirements: [] };
+  let loop = createLoopState({ taskId: "task-stopped", sessionId: sid });
+  loop.status = "STOPPED";
+  loop.stopReason = "stagnation";
+
+  const run = () =>
+    driveTaskLoop({
+      projectRoot: root,
+      taskId: "task-stopped",
+      sessionId: sid,
+      client: fakeClient(calls),
+      config: CONFIG,
+      deps: {
+        loadTask: () => task,
+        evaluateGate: () => ({ pending: ["req-1"] }),
+        loadLoop: () => ({ state: loop, corrupt: false }),
+        record: (_taskId, _root, nextState) => {
+          loop = nextState;
+          return { state: nextState, appended: true };
+        },
+      },
+    });
+
+  const first = run();
+  assert.equal(first.decision, "STOP_STAGNATION");
+  assert.equal(first.prompted, true);
+  assert.match(calls[0].body.parts[0].text, /Stopped: stagnation/);
+
+  await new Promise((resolve) => setImmediate(resolve));
+  const second = run();
+  assert.equal(second.prompted, false);
+  assert.equal(calls.length, 1);
+});
+
+test("budget stop surfaces once", async (t) => {
+  const root = tmpRoot(t);
+  const sid = "ses-budget";
+  const calls = [];
+  const task = { state: "EXECUTING", requirements: [] };
+  let loop = createLoopState({ taskId: "task-budget", sessionId: sid });
+  loop.iteration = 10;
+  loop.maxIterations = 10;
+
+  const run = () =>
+    driveTaskLoop({
+      projectRoot: root,
+      taskId: "task-budget",
+      sessionId: sid,
+      client: fakeClient(calls),
+      config: CONFIG,
+      deps: {
+        loadTask: () => task,
+        evaluateGate: () => ({ pending: ["req-1"] }),
+        loadLoop: () => ({ state: loop, corrupt: false }),
+        record: (_taskId, _root, nextState) => {
+          loop = nextState;
+          return { state: nextState, appended: true };
+        },
+      },
+    });
+
+  const first = run();
+  assert.equal(first.decision, "STOP_BUDGET");
+  assert.equal(first.prompted, true);
+  assert.match(calls[0].body.parts[0].text, /Stopped: budget-exhausted/);
+
+  await new Promise((resolve) => setImmediate(resolve));
+  const second = run();
+  assert.equal(second.prompted, false);
+  assert.equal(calls.length, 1);
 });

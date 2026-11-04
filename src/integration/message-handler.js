@@ -16,6 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { hasWamMarkerFor, injectWamParts, isWamSynthetic } from "./part-provenance.js";
+import { reopenTerminalAgentRun, resetAuthorizationSurface } from "../execution/agent-run-state.js";
 import { ensurePermissionPlan, permissionPreflightLines } from "../policy/permission-preflight.js";
 import { buildTaskInferenceDirective } from "../cognition/task-inference-engine.js";
 import { buildRoleDirective } from "../cognition/task-role-engine.js";
@@ -24,6 +25,7 @@ import { loadPrompt } from "../prompts/loader.js";
 import { confirmCompletion } from "../verification/verification-policy.js";
 import { validateState } from "../state/task-state.js";
 import { buildCompletionValidation } from "./orchestration.js";
+import { splitVisibleRequirements } from "../context/requirement-visibility.js";
 import { pruneCompletedTasks } from "../persistence/retention-manager.js";
 import { classifyIntentLane, INTENT_LANES } from "../policy/intent-router.js";
 import { observeDialogueTurn } from "../dialogue/index.js";
@@ -31,12 +33,12 @@ import { getIntentDictionary, saveIntentDictionary } from "../dialogue/intent-di
 import { loadHistoryEntries, retrieveIntentHistory } from "../context/intent-history.js";
 import { applyContextBudget } from "../context/context-budget.js";
 import { classifyExecutionIntent } from "../execution/task-intent.js";
-import { shouldRunTaskAgentPass } from "../execution/task-agent-run.js";
 import { filterNewContext } from "../context/context-dedupe.js";
 import { recordContextPack, recordDelegationEvidence, injectedSkillIds } from "../context/context-pack-evidence.js";
 import { activeTaskPath } from "../shared/wam-paths.js";
 import { loadConversationMemory, recordTurn, formatMemoryForContext } from "../persistence/conversation-memory.js";
 import { nextActionFrom } from "../state/next-action.js";
+import { loadRuntimeContextInputs } from "../context/runtime-context-inputs.js";
 
 const SESSION_INJECTED_SKILLS = new Map();
 const MAX_TRACKED_SESSIONS = 200;
@@ -125,7 +127,6 @@ const GENERIC_TASK = /^(default-task|task|general|)$/;
 // ---------------------------------------------------------------------------
 
 const RESUME_RE = /\b(en qué estábamos|en que estabamos|dónde íbamos|donde íbamos|sigamos|continuemos|retomar la tarea)\b/i;
-const MAX_VISIBLE_REQS = 5;
 const ASKING_CMD_RE = /^(answer|resolve|contract|progress|task|skills|assumptions|compress)\b/;
 
 // ---------------------------------------------------------------------------
@@ -414,6 +415,11 @@ export async function handleMessage(input, output, deps) {
 
     // Project scope change → backlog + new task
     const existingState = getTaskState(taskId, wamRoot);
+    const reopenedRun = reopenTerminalAgentRun(existingState);
+    const resetAuthorization = resetAuthorizationSurface(existingState);
+    if (reopenedRun || resetAuthorization) {
+      persistTaskState(taskId, existingState, wamRoot);
+    }
     if (existingState?.projectPath && existingState.projectPath !== wamRoot) {
       waitAMinute.addToBacklog(
         existingState,
@@ -428,15 +434,11 @@ export async function handleMessage(input, output, deps) {
 
     // Continuation fast-path: approved contract + no DONE claim
     if (existingState?.contract?.status === "APPROVED") {
-      // For non-DONE messages, skip the gate entirely. For DONE messages,
-      // run the gate; if it reports an advisory (requirements still pending)
-      // we fall through so the recommendation notice is emitted. On a VALID
-      // snapshot we emit the N2 task delta and return.
+      // For non-DONE messages, skip the gate entirely and emit the N2 task
+      // delta. Any DONE claim must fall through: the gate decides whether to
+      // block, advise, or complete the task.
       const isDoneClaim = waitAMinute.isCompletionIntent(promptText);
-      const claim = isDoneClaim
-        ? waitAMinute.evaluateCompletionGate(existingState, promptText)
-        : { blocked: false };
-      const isContinuation = !isDoneClaim || claim.allDone === true;
+      const isContinuation = !isDoneClaim;
       if (isContinuation) {
         const snapshotCheck = checkContinuation(taskId, existingState, wamRoot);
         if (snapshotCheck.status === "VALID") {
@@ -485,14 +487,10 @@ export async function handleMessage(input, output, deps) {
       ? waitAMinute.isTrivial(promptText)
       : false;
     state.executionIntent = classifyExecutionIntent(promptText, { isTrivial: trivialPrompt });
-    const agentLoopEnabled = cfg?.taskLoop?.agents?.enabled === true && deps.agentPassAvailable !== false;
-    if (agentLoopEnabled && state.executionIntent !== "INLINE" && shouldRunTaskAgentPass(state)) {
-      state.executionGate = {
-        active: true,
-        reason: state.executionIntent === "ANALYZE" ? "analysis-loop" : "agent-loop",
-        startedAt: new Date().toISOString(),
-      };
-    } else if (state.executionGate?.active) {
+    // The agent pass owns the execution gate: it activates only while the
+    // delegated agents are running and clears it in `finally`. A new turn must
+    // never inherit a stale gate, or the main model cannot write at all.
+    if (state.executionGate?.active) {
       state.executionGate = {
         ...state.executionGate,
         active: false,
@@ -612,7 +610,9 @@ export async function handleMessage(input, output, deps) {
         analysis.strategy === "FAST");
     const gate = isTrivialAnalysis
       ? { blocked: false, allDone: false }
-      : waitAMinute.evaluateCompletionGate(state, promptText);
+      : waitAMinute.evaluateCompletionGate(state, promptText, {
+          enforce: cfg.completionGate?.enforce === true,
+        });
     // Anti-tampering: only mutate persisted state when the prompt actually
     // asserts completion intent. The gate always evaluates real state now, so
     // this guard guarantees a normal message never mutates phase/nextAction.
@@ -648,6 +648,7 @@ export async function handleMessage(input, output, deps) {
         sessionID: input.sessionID,
         messageID: output.message?.id || input.messageID,
       });
+      deps.queueVisibleNotice?.(input.sessionID, notice);
       updatedState.completionNotified = true;
       try { persistTaskState(taskId, updatedState, wamRoot); } catch {}
     }
@@ -690,8 +691,7 @@ export async function handleMessage(input, output, deps) {
     const objective = updatedState.contract?.objective || analysis.intent?.goal || null;
     if (intentLane.lane !== INTENT_LANES.CONVERSATION) {
       if (updatedState.phase === "PROPOSED" && !updatedState.contractDisplayed) {
-        const visible = reqs.slice(0, MAX_VISIBLE_REQS);
-        const overflow = reqs.length - MAX_VISIBLE_REQS;
+        const { visible, overflow } = splitVisibleRequirements(reqs);
         inject.push(
           `Objective: ${objective || "pending"}`,
           `Remaining (${pend.length}/${reqs.length}):`,
@@ -711,14 +711,20 @@ export async function handleMessage(input, output, deps) {
       for (const id of injectedSkillIds({ taskId, root: wamRoot })) injectedSkills.add(id);
     }
     try {
+      const runtimeInputs = loadRuntimeContextInputs({
+        taskId,
+        root: wamRoot,
+        taskState: updatedState,
+      });
       const pack = await assembleContext({
+        ...runtimeInputs,
         prompt: promptText,
         taskId,
         classification: analysis.intent?.classification,
         mode: analysis.strategy,
         projectPath: wamRoot,
         budget: cfg.contextBudget || 16000,
-        taskState: updatedState,
+        taskState: runtimeInputs.taskState,
         skillRegistry: cfg.skills === false ? {} : (analysis.skillRegistryMap || waitAMinute.loadBundledRegistry()),
         selectedSkills: analysis.skills?.selected || [],
         injectedSkills,
@@ -823,28 +829,35 @@ const { lines } = buildTaskInferenceDirective({
     }
 
 
-    if (isCompletionClaim && gate.advisory) {
-      const maxGateReqs = 5;
+    if (isCompletionClaim && (gate.advisory || gate.blocked)) {
       const pendingItems = gate.pending || [];
       const gateKey = pendingItems.join("|");
-      const repeat = gateKey && updatedState.completionGateKey === gateKey;
+      // Enforce mode always re-injects the block: suppressing it on a repeated
+      // DONE claim would leave the model without guidance. Advisory notices keep
+      // the anti-spam de-duplication.
+      const repeat = !gate.blocked && gateKey && updatedState.completionGateKey === gateKey;
       if (!repeat) {
-        const visiblePending = pendingItems.slice(0, maxGateReqs);
-        const overflowPending = pendingItems.length - maxGateReqs;
+        const { visible: visiblePending, overflow: overflowPending } = splitVisibleRequirements(pendingItems);
         const pendingList = visiblePending.length > 0
           ? "Requisitos pendientes:\n" + visiblePending.map((p) => `- ${truncate(p, 150)}`).join("\n") + (overflowPending > 0 ? `\n(...(+${overflowPending} más))` : "")
           : "";
-        const gateHold = loadPrompt("notice.completion_gate", { count: gate.pending.length, pendingList, nextAction: updatedState.nextAction });
-        emitTextPart(output, gateHold, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+        const validation = buildCompletionValidation(gate, updatedState);
+        if (!gate.blocked) {
+          const gateHold = loadPrompt("notice.completion_gate", { count: gate.pending.length, pendingList, nextAction: updatedState.nextAction });
+          emitTextPart(output, gateHold, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+          deps.queueVisibleNotice?.(input.sessionID, gateHold);
+        }
         // La validación viaja al LLM como parte propia (no como reescritura del
         // mensaje del usuario): el modelo debe continuar con el objetivo del
         // contrato en vez de re-declarar DONE.
-        const validation = buildCompletionValidation(gate, updatedState);
         injectWamParts(
           output,
           [{ id: genPartId(), type: "text", text: validation.text }],
           { messageID: output.message?.id || input.messageID, sessionID: input.sessionID, phase: "gate-validation", idFactory: genPartId, position: "append" },
         );
+        if (gate.blocked) {
+          deps.queueVisibleNotice?.(input.sessionID, validation.text);
+        }
         updatedState.completionGateKey = gateKey;
         persistTaskState(taskId, updatedState, wamRoot);
       }

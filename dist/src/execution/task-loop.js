@@ -67,7 +67,28 @@ const CHECKPOINT_STATUS = {
   BLOCK: "BLOCKED",
 };
 
-function buildNextAction(decision, reason, pending, authorization) {
+function latestReviewFindings(agent) {
+  const results = Array.isArray(agent?.results) ? agent.results : [];
+  for (let index = results.length - 1; index >= 0; index -= 1) {
+    const result = results[index];
+    if (result?.role !== "REVIEWER") continue;
+    const payload = result?.result && typeof result.result === "object" ? result.result : result;
+    const findings = Array.isArray(payload.findings) ? payload.findings : [];
+    return findings
+      .map((finding) => {
+        if (typeof finding === "string") return finding.trim() || null;
+        if (!finding || typeof finding !== "object") return null;
+        const label = finding.id ? `${finding.id}: ` : "";
+        const text =
+          finding.summary || finding.description || finding.message || finding.title || "";
+        return `${label}${text}`.trim() || null;
+      })
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function buildNextAction(decision, reason, pending, authorization, agent) {
   switch (decision) {
     case "CONTINUE":
       return { type: "continue", reason };
@@ -76,7 +97,12 @@ function buildNextAction(decision, reason, pending, authorization) {
     case "VERIFY":
       return { type: "verify", pending: [...pending] };
     case "WAIT_USER":
-      return { type: "wait_user" };
+      return {
+        type: "wait_user",
+        reason,
+        pending: [...pending],
+        findings: latestReviewFindings(agent),
+      };
     case "WAIT_AUTHORIZATION":
       return { type: "wait_authorization", id: authorization.pendingAuth?.id || null };
     case "BLOCK":
@@ -109,6 +135,7 @@ export function decideNextAction({
   const effectivePending = [...pending, ...qualityReasons];
   const gateComplete =
     completionGate.ok === true ||
+    completionGate.allDone === true ||
     (Array.isArray(completionGate.pending) &&
       completionGate.pending.length === 0 &&
       completionGate.ok !== false);
@@ -131,7 +158,7 @@ export function decideNextAction({
   } else if (authorization.denied === true) {
     decision = "BLOCK";
     reason = "authorization-denied";
-  } else if (authorization.pendingAuth) {
+  } else if (authorization.pendingAuth && authorization.contractApproved !== true) {
     decision = "WAIT_AUTHORIZATION";
     reason = "authorization-pending";
   } else if (authorization.contractApproved === false) {
@@ -166,13 +193,16 @@ export function decideNextAction({
   } else if (progress.regressed === true || progress.repeatedRejectedHypothesis === true) {
     decision = "REPLAN";
     reason = "strategy-regressed";
-  } else if (effectivePending.length > 0 && (taskState === "VERIFYING" || completionGate.requiresVerification === true)) {
-    decision = "VERIFY";
-    reason = "verification-required";
+  // STOP_STAGNATION is intentionally evaluated before the work VERIFY branch so a
+  // non-advancing loop cannot keep verifying forever; quality VERIFY above it is
+  // separate and still runs when evidence is insufficient.
   } else if (nextNoProgress >= (loop.maxNoProgress ?? 3) && !progress.advanced) {
     decision = "STOP_STAGNATION";
     reason = "no-progress";
     stopReason = "no-progress";
+  } else if (effectivePending.length > 0 && (taskState === "VERIFYING" || completionGate.requiresVerification === true)) {
+    decision = "VERIFY";
+    reason = "verification-required";
   } else {
     decision = "CONTINUE";
     reason = "work-remaining";
@@ -189,7 +219,7 @@ export function decideNextAction({
   return {
     decision,
     reason,
-    nextAction: buildNextAction(decision, reason, effectivePending, authorization),
+    nextAction: buildNextAction(decision, reason, effectivePending, authorization, agent),
     checkpoint,
     stopReason,
   };
@@ -199,9 +229,30 @@ export function buildTaskLoopPrompt(result = {}) {
   const decision = result.decision || "CONTINUE";
   const lines = [`WAM task loop: ${decision} (${result.reason || "work-remaining"})`];
   const next = result.nextAction || {};
-  if (next.type === "verify" && Array.isArray(next.pending) && next.pending.length > 0) {
+  if (next.type === "wait_user") {
+    if (Array.isArray(next.findings) && next.findings.length > 0) {
+      lines.push("Reviewer findings:");
+      for (const item of next.findings) lines.push(`- ${item}`);
+    }
+    if (Array.isArray(next.pending) && next.pending.length > 0) {
+      lines.push("Pending verification:");
+      for (const item of next.pending) lines.push(`- ${item}`);
+    }
+    lines.push(
+      "Next: reply with the missing decision, evidence, or fix so the agent pass can resume.",
+    );
+  } else if (next.type === "verify" && Array.isArray(next.pending) && next.pending.length > 0) {
     lines.push("Pending verification:");
     for (const item of next.pending) lines.push(`- ${item}`);
+  } else if (next.type === "wait_authorization") {
+    lines.push(`Authorization pending: ${next.id || "unknown"}`);
+    lines.push("Next: approve or deny the pending permission to continue.");
+  } else if (next.type === "block") {
+    lines.push(`Blocked: ${next.reason || result.reason || "unknown"}`);
+    lines.push("Next: resolve the block or reply with new instructions.");
+  } else if (next.type === "stop") {
+    lines.push(`Stopped: ${next.reason || result.stopReason || "unknown"}`);
+    lines.push("Next: reply with a concrete change or resume command to continue.");
   } else if (next.type) {
     lines.push(`Next: ${next.type}`);
   }

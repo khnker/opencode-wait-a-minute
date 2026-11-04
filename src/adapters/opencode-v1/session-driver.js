@@ -1,8 +1,9 @@
 /** Host adapter — drives the pure task loop and persists before prompting. */
 import { decideNextAction, buildTaskLoopPrompt, TASK_LOOP_DECISIONS } from "../../execution/task-loop.js";
+import { isTerminalAgentSignal } from "../../execution/agent-run-state.js";
 import { migrateLegacyPhase } from "../../execution/execution-state.js";
 import { evaluateCompletionGate } from "../../integration/orchestration.js";
-import { getTaskState } from "../../skills/engine.js";
+import { getTaskState, persistTaskState } from "../../skills/engine.js";
 import { collectTaskEvidence, evaluateEvidenceSufficiency, resolveQualityContract } from "../../quality/task-quality-contract.js";
 import { normalizeSessionEvent } from "./event-normalizer.js";
 import {
@@ -35,6 +36,7 @@ export function driveTaskLoop({
   client = null,
   config = DEFAULT_TASK_LOOP_CONFIG,
   qualityConfig = null,
+  enforce = false,
   agent = null,
   now = Date.now(),
   deps = {},
@@ -52,6 +54,7 @@ export function driveTaskLoop({
   const decide = deps.decide || decideNextAction;
   const loadLoop = deps.loadLoop || loadLoopState;
   const record = deps.record || recordLoopDecision;
+  const persistTask = deps.persistTask || persistTaskState;
 
   try {
     return withLoopLock(taskId, projectRoot, () => {
@@ -87,7 +90,10 @@ export function driveTaskLoop({
         };
       }
 
-      const gate = evaluateGate(task, "", quality ? { quality } : {}) || {};
+      const gateOptions = {};
+      if (quality) gateOptions.quality = quality;
+      if (enforce === true) gateOptions.enforce = true;
+      const gate = evaluateGate(task, "", gateOptions) || {};
       const pending = Array.isArray(gate.pending) ? gate.pending : [];
       const taskState = task.state || migrateLegacyPhase(task.phase) || "INITIALIZING";
       const reqs = Array.isArray(task.requirements) ? task.requirements : [];
@@ -122,9 +128,57 @@ export function driveTaskLoop({
         quality,
       });
 
+      if (result.decision === "COMPLETE") {
+        persistTask(
+          taskId,
+          { ...task, phase: "DONE", nextAction: "Tarea completa — contrato verificado" },
+          projectRoot,
+        );
+      }
+
       const actionable = ACTIONABLE.has(result.decision);
-      if (!actionable || typeof client?.session?.prompt !== "function") {
+      const surfaceable =
+        result.decision === "WAIT_USER" ||
+        result.decision === "WAIT_AUTHORIZATION" ||
+        result.decision === "BLOCK" ||
+        result.decision === "STOP_BUDGET" ||
+        result.decision === "STOP_STAGNATION";
+      const authToken =
+        result.decision === "WAIT_AUTHORIZATION"
+          ? task.pendingAuthorization?.id ?? "pending"
+          : null;
+      const surfaceByAgent =
+        surfaceable &&
+        result.decision !== "WAIT_AUTHORIZATION" &&
+        isTerminalAgentSignal(agent);
+      const stopDecision =
+        result.decision === "STOP_BUDGET" || result.decision === "STOP_STAGNATION";
+      const repeatedDecision = stopDecision
+        ? loop.lastDecision === "STOP_BUDGET" || loop.lastDecision === "STOP_STAGNATION"
+        : loop.lastDecision === result.decision;
+      const needsUserSurface =
+        surfaceable &&
+        (surfaceByAgent
+          ? agent.surfaced !== true
+          : result.decision === "WAIT_AUTHORIZATION"
+            ? task.authorizationSurfacedId !== authToken
+            : !repeatedDecision);
+      if ((!actionable && !needsUserSurface) || typeof client?.session?.prompt !== "function") {
         return { prompted: false, decision: result.decision, reason: result.reason, state: saved.state };
+      }
+
+      if (needsUserSurface) {
+        try {
+          if (surfaceByAgent) {
+            persistTask(
+              taskId,
+              { ...task, agentRun: { ...(task.agentRun || {}), surfaced: true } },
+              projectRoot,
+            );
+          } else if (result.decision === "WAIT_AUTHORIZATION") {
+            persistTask(taskId, { ...task, authorizationSurfacedId: authToken }, projectRoot);
+          }
+        } catch {}
       }
 
       inFlight.add(sid);

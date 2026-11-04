@@ -215,6 +215,38 @@ test("handleMessage: gate.allDone → confirmCompletion token-savings summary in
   }
 });
 
+test("handleMessage: DONE con contrato APPROVED y todo verificado no toma el fast-path y completa", async () => {
+  const taskId = `t-done-path-${Date.now()}`;
+  persistTaskState(taskId, {
+    contract: { status: "APPROVED", objective: "x", requirements: [] },
+    requirements: [{ id: "R1", title: "x", status: "verified", evidence: ["ok"] }],
+    phase: "IMPLEMENTING",
+    lastAction: "",
+  }, ROOT);
+
+  const deps = baseDeps();
+  deps.effectiveTaskId = () => ({ taskId, fallbackKind: "explicit" });
+  deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: true });
+  let fastPathCalled = false;
+  deps.checkContinuation = () => { fastPathCalled = true; return { status: "VALID" }; };
+  let transitioned = false;
+  deps.waitAMinute.applyPhaseTransition = () => { transitioned = true; return { phase: "DONE", nextAction: "Listo" }; };
+
+  const out = { message: {}, parts: [] };
+  await handleMessage(
+    {
+      sessionID: "s-done-path",
+      messageID: "m-done-path",
+      message: { parts: [{ type: "text", text: "listo" }] },
+    },
+    out,
+    deps,
+  );
+
+  assert.equal(fastPathCalled, false, "un DONE no debe devolver el control por el fast-path de continuación");
+  assert.equal(transitioned, true, "un DONE verificado debe pasar por la transición de fase");
+});
+
 test("handleMessage: cqe file_context → actualiza cqeCalls y persiste estado", async () => {
   const deps = baseDeps();
   deps.selectContextWithCqe = async () => ({
@@ -406,4 +438,203 @@ test("handleMessage emits a delimited, ordered [wam][start]/[wam][end] block fir
   const lines = block.split("\n").filter((line) => line.trim());
   assert.equal(lines[lines.length - 1], "[wam][end]", "[wam][end] is the last non-empty line");
   assert.ok(!block.startsWith("[wam] [wam][start]"), "the block must not be double-prefixed");
+});
+
+test("handleMessage: a real user message reopens an exhausted agent run", async () => {
+  const taskId = `t-reopen-${Date.now()}`;
+  persistTaskState(taskId, {
+    contract: { status: "APPROVED", objective: "x", requirements: [] },
+    requirements: [{ id: "R1", title: "x", status: "pending", evidence: [] }],
+    phase: "IMPLEMENTING",
+    lastAction: "",
+    authorizationSurfacedId: "auth-1",
+    agentRun: {
+      status: "COMPLETED",
+      verdict: "REVISION_REQUIRED",
+      exhausted: true,
+      surfaced: true,
+      cycles: { revisions: 2, replans: 1 },
+      results: [],
+    },
+  }, ROOT);
+
+  const deps = baseDeps();
+  deps.effectiveTaskId = () => ({ taskId, fallbackKind: "explicit" });
+  deps.checkContinuation = () => ({ status: "VALID" });
+
+  const out = { message: {}, parts: [{ type: "text", text: "sigo: arregla el link" }] };
+  await handleMessage(
+    { sessionID: "s-reopen", messageID: "m-reopen", message: { parts: out.parts } },
+    out,
+    deps,
+  );
+
+  const state = getTaskState(taskId, ROOT);
+  assert.equal(state.agentRun.exhausted, false);
+  assert.equal(state.agentRun.surfaced, false);
+  assert.deepEqual(state.agentRun.cycles, { revisions: 0, replans: 0 });
+  assert.equal(state.authorizationSurfacedId, null);
+});
+
+test("handleMessage: a real user message reopens blocked, needs-input and failed runs", async () => {
+  for (const status of ["BLOCKED", "NEEDS_INPUT", "FAILED"]) {
+    const taskId = `t-reopen-${status}-${Date.now()}`;
+    persistTaskState(taskId, {
+      contract: { status: "APPROVED", objective: "x", requirements: [] },
+      requirements: [{ id: "R1", title: "x", status: "pending", evidence: [] }],
+      phase: "IMPLEMENTING",
+      lastAction: "",
+      agentRun: {
+        status,
+        verdict: null,
+        stoppedAt: status,
+        exhausted: false,
+        surfaced: true,
+        cycles: { revisions: 1, replans: 1 },
+        results: [],
+      },
+    }, ROOT);
+
+    const deps = baseDeps();
+    deps.effectiveTaskId = () => ({ taskId, fallbackKind: "explicit" });
+    deps.checkContinuation = () => ({ status: "VALID" });
+
+    const parts = [{ type: "text", text: "intenta de nuevo" }];
+    await handleMessage(
+      { sessionID: `s-reopen-${status}`, messageID: `m-${status}`, message: { parts } },
+      { message: {}, parts },
+      deps,
+    );
+
+    const state = getTaskState(taskId, ROOT);
+    assert.equal(state.agentRun.status, null, status);
+    assert.equal(state.agentRun.verdict, null, status);
+    assert.equal(state.agentRun.stoppedAt, null, status);
+    assert.equal(state.agentRun.exhausted, false, status);
+    assert.equal(state.agentRun.surfaced, false, status);
+    assert.deepEqual(state.agentRun.cycles, { revisions: 0, replans: 0 }, status);
+  }
+});
+
+test("handleMessage: a synthetic loop prompt does not reopen an exhausted run", async () => {
+  const taskId = `t-no-reopen-${Date.now()}`;
+  persistTaskState(taskId, {
+    contract: { status: "APPROVED", objective: "x", requirements: [] },
+    requirements: [{ id: "R1", title: "x", status: "pending", evidence: [] }],
+    phase: "IMPLEMENTING",
+    lastAction: "",
+    agentRun: {
+      status: "COMPLETED",
+      verdict: "REVISION_REQUIRED",
+      exhausted: true,
+      surfaced: true,
+      cycles: { revisions: 2, replans: 1 },
+      results: [],
+    },
+  }, ROOT);
+
+  const deps = baseDeps();
+  deps.effectiveTaskId = () => ({ taskId, fallbackKind: "explicit" });
+
+  const out = {
+    parts: [
+      tagWamPart(
+        { type: "text", text: "WAM task loop: WAIT_USER (agent-revision-exhausted)" },
+        { messageID: "m-synthetic" },
+      ),
+    ],
+  };
+  await handleMessage({ sessionID: "s-no-reopen", messageID: "m-synthetic" }, out, deps);
+
+  const state = getTaskState(taskId, ROOT);
+  assert.equal(state.agentRun.exhausted, true);
+});
+
+test("handleMessage: DONE bloqueado encola el aviso visible", async () => {
+  const taskId = `t-visible-blocked-${Date.now()}`;
+  persistTaskState(taskId, {
+    contract: { status: "APPROVED", objective: "x", requirements: [] },
+    requirements: [{ id: "R1", title: "x", status: "pending", evidence: [] }],
+    phase: "IMPLEMENTING",
+    lastAction: "",
+  }, ROOT);
+
+  const deps = baseDeps();
+  deps.effectiveTaskId = () => ({ taskId, fallbackKind: "explicit" });
+  deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: true, advisory: false, allDone: false, pending: ["R1: x"] });
+  const notices = [];
+  deps.queueVisibleNotice = (sid, text) => notices.push({ sid, text });
+
+  const out = { message: {}, parts: [] };
+  await handleMessage(
+    {
+      sessionID: "s-visible-blocked",
+      messageID: "m-visible-blocked",
+      message: { parts: [{ type: "text", text: "listo" }] },
+    },
+    out,
+    deps,
+  );
+
+  assert.ok(notices.some((n) => n.sid === "s-visible-blocked" && /⛔|bloqueada/i.test(n.text)));
+});
+
+test("handleMessage: DONE permitido encola el aviso de tarea completada", async () => {
+  const taskId = `t-visible-done-${Date.now()}`;
+  persistTaskState(taskId, {
+    contract: { status: "APPROVED", objective: "x", requirements: [] },
+    requirements: [{ id: "R1", title: "x", status: "verified", evidence: ["ok"] }],
+    phase: "IMPLEMENTING",
+    lastAction: "",
+  }, ROOT);
+
+  const deps = baseDeps();
+  deps.effectiveTaskId = () => ({ taskId, fallbackKind: "explicit" });
+  deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: true, pending: [] });
+  deps.waitAMinute.applyPhaseTransition = () => ({ phase: "DONE", nextAction: "Listo" });
+  const notices = [];
+  deps.queueVisibleNotice = (sid, text) => notices.push({ sid, text });
+
+  const out = { message: {}, parts: [] };
+  await handleMessage(
+    {
+      sessionID: "s-visible-done",
+      messageID: "m-visible-done",
+      message: { parts: [{ type: "text", text: "listo" }] },
+    },
+    out,
+    deps,
+  );
+
+  assert.ok(notices.some((n) => n.sid === "s-visible-done" && /Tarea completada/.test(n.text)));
+});
+
+test("handleMessage: mensaje no-DONE no encola avisos de completitud", async () => {
+  const taskId = `t-visible-nodone-${Date.now()}`;
+  persistTaskState(taskId, {
+    contract: { status: "APPROVED", objective: "x", requirements: [] },
+    requirements: [{ id: "R1", title: "x", status: "verified", evidence: ["ok"] }],
+    phase: "IMPLEMENTING",
+    lastAction: "",
+  }, ROOT);
+
+  const deps = baseDeps();
+  deps.effectiveTaskId = () => ({ taskId, fallbackKind: "explicit" });
+  deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: true, pending: [] });
+  deps.waitAMinute.applyPhaseTransition = () => ({ phase: "DONE", nextAction: "Listo" });
+  const notices = [];
+  deps.queueVisibleNotice = (sid, text) => notices.push({ sid, text });
+
+  const out = { message: {}, parts: [] };
+  await handleMessage(
+    {
+      sessionID: "s-visible-nodone",
+      messageID: "m-visible-nodone",
+      message: { parts: [{ type: "text", text: "implementa X" }] },
+    },
+    out,
+    deps,
+  );
+
+  assert.equal(notices.length, 0);
 });
