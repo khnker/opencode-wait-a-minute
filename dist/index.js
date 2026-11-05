@@ -1138,7 +1138,10 @@ refresh();
       wamWarn(`[wait-a-minute] agent task step failed for ${passTaskId}:`, message);
       try {
         const latest = getTaskState(passTaskId, passRoot) || task;
-        const failed = applyAgentFailure(latest, message);
+        const failed = applyAgentFailure(latest, message, {
+          failureCode: e?.code,
+          attempts: e?.attempts,
+        });
         persistTaskState(passTaskId, failed, passRoot);
         return { taskId: passTaskId, root: passRoot, agent: agentSignalForLoop(null, failed) };
       } catch (persistError) {
@@ -1162,6 +1165,16 @@ refresh();
     if (!taskId) return;
 
     const preState = getTaskState(taskId, root);
+    if (shouldClearExecutionGate(preState, agentRunInFlight.has(taskId))) {
+      clearExecutionGate(taskId, root);
+      if (preState?.executionGate) {
+        preState.executionGate = {
+          ...preState.executionGate,
+          active: false,
+          completedAt: new Date().toISOString(),
+        };
+      }
+    }
     if (preState?.phase === "DONE") {
       await settleTaskChildren(taskId);
       return;
@@ -1760,18 +1773,6 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
         if (shouldBlockForPendingPermission({ tool, enforce: cfg.permissionEnforce === true, plan: st?.permissionPreflight })) {
           wamWarn(`[wait-a-minute] blocked ${tool}: permission preflight is pending`);
           throw new Error(`[wait-a-minute] blocked ${tool}: permission preflight pending; approve permissions first (/wam permissions approve)`);
-        }
-        if (
-          !isWamAgent &&
-          st &&
-          shouldClearExecutionGate(st, agentRunInFlight.has(taskId))
-        ) {
-          clearExecutionGate(taskId, taskRoot);
-          st.executionGate = {
-            ...st.executionGate,
-            active: false,
-            completedAt: new Date().toISOString(),
-          };
         }
         if (
           !isWamAgent &&

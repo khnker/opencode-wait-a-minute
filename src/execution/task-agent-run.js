@@ -303,26 +303,92 @@ export function applyAgentRun(task, outcome, { now = Date.now(), maxHistory = 5 
   };
 }
 
+function describeError(error) {
+  if (!isObject(error)) return { message: String(error), code: "", status: null };
+  const data = isObject(error.data) ? error.data : null;
+  const dataError = isObject(data?.error) ? data.error : null;
+  const message =
+    (nonEmptyString(dataError?.message) && dataError.message) ||
+    (nonEmptyString(data?.message) && data.message) ||
+    (nonEmptyString(error.message) && error.message) ||
+    (nonEmptyString(error.name) && error.name) ||
+    String(error);
+  const code =
+    (nonEmptyString(error.code) && error.code) ||
+    (nonEmptyString(data?.code) && data.code) ||
+    (nonEmptyString(dataError?.code) && dataError.code) ||
+    "";
+  const status = data?.statusCode ?? error.status ?? data?.status ?? null;
+  return { message, code, status };
+}
+
 export function formatAgentFailure(error, { maxLength = 300 } = {}) {
   if (!isObject(error)) return String(error || "agent step failed").slice(0, maxLength);
-  const parts = [
-    nonEmptyString(error.message) ? error.message : "agent step failed",
-  ];
-  if (nonEmptyString(error.code)) parts.push(`code=${error.code}`);
+  const top = describeError(error);
+  const parts = [top.message];
+  if (top.code) parts.push(`code=${top.code}`);
+  if (top.status !== null) parts.push(`status=${top.status}`);
   let cause = error.cause;
   for (let depth = 0; cause && depth < 3; depth += 1) {
-    const causeMessage = isObject(cause) && nonEmptyString(cause.message)
-      ? cause.message
-      : String(cause);
-    const causeCode = isObject(cause) && nonEmptyString(cause.code) ? ` code=${cause.code}` : "";
-    parts.push(`cause${depth === 0 ? "" : `[${depth}]`}: ${causeMessage}${causeCode}`);
+    const detail = describeError(cause);
+    const suffix = `${detail.code ? ` code=${detail.code}` : ""}${detail.status !== null ? ` status=${detail.status}` : ""}`;
+    parts.push(`cause${depth === 0 ? "" : `[${depth}]`}: ${detail.message}${suffix}`);
     cause = isObject(cause) ? cause.cause : undefined;
   }
   const text = parts.join("; ");
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
 }
 
-export function applyAgentFailure(task, message, { now = Date.now(), maxHistory = 5 } = {}) {
+const RETRYABLE_AGENT_ERROR_CODES = new Set([
+  "PROMPT_TIMEOUT",
+  "PROMPT_FAILED",
+  "SESSION_CREATE_FAILED",
+]);
+const TERMINAL_AGENT_STATUSES = new Set(["BLOCKED", "NEEDS_INPUT", "FAILED", "COMPLETED"]);
+
+function isAbortTimeoutBusy(error) {
+  const seen = new Set();
+  let cause = error;
+  while (cause && typeof cause === "object" && !seen.has(cause)) {
+    seen.add(cause);
+    if (
+      cause.name === "AbortError" ||
+      cause.name === "TimeoutError" ||
+      cause.code === "ABORT_ERR" ||
+      cause.code === "ETIMEDOUT"
+    ) {
+      return true;
+    }
+    const status = Number(
+      cause.status ?? cause.statusCode ?? cause.httpStatus ?? cause.data?.status,
+    );
+    if (status === 408 || status === 429 || (status >= 500 && status <= 599)) return true;
+    const message = typeof cause.message === "string" ? cause.message : "";
+    if (/timeout|timed out|aborted|abort|busy|rate.?limit|too many requests|temporar|overload/i.test(message)) {
+      return true;
+    }
+    cause = cause.cause;
+  }
+  return false;
+}
+
+export function isRetryableAgentError(error) {
+  if (!isObject(error)) return false;
+  const code = nonEmptyString(error.code) ? error.code : "";
+  if (code === "INVALID_RESULT" || /CONTRACT/i.test(code)) return false;
+  if (TERMINAL_AGENT_STATUSES.has(error.status) || TERMINAL_AGENT_STATUSES.has(error.roleStatus)) {
+    return false;
+  }
+  if (RETRYABLE_AGENT_ERROR_CODES.has(code)) return true;
+  if (code === "ORCHESTRATION_TIMEOUT" || code === "AGENT_TIMEOUT") return true;
+  return isAbortTimeoutBusy(error);
+}
+
+export function applyAgentFailure(
+  task,
+  message,
+  { failureCode, attempts, now = Date.now(), maxHistory = 5 } = {},
+) {
   const updated = applyAgentRun(
     task,
     {
@@ -337,6 +403,8 @@ export function applyAgentFailure(task, message, { now = Date.now(), maxHistory 
     { now, maxHistory },
   );
   updated.agentRun.failureReason = String(message || "agent step failed");
+  if (failureCode !== undefined) updated.agentRun.failureCode = failureCode;
+  if (attempts !== undefined) updated.agentRun.attempts = attempts;
   return updated;
 }
 
@@ -348,7 +416,7 @@ export function shouldRunTaskAgentPass(task) {
   if (agentRun.status === "COMPLETED" && agentRun.verdict === "ACCEPTED") {
     return false;
   }
-  return !["BLOCKED", "NEEDS_INPUT", "FAILED"].includes(agentRun.status);
+  return !["BLOCKED", "NEEDS_INPUT"].includes(agentRun.status);
 }
 
 export async function runConfiguredTaskAgentStep({
@@ -370,6 +438,7 @@ export async function runConfiguredTaskAgentStep({
     contextSelector,
     maxRevisionCycles: agentConfig.maxRevisionCycles,
     maxReplanCycles: agentConfig.maxReplanCycles,
+    maxAttempts: agentConfig.maxAttempts,
     maxHistory: agentConfig.maxHistory,
     now,
     persist,
@@ -385,6 +454,7 @@ export async function runTaskAgentStep({
   maxCharsPerSource,
   maxRevisionCycles,
   maxReplanCycles,
+  maxAttempts = 1,
   now = Date.now(),
   maxHistory = 5,
   persist,
@@ -395,22 +465,52 @@ export async function runTaskAgentStep({
   const hasIdentity = isObject(task) && (task.id || task.taskId || task.task_id);
   const snapshot = !hasIdentity && nonEmptyString(taskId) ? { ...task, id: taskId } : task;
   const input = buildTaskAgentInput(snapshot);
-  const outcome = await runAgentFeedbackOrchestration({
-    ...input,
-    adapter,
-    contextSelector,
-    maxChars,
-    maxCharsPerSource,
-    maxRevisionCycles,
-    maxReplanCycles,
-  });
-  const updatedTask = applyAgentRun(task, outcome, { now, maxHistory });
-  if (persist) {
-    await persist(updatedTask, outcome);
+  const baseConstraints = Array.isArray(input.constraints) ? input.constraints : [];
+  const totalAttempts =
+    Number.isInteger(maxAttempts) && maxAttempts > 0 ? maxAttempts : 1;
+  let constraints = baseConstraints;
+  let attemptMaxChars = maxChars;
+  let attempts = 0;
+  let lastError;
+  for (let attempt = 0; attempt < totalAttempts; attempt += 1) {
+    attempts = attempt + 1;
+    try {
+      const outcome = await runAgentFeedbackOrchestration({
+        ...input,
+        adapter,
+        contextSelector,
+        constraints,
+        maxChars: attemptMaxChars,
+        maxCharsPerSource,
+        maxRevisionCycles,
+        maxReplanCycles,
+      });
+      const updatedTask = applyAgentRun(task, outcome, { now, maxHistory });
+      if (persist) {
+        await persist(updatedTask, outcome);
+      }
+      return {
+        task: updatedTask,
+        outcome,
+        decision: decideAgentLoopAction(outcome),
+        attempts,
+      };
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableAgentError(error) || attempts >= totalAttempts) break;
+      const code = nonEmptyString(error?.code) ? error.code : "AGENT_FAILURE";
+      constraints = [
+        ...baseConstraints,
+        `Retry ${attempts}: previous attempt failed with ${code}; return a minimal evidence-backed result and stop exploring.`,
+      ];
+      if (typeof attemptMaxChars === "number" && attemptMaxChars > 0) {
+        attemptMaxChars = Math.max(2000, Math.floor(attemptMaxChars * 0.6));
+      }
+    }
   }
-  return {
-    task: updatedTask,
-    outcome,
-    decision: decideAgentLoopAction(outcome),
-  };
+  if (lastError && typeof lastError === "object") {
+    lastError.attempts = attempts;
+    if (nonEmptyString(lastError.code)) lastError.failureCode = lastError.code;
+  }
+  throw lastError;
 }

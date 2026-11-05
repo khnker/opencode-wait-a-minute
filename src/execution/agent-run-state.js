@@ -20,6 +20,10 @@ export function agentSignalForLoop(outcome, task) {
     ...(typeof run.failureReason === "string" && run.failureReason
       ? { failureReason: run.failureReason }
       : {}),
+    ...(typeof run.failureCode === "string" && run.failureCode
+      ? { failureCode: run.failureCode }
+      : {}),
+    ...(Number.isInteger(run.attempts) ? { attempts: run.attempts } : {}),
     results: Array.isArray(run.results) ? run.results : [],
   };
 }
@@ -39,6 +43,7 @@ export function reopenTerminalAgentRun(state) {
     surfaced: false,
     cycles: { revisions: 0, replans: 0 },
   };
+  delete state.agentRun.failureReason;
   return true;
 }
 

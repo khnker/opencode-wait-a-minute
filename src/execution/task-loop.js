@@ -1,5 +1,6 @@
 /** Task loop — pure, deterministic controller for execution-loop decisions. */
 import { migrateLegacyPhase } from "./execution-state.js";
+import { isRetryableAgentError } from "./task-agent-run.js";
 
 export const TASK_LOOP_DECISIONS = Object.freeze([
   "CONTINUE",
@@ -20,10 +21,19 @@ export function decideAgentLoopAction(agent) {
   const status = agent.status;
   const verdict = agent.verdict ?? null;
   if (status === "FAILED") {
+    const maxAttempts = Number.isInteger(agent.maxAttempts) && agent.maxAttempts > 0 ? agent.maxAttempts : 0;
+    const attempts = Number.isInteger(agent.attempts) ? agent.attempts : 0;
+    if (
+      agent.failureCode &&
+      isRetryableAgentError({ code: agent.failureCode }) &&
+      attempts < maxAttempts
+    ) {
+      return { decision: "CONTINUE", reason: "agent-retryable-failure" };
+    }
     const detail =
       typeof agent.failureReason === "string" ? agent.failureReason.trim().replace(/\s+/g, " ") : "";
     return {
-      decision: "BLOCK",
+      decision: "WAIT_USER",
       reason: detail ? `agent-failed: ${detail.slice(0, 200)}` : "agent-failed",
     };
   }

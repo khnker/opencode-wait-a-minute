@@ -112,8 +112,8 @@ does not need another authorization gate.
 #### Scenario: Failed agent pass
 
 - **WHEN** the persisted `agentRun` has `status: "FAILED"` and the loop decides
-  `BLOCK` with reason `agent-failed`
-- **THEN** the host emits one synthetic prompt with the block reason
+  `WAIT_USER` with reason `agent-failed`
+- **THEN** the host emits one synthetic prompt with the failure reason
 - **AND** it persists `agentRun.surfaced = true`
 - **AND** the next idle with the same state stays silent
 
@@ -174,20 +174,31 @@ this reset.
 - **THEN** `extractPrompt` returns an empty string and the handler does not
   reopen the run
 
-### Requirement: A failed agent pass is persisted and stops automatic retries
+### Requirement: Retryable agent failures are bounded and surface to the user
 
 When an agent pass throws, the host MUST persist a terminal `FAILED` run with the
-failure reason instead of only logging the error. It MUST stop scheduling automatic
-passes for that task until a real user turn reopens the run, and the existing
-terminal-pause surfacing MUST report the reason once.
+failure reason and, when available, `failureCode` and `attempts`, instead of only
+logging the error. Retryable invocation failures MUST be retried inside the pass up
+to `taskLoop.agents.maxAttempts`, feeding the previous failure and a narrower
+context to the next attempt. After exhaustion the loop MUST surface `WAIT_USER`
+with `agent-failed: <detail>`; `BLOCK` is reserved for denied authorization and
+task-blocked states.
+
+#### Scenario: Retry then success
+
+- **WHEN** an invocation fails with `PROMPT_TIMEOUT` or an aborted child session
+  and the retry budget remains
+- **THEN** the orchestration runs again with the previous failure as a constraint
+  and a reduced context budget
+- **AND** a successful retry returns the outcome with the attempts used
 
 #### Scenario: Adapter error fails the pass
 
 - **WHEN** `runTaskAgentPass` throws before returning an outcome
 - **THEN** the task's `agentRun.status` is `FAILED`
 - **AND** `agentRun.failureReason` contains the error message
-- **AND** `shouldRunTaskAgentPass` returns false on the next idle
-- **AND** the loop decision is `BLOCK` with reason `agent-failed: <detail>`
+- **AND** `agentRun.failureCode` and `agentRun.attempts` are persisted when available
+- **AND** the loop decision is `WAIT_USER` with reason `agent-failed: <detail>`
 - **AND** the host surfaces that reason once
 
 #### Scenario: A real user turn reopens the failed run
@@ -216,4 +227,17 @@ error code and the cause chain.
 - **WHEN** `client.session.prompt` rejects because the invocation signal aborted
 - **THEN** the adapter throws an `AgentInvocationError` with code `PROMPT_TIMEOUT`
 - **AND** the persisted `failureReason` contains the timeout message and the cause
+
+### Requirement: Agent failures preserve their cause
+
+The system SHALL record the underlying provider error when an agent session
+finishes with an error and no text, instead of reporting an empty response.
+
+#### Scenario: Provider error without text parts
+
+- **WHEN** the session prompt response contains `info.error` and no text parts
+- **THEN** the invocation fails with `PROMPT_FAILED`
+- **AND** the message includes the provider message and status code when present
+- **AND** the original error is retained as `cause`
+- **AND** the persisted loop failure reason includes that message
 

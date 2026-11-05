@@ -99,7 +99,7 @@ test("WAM_GOVERNANCE=off / WAM_BYPASS disable enforcement", () => {
 
 test("config file is honored", () => {
   const cfg = loadWamConfig(tmpProject({ skills: false, logging: false, enforcement: false }));
-  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false, debug: true, autoLoop: true, permissionPreflight: true, contextProjection: "active", taskLoop: { enabled: true, maxIterations: 10, maxNoProgress: 3, agents: { enabled: false, maxRevisionCycles: 2, maxReplanCycles: 1, maxHistory: 5 } }, qualityContracts: { enabled: false } });
+  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false, debug: true, autoLoop: true, permissionPreflight: true, permissionEnforce: false, contextProjection: "active", taskLoop: { enabled: true, maxIterations: 10, maxNoProgress: 3, agents: { enabled: false, maxRevisionCycles: 2, maxReplanCycles: 1, maxAttempts: 2, maxHistory: 5, toolTimeoutMs: 120000 } }, qualityContracts: { enabled: false }, completionGate: { enforce: false } });
 });
 
 test("contextProjection defaults to active and honors env/file overrides", () => {
@@ -226,7 +226,9 @@ test("task loop agents are opt-in and honor file/env overrides", () => {
     enabled: false,
     maxRevisionCycles: 2,
     maxReplanCycles: 1,
+    maxAttempts: 2,
     maxHistory: 5,
+    toolTimeoutMs: 120000,
   });
   assert.equal(
     loadWamConfig(tmpProject({ taskLoop: { agents: { enabled: true } } })).taskLoop.agents.enabled,
@@ -244,14 +246,29 @@ test("task loop agents are opt-in and honor file/env overrides", () => {
   process.env.WAM_TASK_LOOP_AGENTS = "1";
   process.env.WAM_AGENT_MAX_REVISIONS = "0";
   process.env.WAM_AGENT_MAX_REPLANS = "3";
+  process.env.WAM_AGENT_MAX_ATTEMPTS = "3";
   process.env.WAM_AGENT_MAX_HISTORY = "1";
   const cfg = loadWamConfig(tmpProject({ taskLoop: { agents: { enabled: false } } }));
   assert.deepEqual(cfg.taskLoop.agents, {
     enabled: true,
     maxRevisionCycles: 0,
     maxReplanCycles: 3,
+    maxAttempts: 3,
     maxHistory: 1,
+    toolTimeoutMs: 120000,
   });
+  delete process.env.WAM_TASK_LOOP_AGENTS;
+  delete process.env.WAM_AGENT_MAX_REVISIONS;
+  delete process.env.WAM_AGENT_MAX_REPLANS;
+  delete process.env.WAM_AGENT_MAX_ATTEMPTS;
+  delete process.env.WAM_AGENT_MAX_HISTORY;
+});
+
+test("agent tool timeout honors file and env overrides", () => {
+  assert.equal(loadWamConfig(tmpProject({ taskLoop: { agents: { toolTimeoutMs: 5000 } } })).taskLoop.agents.toolTimeoutMs, 5000);
+  process.env.WAM_AGENT_TOOL_TIMEOUT_MS = "2500";
+  assert.equal(loadWamConfig(tmpProject()).taskLoop.agents.toolTimeoutMs, 2500);
+  delete process.env.WAM_AGENT_TOOL_TIMEOUT_MS;
 });
 
 test("qualityContracts default to disabled and honor file/env overrides", () => {
@@ -262,6 +279,17 @@ test("qualityContracts default to disabled and honor file/env overrides", () => 
   process.env.WAM_QUALITY_CONTRACTS = "0";
   assert.equal(loadWamConfig(tmpProject({ qualityContracts: { enabled: true } })).qualityContracts.enabled, false);
   delete process.env.WAM_QUALITY_CONTRACTS;
+});
+
+test("completionGate enforcement defaults to off and honors file/env overrides", () => {
+  assert.equal(loadWamConfig(tmpProject()).completionGate.enforce, false);
+  assert.equal(loadWamConfig(tmpProject({ completionGate: { enforce: true } })).completionGate.enforce, true);
+  process.env.WAM_COMPLETION_GATE = "1";
+  assert.equal(loadWamConfig(tmpProject()).completionGate.enforce, true);
+  delete process.env.WAM_COMPLETION_GATE;
+  process.env.WAM_COMPLETION_GATE_ENFORCE = "0";
+  assert.equal(loadWamConfig(tmpProject({ completionGate: { enforce: true } })).completionGate.enforce, false);
+  delete process.env.WAM_COMPLETION_GATE_ENFORCE;
 });
 
 test("permissionPreflight defaults to true and honors file/env overrides", () => {

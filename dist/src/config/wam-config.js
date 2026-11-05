@@ -22,6 +22,7 @@
  *   - debug:       emit structured WAM-DEBUG traces for auditing logic   (default false)
  *   - autoLoop:    auto-continue after a rejected post-DONE review       (default true)
  *   - permissionPreflight: request access permissions before delegating  (default true)
+ *   - permissionEnforce: hard-enforce permission decisions              (default false)
  *   - taskLoop:    drive the execution loop after session.idle           (default enabled)
  *   - qualityContracts: enforce task-specific evidence requirements      (default disabled)
  *
@@ -32,8 +33,10 @@
  *   - debug:       WAM_DEBUG=1 | WAM_DEBUG=true | WAM_LOG_LEVEL=debug | WAM_DISABLE_DEBUG=1
  *   - autoLoop:    WAM_AUTO_LOOP=<bool> | WAM_DISABLE_AUTO_LOOP=1
  *   - permissionPreflight: WAM_PERMISSION_PREFLIGHT=<bool> | WAM_DISABLE_PERMISSION_PREFLIGHT=1
+ *   - permissionEnforce: WAM_PERMISSION_ENFORCE=<bool>
  *   - task loop agents: WAM_TASK_LOOP_AGENTS=1, WAM_AGENT_MAX_REVISIONS=<int>,
- *     WAM_AGENT_MAX_REPLANS=<int>, WAM_AGENT_MAX_HISTORY=<int>
+ *     WAM_AGENT_MAX_REPLANS=<int>, WAM_AGENT_MAX_HISTORY=<int>,
+ *     WAM_AGENT_TOOL_TIMEOUT_MS=<positive-int>, WAM_AGENT_EARLY_PASS=<bool>
  *
  * Config file path override: WAM_CONFIG=<absolute-path-to-config.json>
  * Global config path override: WAM_GLOBAL_CONFIG=<absolute-path-to-config.json>
@@ -52,6 +55,7 @@ export const DEFAULT_WAM_CONFIG = Object.freeze({
   debug: true,
   autoLoop: true,
   permissionPreflight: true,
+  permissionEnforce: false,
   contextProjection: "active",
   taskLoop: Object.freeze({
     enabled: true,
@@ -61,10 +65,13 @@ export const DEFAULT_WAM_CONFIG = Object.freeze({
       enabled: false,
       maxRevisionCycles: 2,
       maxReplanCycles: 1,
+      maxAttempts: 2,
       maxHistory: 5,
+      toolTimeoutMs: 120000,
     }),
   }),
   qualityContracts: Object.freeze({ enabled: false }),
+  completionGate: Object.freeze({ enforce: false }),
 });
 
 const TRUE_VALUES = new Set(["1", "true", "on", "yes", "enabled", "enable"]);
@@ -235,10 +242,17 @@ export function loadWamConfig(baseDir = process.cwd()) {
     DEFAULT_WAM_CONFIG.permissionPreflight,
   );
 
+  const permissionEnforce = firstDefined(
+    parseBoolean(process.env.WAM_PERMISSION_ENFORCE),
+    parseBoolean(file.permissionEnforce),
+    DEFAULT_WAM_CONFIG.permissionEnforce,
+  );
+
   const fileTaskLoop = file.taskLoop && typeof file.taskLoop === "object" ? file.taskLoop : {};
   const fileTaskLoopAgents =
     fileTaskLoop.agents && typeof fileTaskLoop.agents === "object" ? fileTaskLoop.agents : {};
   const fileQualityContracts = file.qualityContracts && typeof file.qualityContracts === "object" ? file.qualityContracts : {};
+  const fileCompletionGate = file.completionGate && typeof file.completionGate === "object" ? file.completionGate : {};
 
   return {
     skills,
@@ -247,6 +261,7 @@ export function loadWamConfig(baseDir = process.cwd()) {
     debug,
     autoLoop,
     permissionPreflight,
+    permissionEnforce,
     contextProjection: firstDefined(
       process.env.WAM_CONTEXT_PROJECTION,
       typeof file.contextProjection === "string" ? file.contextProjection : undefined,
@@ -284,10 +299,20 @@ export function loadWamConfig(baseDir = process.cwd()) {
           parseNonNegativeInt(fileTaskLoopAgents.maxReplanCycles),
           DEFAULT_WAM_CONFIG.taskLoop.agents.maxReplanCycles,
         ),
+        maxAttempts: firstDefined(
+          parsePositiveInt(process.env.WAM_AGENT_MAX_ATTEMPTS),
+          parsePositiveInt(fileTaskLoopAgents.maxAttempts),
+          DEFAULT_WAM_CONFIG.taskLoop.agents.maxAttempts,
+        ),
         maxHistory: firstDefined(
           parseNonNegativeInt(process.env.WAM_AGENT_MAX_HISTORY),
           parseNonNegativeInt(fileTaskLoopAgents.maxHistory),
           DEFAULT_WAM_CONFIG.taskLoop.agents.maxHistory,
+        ),
+        toolTimeoutMs: firstDefined(
+          parsePositiveInt(process.env.WAM_AGENT_TOOL_TIMEOUT_MS),
+          parsePositiveInt(fileTaskLoopAgents.toolTimeoutMs),
+          DEFAULT_WAM_CONFIG.taskLoop.agents.toolTimeoutMs,
         ),
       },
     },
@@ -296,6 +321,14 @@ export function loadWamConfig(baseDir = process.cwd()) {
         parseBoolean(process.env.WAM_QUALITY_CONTRACTS),
         parseBoolean(fileQualityContracts.enabled),
         DEFAULT_WAM_CONFIG.qualityContracts.enabled,
+      ),
+    },
+    completionGate: {
+      enforce: firstDefined(
+        parseBoolean(process.env.WAM_COMPLETION_GATE),
+        parseBoolean(process.env.WAM_COMPLETION_GATE_ENFORCE),
+        parseBoolean(fileCompletionGate.enforce),
+        DEFAULT_WAM_CONFIG.completionGate.enforce,
       ),
     },
   };

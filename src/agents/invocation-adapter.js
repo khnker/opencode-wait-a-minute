@@ -60,6 +60,24 @@ function withTimeout(promise, ms, makeError) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+function isPromptTimeoutCause(error) {
+  const seen = new Set();
+  let cause = error;
+  while (cause && typeof cause === "object" && !seen.has(cause)) {
+    seen.add(cause);
+    if (
+      cause.name === "AbortError" ||
+      cause.name === "TimeoutError" ||
+      cause.code === "ABORT_ERR" ||
+      /timed? ?out|timeout/i.test(typeof cause.message === "string" ? cause.message : "")
+    ) {
+      return true;
+    }
+    cause = cause.cause;
+  }
+  return false;
+}
+
 export function toolPolicyForRole(role) {
   const capabilities = getRoleCapabilities(role);
   return capabilities.modifyCode ? BUILDER_TOOLS : READ_ONLY_TOOLS;
@@ -209,6 +227,14 @@ export function parseAgentResultText(text) {
   }
 }
 
+function sessionErrorMessage(data) {
+  const error = data?.info?.error ?? data?.error;
+  if (!error) return null;
+  const detail = error?.data?.message || error?.message || error?.name || String(error);
+  const status = error?.data?.statusCode;
+  return `agent session error: ${detail}${status ? ` (${status})` : ""}`;
+}
+
 function responseText(parts) {
   if (!Array.isArray(parts)) return "";
   return parts
@@ -310,7 +336,7 @@ export function createOpenCodeV1AgentAdapter({
           if (!cause.sessionID) cause.sessionID = session.id;
           throw cause;
         }
-        if (signal?.aborted || cause?.name === "AbortError" || cause?.code === "ABORT_ERR") {
+        if (signal?.aborted || isPromptTimeoutCause(cause)) {
           throw new AgentInvocationError(
             `agent prompt timeout after ${timeoutMs}ms`,
             {
@@ -329,6 +355,14 @@ export function createOpenCodeV1AgentAdapter({
 
       const data = response?.data ?? response;
       try {
+        const failure = sessionErrorMessage(data);
+        if (failure) {
+          throw new AgentInvocationError(failure, {
+            code: AGENT_INVOCATION_ERROR_CODES.PROMPT_FAILED,
+            cause: data?.info?.error ?? data?.error,
+            sessionID: session.id,
+          });
+        }
         const result = normalizeAgentResult(
           parseAgentResultText(responseText(data?.parts)),
         );

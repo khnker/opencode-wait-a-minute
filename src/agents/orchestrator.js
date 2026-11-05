@@ -363,7 +363,11 @@ async function executeOrchestration({
     return { result, verdict };
   };
 
-  const stopForFeedback = (verdict, reviewFindings) => {
+  const stopForFeedback = (
+    verdict,
+    reviewFindings,
+    { revisionTo = AGENT_ROLES.BUILDER, applyRevisionFindings = false } = {},
+  ) => {
     if (verdict === "REVISION_REQUIRED") {
       if (cycles.revisions >= maxRevisionCycles) {
         return finish("REVISION_REQUIRED", AGENT_ROLES.REVIEWER, verdict, {
@@ -374,13 +378,19 @@ async function executeOrchestration({
       handoffs.push({
         kind: "revision",
         from: AGENT_ROLES.REVIEWER,
-        to: AGENT_ROLES.BUILDER,
+        to: revisionTo,
         findings: [],
         decisions: [],
         artifacts: [],
         evidence: [],
         reviewFindings: [...reviewFindings],
       });
+      if (applyRevisionFindings) {
+        accumulated.constraints = [
+          ...baseConstraints,
+          ...reviewFindings.map(reviewFindingConstraint),
+        ];
+      }
       return null;
     }
     if (verdict === "REPLAN_REQUIRED") {
@@ -418,25 +428,51 @@ async function executeOrchestration({
     terminal = terminalResult(result, AGENT_ROLES.ARCHITECT);
     if (terminal) return terminal;
 
-    const review = await runReviewer();
+    let review = await runReviewer();
     if (review.terminal) return review.terminal;
-    if (review.verdict === "ACCEPTED") {
-      return finish("COMPLETED", null, review.verdict);
-    }
-    if (review.verdict === "BLOCKED") {
-      return finish("BLOCKED", AGENT_ROLES.REVIEWER, review.verdict);
-    }
-    if (
-      review.verdict !== "REVISION_REQUIRED" &&
-      review.verdict !== "REPLAN_REQUIRED"
-    ) {
-      throw new AgentOrchestrationError(
-        `unknown reviewer verdict: ${String(review.verdict)}`,
+
+    while (true) {
+      const verdict = review.verdict;
+      if (verdict === "ACCEPTED") {
+        return finish("COMPLETED", null, verdict);
+      }
+      if (verdict === "BLOCKED") {
+        return finish("BLOCKED", AGENT_ROLES.REVIEWER, verdict);
+      }
+      if (verdict !== "REVISION_REQUIRED" && verdict !== "REPLAN_REQUIRED") {
+        throw new AgentOrchestrationError(
+          `unknown reviewer verdict: ${String(verdict)}`,
+        );
+      }
+
+      const reviewFindings = review.result.review?.findings ?? [];
+      const feedbackStop = stopForFeedback(verdict, reviewFindings, {
+        revisionTo: AGENT_ROLES.ARCHITECT,
+        applyRevisionFindings: true,
+      });
+      if (feedbackStop) return feedbackStop;
+
+      if (verdict === "REVISION_REQUIRED") {
+        result = await invokeRole(
+          AGENT_ROLES.ANALYST,
+          AGENT_ROLES.ARCHITECT,
+          "revision",
+        );
+        terminal = terminalResult(result, AGENT_ROLES.ANALYST);
+        if (terminal) return terminal;
+      }
+
+      result = await invokeRole(
+        AGENT_ROLES.ARCHITECT,
+        AGENT_ROLES.REVIEWER,
+        verdict === "REPLAN_REQUIRED" ? "replan" : "revision",
       );
+      terminal = terminalResult(result, AGENT_ROLES.ARCHITECT);
+      if (terminal) return terminal;
+
+      review = await runReviewer();
+      if (review.terminal) return review.terminal;
     }
-    return finish(review.verdict, AGENT_ROLES.REVIEWER, review.verdict, {
-      exhausted: true,
-    });
   }
 
   let result = await invokeRole(AGENT_ROLES.ANALYST, AGENT_ROLES.ARCHITECT);

@@ -16,6 +16,7 @@ import {
   decideNextAction,
 } from "../../src/execution/task-loop.js";
 import { agentSignalForLoop } from "../../src/execution/agent-run-state.js";
+import { selectRoleContext } from "../../src/agents/context-isolation.js";
 
 const TASK_ID = "task-1";
 const REVIEW_FINDING = {
@@ -242,7 +243,7 @@ test("decideAgentLoopAction maps terminal agent outcomes", () => {
     reason: "agent-review-accepted",
   });
   assert.deepEqual(decideAgentLoopAction({ status: "FAILED" }), {
-    decision: "BLOCK",
+    decision: "WAIT_USER",
     reason: "agent-failed",
   });
   assert.deepEqual(decideAgentLoopAction({ status: "BLOCKED" }), {
@@ -297,7 +298,7 @@ test("decideNextAction accepts an agent outcome but budget still wins", () => {
   );
   assert.equal(
     decideNextAction({ ...base, agent: { status: "FAILED" } }).decision,
-    "BLOCK",
+    "WAIT_USER",
   );
   assert.equal(
     decideNextAction({ ...base, budget: { exhausted: true }, agent: accepted }).decision,
@@ -375,7 +376,7 @@ test("shouldRunTaskAgentPass skips terminal outcomes and allows retries", () => 
   );
   assert.equal(
     shouldRunTaskAgentPass({ ...baseTask(), agentRun: { status: "FAILED" } }),
-    false,
+    true,
   );
   assert.equal(
     shouldRunTaskAgentPass({ ...baseTask(), agentRun: { status: "COMPLETED", verdict: "REVISION_REQUIRED" } }),
@@ -483,14 +484,20 @@ test("routes task.diff into the reviewer request only", async () => {
   assert.equal(result.outcome.status, "COMPLETED");
 });
 
-test("applyAgentFailure persists a terminal run with the failure reason", () => {
+test("applyAgentFailure persists a resumable run with the failure reason", () => {
   const task = baseTask();
-  const updated = applyAgentFailure(task, "child session timed out", { now: 42 });
+  const updated = applyAgentFailure(task, "child session timed out", {
+    failureCode: "PROMPT_TIMEOUT",
+    attempts: 2,
+    now: 42,
+  });
 
   assert.equal(updated.agentRun.status, "FAILED");
   assert.equal(updated.agentRun.failureReason, "child session timed out");
+  assert.equal(updated.agentRun.failureCode, "PROMPT_TIMEOUT");
+  assert.equal(updated.agentRun.attempts, 2);
   assert.equal(updated.agentRun.updatedAt, 42);
-  assert.equal(shouldRunTaskAgentPass(updated), false);
+  assert.equal(shouldRunTaskAgentPass(updated), true);
   assert.equal(task.agentRun, undefined);
 });
 
@@ -506,12 +513,114 @@ test("formatAgentFailure includes the error code and cause chain", () => {
   );
 });
 
-test("a failed pass blocks the loop with the persisted reason", () => {
+test("formatAgentFailure surfaces HTTP error data from the cause", () => {
+  const error = new Error("failed to prompt agent session", {
+    cause: {
+      name: "APIError",
+      data: { message: "session is busy", statusCode: 409 },
+    },
+  });
+  error.code = "PROMPT_FAILED";
+
+  assert.equal(
+    formatAgentFailure(error),
+    "failed to prompt agent session; code=PROMPT_FAILED; cause: session is busy status=409",
+  );
+});
+
+test("a failed pass soft-fails to the user with the persisted reason", () => {
   const task = baseTask();
   const updated = applyAgentFailure(task, "child session timed out", { now: 42 });
   const signal = agentSignalForLoop(null, updated);
   const action = decideAgentLoopAction(signal);
 
-  assert.equal(action.decision, "BLOCK");
+  assert.equal(action.decision, "WAIT_USER");
   assert.equal(action.reason, "agent-failed: child session timed out");
+});
+
+test("a retryable failure without a known budget waits for the user", () => {
+  const updated = applyAgentFailure(baseTask(), "prompt timed out", {
+    failureCode: "PROMPT_TIMEOUT",
+    attempts: 1,
+  });
+  const action = decideAgentLoopAction(agentSignalForLoop(null, updated));
+
+  assert.equal(action.decision, "WAIT_USER");
+  assert.equal(action.reason, "agent-failed: prompt timed out");
+});
+
+test("runTaskAgentStep retries a retryable failure with narrowed context", async () => {
+  const inner = makeAdapter();
+  const calls = [];
+  const selections = [];
+  const adapter = {
+    calls,
+    async invoke(request) {
+      calls.push(request);
+      if (calls.length === 1) {
+        const error = new Error("prompt timed out");
+        error.code = "PROMPT_TIMEOUT";
+        throw error;
+      }
+      return inner.invoke(request);
+    },
+  };
+  const contextSelector = (selection) => {
+    selections.push({ maxChars: selection.maxChars, constraints: [...selection.constraints] });
+    return selectRoleContext(selection);
+  };
+
+  const result = await runTaskAgentStep({
+    task: baseTask(),
+    adapter,
+    contextSelector,
+    maxAttempts: 2,
+    maxChars: 10_000,
+  });
+
+  assert.equal(result.attempts, 2);
+  assert.equal(result.outcome.status, "COMPLETED");
+  assert.equal(result.outcome.verdict, "ACCEPTED");
+  assert.equal(calls.length, 5);
+  const retryInput = calls[1];
+  assert.equal(selections[1].maxChars, 6_000);
+  assert.equal(
+    retryInput.input.constraints.some(
+      (constraint) =>
+        constraint.includes("Retry 1") && constraint.includes("PROMPT_TIMEOUT"),
+    ),
+    true,
+  );
+});
+
+test("runTaskAgentStep exhausts retryable failures and waits for the user", async () => {
+  const adapter = {
+    calls: [],
+    async invoke(request) {
+      this.calls.push(request);
+      const error = new Error("prompt timed out");
+      error.code = "PROMPT_TIMEOUT";
+      throw error;
+    },
+  };
+
+  await assert.rejects(
+    runTaskAgentStep({ task: baseTask(), adapter, maxAttempts: 2 }),
+    (error) => {
+      assert.equal(error.attempts, 2);
+      assert.equal(error.failureCode, "PROMPT_TIMEOUT");
+      return true;
+    },
+  );
+  assert.equal(adapter.calls.length, 2);
+
+  const exhausted = decideAgentLoopAction({
+    status: "FAILED",
+    failureCode: "PROMPT_TIMEOUT",
+    failureReason: "prompt timed out",
+    attempts: 2,
+    maxAttempts: 2,
+  });
+  assert.equal(exhausted.decision, "WAIT_USER");
+  assert.equal(exhausted.reason, "agent-failed: prompt timed out");
 });

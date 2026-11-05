@@ -11,7 +11,8 @@ Every non-trivial change follows this order:
    and `specs/<capability>/spec.md`.
 4. **Implement**: keep the smallest complete diff; no dead code, no unrequested abstractions.
 5. **Test**: add regression tests for new behavior; run affected suites with
-   `node --test --test-force-exit <files>`.
+   `node --test --test-force-exit <files>`. Every behavioral change also needs a
+   fresh-session web verification (see below); unit tests alone are not enough.
 6. **Validate**: `openspec validate --changes --strict`, `npm run build`, and load-check `dist/`.
 7. **Report**: files changed, tests run, residual risks.
 
@@ -19,6 +20,7 @@ Every non-trivial change follows this order:
 
 ```bash
 npm run build                 # copy index.js, package.json, src/, skills/, prompts/, vendor/ to dist (POSIX cp)
+npm run verify:web -- --out <tmp>  # fresh opencode web E2E; writes report.json/report.md
 npm run validate              # release gate (full suite; slow)
 node scripts/run-tests.mjs    # full suite with force-exit
 node scripts/prune-wam-artifacts.mjs --apply  # archive one-use test tasks/snapshots
@@ -29,6 +31,33 @@ Prerequisites: Node >= 20 and the sibling `../context-query-core` checkout
 
 Tests live in `tests/` (legacy, e2e, isolation), as `test-*.mjs` at the repo root and as
 `src/**/*.test.js`. Per-file runs use `node --test --test-force-exit <files>`.
+
+## Fresh-session web verification (mandatory)
+
+Every behavioral change MUST be verified in a **fresh** `opencode web` instance, not only
+with unit tests. The canonical automated check is:
+
+```bash
+npm run verify:web -- --out /tmp/wam-web-e2e-<run>
+```
+
+It creates an isolated fixture, starts a new server, approves the contract, drives the
+real agent loop, and writes `report.json`/`report.md` with checks, timeline, roles,
+artifacts and redacted logs. A change is not validated if this command has not been run
+against the final code (or, if it cannot run, the manual procedure below was followed and
+the reason recorded in the change report).
+
+1. Create an isolated fixture project (e.g. a temp dir) with its own `.wam/config.json`.
+   Never point the test server at the live project's `.wam`.
+2. Start a new server process with the fixture as cwd (a process started before the
+   change is not valid):
+   `opencode web --port <free> --hostname 127.0.0.1`
+3. Drive it with Playwright (new session, fill `[aria-label="Prompt"]`, press Enter,
+   assert the rendered body) or with `curl` against the same base URL
+   (`GET /session`, `GET /session/<sid>/message`, ...). Assert both the rendered UI and
+   the persisted messages/parts.
+4. Stop the server, remove the fixture, and record the URL, scenario and evidence in the
+   change report.
 
 ## Runtime notes
 

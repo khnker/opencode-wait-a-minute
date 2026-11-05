@@ -487,7 +487,7 @@ test("pending authorization surfaces once and persists the marker", async (t) =>
   assert.equal(calls.length, 1);
 });
 
-test("failed agent BLOCK surfaces once and persists the marker", async (t) => {
+test("failed agent run surfaces WAIT_USER once and persists the marker", async (t) => {
   const root = tmpRoot(t);
   const sid = "ses-failed";
   const calls = [];
@@ -521,10 +521,10 @@ test("failed agent BLOCK surfaces once and persists the marker", async (t) => {
     });
 
   const first = run();
-  assert.equal(first.decision, "BLOCK");
+  assert.equal(first.decision, "WAIT_USER");
   assert.equal(first.reason, "agent-failed");
   assert.equal(first.prompted, true);
-  assert.match(calls[0].body.parts[0].text, /Blocked: agent-failed/);
+  assert.match(calls[0].body.parts[0].text, /agent-failed/);
   assert.equal(task.agentRun.surfaced, true);
 
   await new Promise((resolve) => setImmediate(resolve));

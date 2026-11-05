@@ -70,6 +70,7 @@ test("reopenTerminalAgentRun clears the terminal marker and keeps history", () =
       surfaced: true,
       cycles: { revisions: 2, replans: 1 },
       results: [{ role: "REVIEWER" }],
+      failureReason: "failed to prompt agent session",
     },
   };
 
@@ -79,6 +80,7 @@ test("reopenTerminalAgentRun clears the terminal marker and keeps history", () =
   assert.equal(state.agentRun.stoppedAt, null);
   assert.equal(state.agentRun.exhausted, false);
   assert.equal(state.agentRun.surfaced, false);
+  assert.equal(state.agentRun.failureReason, undefined);
   assert.deepEqual(state.agentRun.cycles, { revisions: 0, replans: 0 });
   assert.equal(state.agentRun.results.length, 1);
 });
