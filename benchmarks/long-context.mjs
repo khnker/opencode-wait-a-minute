@@ -8,7 +8,7 @@
  *   node benchmarks/long-context.mjs
  */
 
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runLongContextScaling } from "./real/runners/continuation-runner.mjs";
@@ -39,6 +39,7 @@ async function main() {
     results
   };
   const filename = `long-context-${timestamp}.json`;
+  mkdirSync(RESULTS_DIR, { recursive: true });
   const outPath = join(RESULTS_DIR, filename);
   writeFileSync(outPath, JSON.stringify(artifact, null, 2), "utf8");
   console.log(`Wrote ${outPath}`);

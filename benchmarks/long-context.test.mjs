@@ -13,7 +13,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -93,11 +93,9 @@ test("long-context: contextReductionPct is non-negative (WAM <= baseline)", asyn
   }
 });
 
-test("long-context: main() writes a JSON artifact under benchmarks/results/", async () => {
-  // We exercise the main() pipeline but redirect by inspecting its
-  // stdout. The artifact is written to `benchmarks/results/`, which
-  // must exist (we list it here for the contract).
+test("long-context: single-size run works with a clean results directory", async () => {
   const resultsDir = join(__dirname, "results");
+  mkdirSync(resultsDir, { recursive: true });
   assert.ok(existsSync(resultsDir), `results dir must exist: ${resultsDir}`);
   // Run a single size to keep the test fast and self-contained.
   const single = await runLongContextScaling({ sizes: [CONTINUATION_SIZES[0]] });
