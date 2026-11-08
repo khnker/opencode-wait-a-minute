@@ -1,7 +1,7 @@
 {
   "name": "opencode-wait-a-minute",
   "description": "WAM keeps more state than it sends: deterministic task-state, context reconstruction, and evidence-backed completion for OpenCode agents.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "main": "index.js",
   "engines": {
     "node": ">=22.6"
@@ -11,7 +11,6 @@
     "src/",
     "skills/",
     "prompts/",
-    "vendor/**/dist",
     "vendor/**/src/",
     "vendor/**/index.js",
     "README.md",

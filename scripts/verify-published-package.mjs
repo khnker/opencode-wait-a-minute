@@ -62,7 +62,10 @@ function verifyExpectedFiles(pkgDir, pkgJson) {
       continue;
     }
     const re = globToRegExp(pattern);
-    if (!readdirSync(dir).some((name) => re.test(name))) missing.push(entry);
+    const nested = readdirSync(dir, { recursive: true }).map((name) =>
+      String(name).replaceAll("\\", "/")
+    );
+    if (!nested.some((name) => re.test(name))) missing.push(entry);
   }
 
   if (missing.length > 0) {
