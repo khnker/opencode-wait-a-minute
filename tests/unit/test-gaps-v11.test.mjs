@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import pluginDefault from "../../index.js";
 import { getTaskState } from "../../src/skills/engine.js";
+import { discoverSkills } from "../../src/policy/skill-routing.js";
 
 const CWD = process.cwd();
 const cleanup = (id) => {
@@ -43,7 +44,11 @@ test("Lifecycle: status + phase evolution", async () => {
     cleanup(taskId);
 });
 
-test("Skill Audit: registra uso en .wam/skills/registry/usage.log", async () => {
+test("Skill Audit: registra uso en .wam/skills/registry/usage.log", async (t) => {
+    if (!discoverSkills({ root: CWD }).shadcn) {
+        t.skip("requires the shadcn skill installed in the environment");
+        return;
+    }
     const taskId = `audit-${Date.now()}`;
     cleanup(taskId);
     const usageLog = path.join(CWD, ".wam", "skills", "registry", "usage.log");

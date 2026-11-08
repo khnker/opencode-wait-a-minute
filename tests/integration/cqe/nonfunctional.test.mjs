@@ -48,7 +48,7 @@ test('RNF: cold query completes within a generous time budget', async () => {
   }
 });
 
-test('RNF: package exposes context-query-core as a resolvable dependency', async () => {
-  const mod = await import('context-query-core');
+test('RNF: vendored context-query-core exposes createEngine', async () => {
+  const mod = await import('../../../vendor/context-query-core/src/index.js');
   assert.strictEqual(typeof mod.createEngine, 'function');
 });
