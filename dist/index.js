@@ -19,7 +19,7 @@ import { splitVisibleRequirements } from "./src/context/requirement-visibility.j
 import { injectWamParts, defaultPartId } from "./src/integration/part-provenance.js";
 import { enqueueVisibleNotice, drainVisibleNotices, buildVisibleNoticePart, updateVisibleNoticePart } from "./src/integration/visible-notices.js";
 import { stripWrappingQuotes } from "./src/shared/command-args.js";
-import { loadWamConfig } from "./src/config/wam-config.js";
+import { loadWamConfig, isDashboardEnabled } from "./src/config/wam-config.js";
 import { ensurePermissionPlan, permissionPreflightLines, delegationBlocked, shouldBlockForPendingPermission } from "./src/policy/permission-preflight.js";
 import { configureLogger } from "./src/integration/logger.js";
 import { setLoggingEnabled, setDebugEnabled, registerLogicGate, wamDebug, wamLog, wamWarn, wamError } from "./src/shared/wam-log.js";
@@ -955,6 +955,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
     });
   }
 
+  const dashboardEnabled = isDashboardEnabled();
   try {
     const http = await import("node:http");
     const port = Number(process.env.WAM_DASHBOARD_PORT || process.env.PORT || 4321);
@@ -1069,11 +1070,13 @@ refresh();
 </body>
 </html>`);
     });
-    server.listen(port, () => {
-      console.log(`[WaitAMinute] Dashboard running at http://localhost:${port}`);
-    }).on("error", (err) => {
-      console.log(`[WaitAMinute] Dashboard server failed to start:`, err.message);
-    });
+    if (dashboardEnabled) {
+      server.listen(port, () => {
+        console.log(`[WaitAMinute] Dashboard running at http://localhost:${port}`);
+      }).on("error", (err) => {
+        console.log(`[WaitAMinute] Dashboard server failed to start:`, err.message);
+      });
+    }
   } catch (e) {}
 
   async function resolveSessionBase(sessionID) {

@@ -17,7 +17,7 @@
  *
  * Supported flags (all booleans):
  *   - skills:      discover, route and inject skills into context        (default true)
- *   - logging:     emit WAM logs (file + console)                       (default true)
+ *   - logging:     emit WAM logs (file + console)                       (default false)
  *   - enforcement: block mutating tools until the contract is approved   (default true)
  *   - debug:       emit structured WAM-DEBUG traces for auditing logic   (default false)
  *   - autoLoop:    auto-continue after a rejected post-DONE review       (default true)
@@ -53,7 +53,7 @@ import path from "node:path";
 
 export const DEFAULT_WAM_CONFIG = Object.freeze({
   skills: true,
-  logging: true,
+  logging: false,
   enforcement: true,
   debug: true,
   autoLoop: true,
@@ -89,6 +89,10 @@ export function parseBoolean(value) {
   if (TRUE_VALUES.has(v)) return true;
   if (FALSE_VALUES.has(v)) return false;
   return undefined;
+}
+
+export function isDashboardEnabled(env = process.env) {
+  return parseBoolean(env.WAM_DASHBOARD) === true;
 }
 
 function firstDefined(...values) {

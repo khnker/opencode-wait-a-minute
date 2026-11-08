@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { loadWamConfig, parseBoolean, DEFAULT_WAM_CONFIG } from "../../src/config/wam-config.js";
+import { loadWamConfig, parseBoolean, isDashboardEnabled, DEFAULT_WAM_CONFIG } from "../../src/config/wam-config.js";
 import { configureLogger, isLoggingEnabled } from "../../src/integration/logger.js";
 import { setLoggingEnabled, wamLog } from "../../src/shared/wam-log.js";
 
@@ -16,6 +16,7 @@ const ENV_KEYS = [
   "WAM_GLOBAL_CONFIG",
   "WAM_AUTO_LOOP", "WAM_DISABLE_AUTO_LOOP",
   "WAM_PERMISSION_PREFLIGHT", "WAM_DISABLE_PERMISSION_PREFLIGHT",
+  "WAM_DASHBOARD", "WAM_DASHBOARD_PORT",
   "WAM_CONTEXT_PROJECTION",
   "WAM_TASK_LOOP", "WAM_TASK_LOOP_MAX_ITERATIONS", "WAM_TASK_LOOP_MAX_NO_PROGRESS",
   "WAM_TASK_LOOP_AGENTS", "WAM_AGENT_MAX_REVISIONS", "WAM_AGENT_MAX_REPLANS",
@@ -56,11 +57,11 @@ function tmpGlobal(configObj) {
   return file;
 }
 
-test("defaults are all enabled", () => {
+test("defaults keep logging off", () => {
   const cfg = loadWamConfig(tmpProject());
   assert.deepEqual(cfg, { ...DEFAULT_WAM_CONFIG });
   assert.equal(cfg.skills, true);
-  assert.equal(cfg.logging, true);
+  assert.equal(cfg.logging, false);
   assert.equal(cfg.enforcement, true);
 });
 
@@ -338,6 +339,15 @@ test("project config overrides global with deep merge", () => {
   assert.equal(cfg.taskLoop.agents.maxRevisionCycles, 4, "project nested value wins");
 });
 
+test("dashboard is opt-in", () => {
+  assert.equal(isDashboardEnabled({}), false);
+  assert.equal(isDashboardEnabled({ WAM_DASHBOARD: "0" }), false);
+  assert.equal(isDashboardEnabled({ WAM_DASHBOARD: "false" }), false);
+  assert.equal(isDashboardEnabled({ WAM_DASHBOARD: "1" }), true);
+  assert.equal(isDashboardEnabled({ WAM_DASHBOARD: "true" }), true);
+  assert.equal(isDashboardEnabled({ WAM_DASHBOARD: "TRUE" }), true);
+});
+
 test("missing global config falls back to defaults", () => {
   process.env.WAM_GLOBAL_CONFIG = path.join(
     os.tmpdir(),
@@ -351,5 +361,5 @@ test("WAM_CONFIG suppresses the global config", () => {
   process.env.WAM_CONFIG = tmpGlobal({ skills: true });
   const cfg = loadWamConfig(tmpProject());
   assert.equal(cfg.skills, true);
-  assert.equal(cfg.logging, true, "global file must not be merged when WAM_CONFIG is set");
+  assert.equal(cfg.logging, false, "global file must not be merged when WAM_CONFIG is set");
 });

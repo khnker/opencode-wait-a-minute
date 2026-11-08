@@ -165,6 +165,8 @@ Once installed, WAM intercepts requests before skill resolution and agent execut
 - Permission preflight — before delegating to a subagent, WAM derives the access permissions the approved task needs and surfaces them as a recommendation; delegation is never blocked (`/wam permissions approve` / `deny` only update the plan, `/wam status` shows it). Disable with `"permissionPreflight": false` in `.wam/config.json` or `WAM_DISABLE_PERMISSION_PREFLIGHT=1`.
 - Contract approval — `"contractApproval": "advisory" | "required"` in `.wam/config.json` (default `advisory`; override with `WAM_CONTRACT_APPROVAL`). In `required` mode, `write`, `edit`, `apply_patch`, `patch` and `todo_write` are blocked until the user sends `/wam contract approve`; the model first restates the visible plan and the hard block repeats it with the objective, pending requirements and verification.
 - Context projection — `"contextProjection": "legacy" | "shadow" | "active"` in `.wam/config.json` (default `active`; override with `WAM_CONTEXT_PROJECTION`). `shadow` measures the projection against the legacy brief without injecting it; `legacy` keeps the previous brief.
+- Logging — off by default. Enable with `"logging": true` in `.wam/config.json` or `WAM_LOGGING=1`.
+- Sessions dashboard — off by default. Enable with `WAM_DASHBOARD=1` (optional `WAM_DASHBOARD_PORT`, default `4321`).
 
 ## Debugging and diagnostics
 WAM emits structured, greppable traces when debug mode is on. They audit which WAM logic is loaded, which is skipped, and what runtime decisions were made — useful for benchmarking, regression detection and logic-gap analysis.

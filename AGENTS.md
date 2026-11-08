@@ -95,8 +95,10 @@ the reason recorded in the change report).
 
 ## Runtime notes
 
-- Logging is opt-in for this repo: `.wam/config.json` sets `"logging": false`.
-- `WAM_LOGGING=true` enables logs; `plugin.log` rotates at 5 MB.
+- Logging is off by default; enable with `WAM_LOGGING=true` or `"logging": true`.
+  `plugin.log` rotates at 5 MB.
+- The sessions dashboard is off by default; enable with `WAM_DASHBOARD=true`
+  (optional `WAM_DASHBOARD_PORT`, default 4321).
 - Tests must not write to the project `.wam`; the test runner disables logging and
   redirects `WAM_LOG_FILE`, `WAM_METRICS_DIR` and `WAM_SESSION_DIR` to the OS temp directory.
 - To run the suite while a live WAM session uses the project, use
