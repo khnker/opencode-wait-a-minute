@@ -4,4 +4,4 @@
 - [x] Gate dashboard listening behind `WAM_DASHBOARD=true|1` in `index.js`.
 - [x] Add tests for logging defaults and dashboard opt-in parsing.
 - [x] Run affected tests, full suite, build, `openspec validate --changes --strict`, and fresh web verification.
-- [ ] Run the unified release gate and publish only after it passes.
+- [x] Run the unified release gate and publish only after it passes.
