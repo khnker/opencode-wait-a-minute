@@ -1,11 +1,14 @@
-import { analyze, getTaskState, persistTaskState, routeSkillsV2, loadSkillOnDemand, cavemanify, estimateTokens, buildAssumptions, escalateAssumptions, formatBacklog, findDuplicateTask } from "./src/skills/engine.js";
+import { analyze, buildRegistry, getTaskState, persistTaskState, routeSkillsV2, loadSkillOnDemand, cavemanify, estimateTokens, buildAssumptions, escalateAssumptions, formatBacklog, findDuplicateTask } from "./src/skills/engine.js";
+import { discoverSkills } from "./src/policy/skill-routing.js";
 import { createDialogueLlmFromEnv } from "./src/dialogue/llm-observer.js";
 import { startExperiment, noteSuccess, noteFailure } from "./src/execution/execution-engine.js";
 import { planAutoContinuation, buildAutoLoopPrompt } from "./src/execution/auto-continuation.js";
 import { driveTaskLoop } from "./src/adapters/opencode-v1/session-driver.js";
+import { shouldPauseForContractApproval } from "./src/execution/task-loop.js";
 import { runConfiguredTaskAgentStep, shouldRunTaskAgentPass, applyAgentFailure, formatAgentFailure } from "./src/execution/task-agent-run.js";
 import { agentSignalForLoop } from "./src/execution/agent-run-state.js";
-import { isExecutionGateActive, isMutatingToolCall, executionGateDirective, shouldClearExecutionGate } from "./src/execution/execution-gate.js";
+import { isExecutionGateActive, isExecutionGateStale, isMutatingToolCall, executionGateDirective, shouldClearExecutionGate, shouldReleaseOrphanGate } from "./src/execution/execution-gate.js";
+import { loadLoopState } from "./src/state/loop-state.js";
 import { createOpenCodeV1AgentAdapter } from "./src/agents/invocation-adapter.js";
 import { registerSessionLifecycle, unregisterSessionLifecycle } from "./src/integration/session-lifecycle.js";
 import { checkToolPath } from "./src/execution/tool-path-guard.js";
@@ -20,13 +23,13 @@ import { loadWamConfig } from "./src/config/wam-config.js";
 import { ensurePermissionPlan, permissionPreflightLines, delegationBlocked, shouldBlockForPendingPermission } from "./src/policy/permission-preflight.js";
 import { configureLogger } from "./src/integration/logger.js";
 import { setLoggingEnabled, setDebugEnabled, registerLogicGate, wamDebug, wamLog, wamWarn, wamError } from "./src/shared/wam-log.js";
-import { evaluateCompletionGate, applyPhaseTransition, isCompletionIntent, COMPLETION_INTENT_REGEX } from "./src/integration/orchestration.js";
+import { evaluateCompletionGate, applyPhaseTransition, isCompletionIntent, COMPLETION_INTENT_REGEX, rejectContractLogic } from "./src/integration/orchestration.js";
 import { loadPrompt } from "./src/prompts/loader.js";
 import { activeTaskPath, sessionTaskPath, tasksDir as wamTasksDir, taskDir as wamTaskDir } from "./src/shared/wam-paths.js";
 
 import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, listDecisions, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
 import { purgeTasks } from "./src/persistence/retention-manager.js";
-import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, selectContextWithCqe, detectFileSearchIntent, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules, setActiveSession, applyBootstrapApproval } from "./src/context/context.js";
+import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, selectContextWithCqe, detectFileSearchIntent, retrieveContext, retrieveContextWithCqe, closeSession, resolveWamRoot, migrateLegacyCapsules, setActiveSession, applyBootstrapApproval } from "./src/context/context.js";
 import { assembleContext } from "./src/context/assembly.js";
 import { injectCanonicalProjectContext } from "./src/context/canonical-project-context.js";
 import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./src/verification/verification.js";
@@ -177,6 +180,7 @@ const DEFAULT_CONFIG = {
   budgetTokens: 64000,
   contextBudget: 32000,
   tierPrompts: {},
+  contractApproval: "advisory",
 };
 
 // opencode 1.18.25+: chat.message output = { message, parts } (sin .system).
@@ -716,9 +720,10 @@ function classifyActionAgainstStrategy(action, tool, args, approvedStrategy) {
   if (!approvedStrategy || approvedStrategy.status !== "ACTIVE") return { covered: null, reason: "No active approved strategy" }; // Self-contained capability matching (extracted by autonomy-behavior-suite.test.mjs via `new Function(...)`, so this body must not reference external symbols and must avoid inner `\n}` that would prematurely terminate the regex match).
   const actionStr = String(action || "").trim();
   const toolStr = String(tool || "").trim();
-  const argv = (args && Array.isArray(args.argv)) ? args.argv : (args && typeof args.command === "string" ? args.command.split(/\s+/) : []);
-  const executable = toolStr === "bash" ? String(args && args.command || "").split(/\s+/)[0] : toolStr;
-  const candidate = { action: actionStr, tool: toolStr, executable: args };
+  const rawCommand = args && typeof args.command === "string" ? args.command : (args && Array.isArray(args.argv) ? args.argv.join(" ") : "");
+  const argv = rawCommand ? String(rawCommand).split(/\s+/).filter(Boolean) : [];
+  const executable = toolStr === "bash" ? (argv[0] || "") : toolStr;
+  const candidate = { action: actionStr, tool: toolStr, executable, args: toolStr === "bash" ? argv.slice(1) : argv };
   const toCapability = (s) => { const str = String(s || "").trim(); const parts = str.split(/\s+/).filter(Boolean); if (parts.length === 0) return null; if (parts.length === 1) return { capability: "action.execute", action: parts[0] }; return { capability: "command.execute", executable: parts[0], argsPattern: parts.slice(1) }; };
   const allowedCaps = (approvedStrategy.allowedActions || []).map(toCapability).filter(Boolean);
   const prohibitedCaps = (approvedStrategy.prohibitedActions || []).map(toCapability).filter(Boolean);
@@ -730,14 +735,14 @@ function classifyActionAgainstStrategy(action, tool, args, approvedStrategy) {
     const builtCandidate = buildCandidate({ action: actionStr, tool: toolStr, args: args || {} });
     const verdict = classifyByCapabilities(builtCandidate, { allowed: allowedCaps, prohibited: prohibitedCaps });
     if (verdict && verdict.allowed === true) return { covered: true, reason: "Acción cubierta por strategy activa" };
-    if (allowedCaps.length === 0) return { covered: false, reason: "Acción no cubierta por capabilities estructuradas de la strategy" };
+  if (allowedCaps.length === 0) return { covered: null, reason: "no-capabilities-configured" };
     return { covered: false, reason: (verdict && verdict.reason) || "Acción no cubierta por strategy activa" };
   }
   const matchCapability = (cap, cand) => { if (!cap) return false; if (cap.capability === "action.execute") return cap.action === cand.action || cap.action === cand.tool; if (cap.capability === "command.execute") { if (cap.executable && cap.executable !== cand.executable) return false; if (Array.isArray(cap.argsPattern)) { for (let i = 0; i < cap.argsPattern.length; i++) { if (cap.argsPattern[i] !== cand.args[i]) return false; } } return true; } return false; };
   const isProhibited = prohibitedCaps.some((cap) => matchCapability(cap, candidate));
   const isAllowed = allowedCaps.some((cap) => matchCapability(cap, candidate));
   if (isProhibited) return { covered: false, reason: "Acción prohibida explícitamente en strategy" };
-  if (allowedCaps.length === 0) return { covered: false, reason: "Acción no cubierta por capabilities estructuradas de la strategy" };
+  if (allowedCaps.length === 0) return { covered: null, reason: "no-capabilities-configured" };
   if (isAllowed) return { covered: true, reason: "Acción cubierta por strategy activa" };
   return { covered: false, reason: "Acción no cubierta por strategy activa" };
 }
@@ -819,6 +824,40 @@ function prepareSystemInject(analysis, state, cfg, projectDirectory, waitAMinute
   return inject;
 }
 
+async function replyPermissionRequest(client, requestID, sessionID) {
+  const reply = "always";
+  const attempts = [];
+  if (typeof client?.permission?.reply === "function") {
+    attempts.push(() => client.permission.reply({ requestID, reply }));
+  }
+  if (sessionID && typeof client?.session?.permission?.reply === "function") {
+    attempts.push(() => client.session.permission.reply({ sessionID, requestID, reply }));
+  }
+  if (sessionID && typeof client?.postSessionIdPermissionsPermissionId === "function") {
+    attempts.push(() =>
+      client.postSessionIdPermissionsPermissionId({
+        path: { id: sessionID, permissionID: requestID },
+        body: { response: reply },
+      }),
+    );
+  }
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      const result = await attempt();
+      if (result?.error) {
+        lastError = result.error;
+        continue;
+      }
+      return true;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  wamDebug("[wait-a-minute] permission auto-allow failed:", lastError?.message || "permission.reply unavailable");
+  return false;
+}
+
 /**
  * Plugin factory — loaded by OpenCode when registered in opencode.jsonc.
  * Autocontained: no external deps beyond ./engine.js.
@@ -838,7 +877,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
   configureLogger({ enabled: wamConfig.logging });
   setLoggingEnabled(wamConfig.logging);
   setDebugEnabled(wamConfig.debug);
-  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement, debug: wamConfig.debug, autoLoop: wamConfig.autoLoop, permissionPreflight: wamConfig.permissionPreflight, contextProjection: wamConfig.contextProjection, taskLoop: wamConfig.taskLoop, completionGate: wamConfig.completionGate };
+  cfg = { ...cfg, skills: wamConfig.skills, logging: wamConfig.logging, enforcement: wamConfig.enforcement, debug: wamConfig.debug, autoLoop: wamConfig.autoLoop, permissionPreflight: wamConfig.permissionPreflight, contractApproval: wamConfig.contractApproval, contextProjection: wamConfig.contextProjection, taskLoop: wamConfig.taskLoop, completionGate: wamConfig.completionGate };
   // Audit which WAM logic gates are loaded so WAM_DEBUG=1 output is self-describing.
   registerLogicGate("skills", { loaded: wamConfig.skills, source: "wam-config", note: "skill discovery/routing/injection" });
   registerLogicGate("logging", { loaded: wamConfig.logging, source: "wam-config", note: "file + console log emission" });
@@ -846,6 +885,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
   registerLogicGate("debug", { loaded: wamConfig.debug, source: "wam-config", note: "structured WAM-DEBUG traces" });
   registerLogicGate("autoLoop", { loaded: wamConfig.autoLoop, source: "wam-config", note: "automatic post-DONE continuation" });
   registerLogicGate("permissionPreflight", { loaded: wamConfig.permissionPreflight, source: "wam-config", note: "upfront access permission plan before delegation" });
+  registerLogicGate("contractApproval", { loaded: wamConfig.contractApproval === "required", source: "wam-config", note: "pauses writes until /wam contract approve" });
 
   // Track if plugin is bypassed
   let bypassed = false;
@@ -1107,7 +1147,9 @@ refresh();
     try {
       const task = getTaskState(passTaskId, passRoot);
       if (!task) return null;
-      if (!shouldRunTaskAgentPass(task)) return null;
+      if (!shouldRunTaskAgentPass(task, { maxConsecutiveFailures: agentConfig?.maxConsecutiveFailures })) {
+        return null;
+      }
       wamDebug(`[wait-a-minute] agent pass running ${passTaskId} (intent=${task.executionIntent ?? "unknown"})`);
       const taskWithGate = {
         ...task,
@@ -1115,6 +1157,7 @@ refresh();
           active: true,
           reason: task.executionIntent === "ANALYZE" ? "analysis-loop" : "agent-loop",
           startedAt: new Date().toISOString(),
+          ownerPid: process.pid,
         },
       };
       persistTaskState(passTaskId, taskWithGate, passRoot);
@@ -1180,6 +1223,11 @@ refresh();
       return;
     }
 
+    if (shouldPauseForContractApproval({ contractApproval: cfg.contractApproval, state: preState })) {
+      wamDebug(`[wait-a-minute] task loop paused until contract approval for ${taskId}`);
+      return { reason: "contract-not-approved" };
+    }
+
     if (!skipAgent && cfg.taskLoop.agents?.enabled) {
       if (agentRunInFlight.has(taskId)) return { reason: "in-flight" };
       const passPromise = runTaskAgentPass(sessionID, { root, taskId });
@@ -1188,7 +1236,7 @@ refresh();
       agent = pass?.agent ?? null;
     }
 
-    return driveTaskLoop({ sessionId: sessionID, projectRoot: root, taskId, client, agent, config: cfg.taskLoop, qualityConfig: cfg.qualityContracts, enforce: cfg.completionGate?.enforce === true });
+    return driveTaskLoop({ sessionId: sessionID, projectRoot: root, taskId, client, agent, config: cfg.taskLoop, qualityConfig: cfg.qualityContracts, enforce: cfg.completionGate?.enforce === true, contractApproval: cfg.contractApproval });
   }
 
   /**
@@ -1226,6 +1274,7 @@ refresh();
       if (!taskId) return;
       const state = getTaskState(taskId, root);
       if (!state || state.phase === "DONE") return;
+      if (shouldPauseForContractApproval({ contractApproval: cfg.contractApproval, state })) return;
       const gate = evaluateCompletionGate(state, "", { enforce: cfg.completionGate?.enforce === true });
       if (!gate.advisory && !gate.blocked) return;
       if (!client?.session?.messages || !client?.session?.prompt) return;
@@ -1414,6 +1463,13 @@ async function postToolExecution(input, output) {
     "event": ({ event } = {}) => {
       try {
         const props = event?.properties || {};
+        if (event?.type === "permission.asked" || event?.type === "permission.v2.asked") {
+          const requestID = props.id || props.requestID || props.permissionID;
+          if (requestID) {
+            void replyPermissionRequest(client, requestID, props.sessionID);
+          }
+          return;
+        }
         if (event?.type === "session.created") {
           // Register the session eagerly (idempotent). Task-state creation still
           // happens on the first message, which remains the documented fallback
@@ -1687,6 +1743,25 @@ async function postToolExecution(input, output) {
             st = getTaskState(taskId, taskRoot);
           }
         }
+        // A gate left by a previous process cannot be held open by this one
+        // (agent passes live in memory). Release it before enforcing, otherwise
+        // every restart would keep mutations blocked forever.
+        if (st && st.executionGate?.active) {
+          let loopStatus = null;
+          try { loopStatus = loadLoopState(taskId, taskRoot)?.state?.status ?? null; } catch {}
+          const inFlight = agentRunInFlight.has(taskId);
+          if (
+            isExecutionGateStale(st.executionGate) ||
+            shouldReleaseOrphanGate(st, { loopStatus, inFlight })
+          ) {
+            clearExecutionGate(taskId, taskRoot);
+            st.executionGate = {
+              ...st.executionGate,
+              active: false,
+              completedAt: new Date().toISOString(),
+            };
+          }
+        }
         const tool = input?.tool || "";
         if (process.env.WAM_DEBUG_TE) {
           wamLog(`[WAM-DEBUG-TE] sid=${sid} taskId=${taskId} phase=${st?.phase} tool=${tool}`);
@@ -1801,18 +1876,30 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
           // subagent — and should be governed normally. Real subagents carry
           // a non-null parentID in sessionParents.
           try {
-            enforceGovernance(tool, st, {
+            const governance = enforceGovernance(tool, st, {
               isSubagent,
               declaredFiles,
+              args: toolArgs,
               enforcementEnabled: cfg.enforcement !== false,
+              requireApproval: cfg.contractApproval === "required",
             });
+            if (governance.allowed === false) {
+              const block = new WamPolicyBlock(governance.directive || governance.reason, {
+                tool,
+                reason: governance.reason,
+                level: "BLOCKED",
+                source: "contract-approval",
+              });
+              block.wamHardBlock = true;
+              throw block;
+            }
             wamDebug("governance", `enforceGovernance(${tool}) -> ALLOWED`, { isSubagent, phase: st?.phase, enforcement: cfg.enforcement });
           } catch (err) {
             wamDebug("governance", `enforceGovernance(${tool}) -> BLOCKED`, { isSubagent, phase: st?.phase, reason: err?.message });
             if (err?.wamPolicyBlock) {
               queueToolDirective(input, err.message);
               // Soft mode: log warning and allow execution to continue unless strict mode
-              if (process.env.WAM_STRICT_BLOCK !== "1") {
+              if (process.env.WAM_STRICT_BLOCK !== "1" && !err.wamHardBlock) {
                 wamLog(`[wait-a-minute] SOFT GOVERNANCE BLOCK (${tool}): ${err.message}`);
                 // Execution continues, governance warning logged
                 return;
@@ -2299,9 +2386,15 @@ const sel = routeSkillsV2(prompt, {}, waitAMinute.getRegistry(), "STANDARD");
     if (action === "get") {
       const q = stripWrappingQuotes(rest.join(" "));
       if (!q) return "Uso: /wam ctx get <query>";
-      const r = retrieveContext(q, { root });
-      if (!r.ok) return r.message;
-      return r.capsules.map((h) => `[${h.capsule.level}] ${h.capsule.context_id} (rel ${h.relevance.toFixed(2)}) ${(h.capsule.purpose || "").slice(0, 80)}`).join("\n");
+      const r = await retrieveContextWithCqe(q, { root });
+      if (r.ok && r.capsules) {
+        return r.capsules.map((h) => `[${h.capsule.level}] ${h.capsule.context_id} (rel ${h.relevance.toFixed(2)}) ${(h.capsule.purpose || "").slice(0, 80)}`).join("\n");
+      }
+      if (r.items?.length) {
+        const prefix = r.source === "wam-native" ? "[wam-native]" : "[cqe]";
+        return r.items.map((it) => `${prefix} ${it.path}:${it.startLine ?? "?"} (rel ${typeof it.score === "number" ? it.score.toFixed(2) : "?"}) ${String(it.content || "").replace(/\s+/g, " ").trim().slice(0, 120)}`).join("\n");
+      }
+      return r.message;
     }
     if (action === "show") {
       const id = rest.join(" ");
@@ -2404,7 +2497,9 @@ const waitAMinute = {
    * Obtiene el registry actual.
    */
   getRegistry: function() {
-    return this.loadBundledRegistry();
+    const root = process.cwd();
+    const available = discoverSkills({ root });
+    return buildRegistry(available, root).registry;
   },
 
   /**
@@ -2548,7 +2643,7 @@ const waitAMinute = {
    * Estado durable de tarea: contrato + requisitos por evidencia.
    * PROPOSED la primera vez; preserva contrato APPROVED y progreso existente.
    */
-  buildPersistedState: function(taskId, analysis, root) {
+  buildPersistedState: function(taskId, analysis, root, options = {}) {
     const existing = getTaskState(taskId, root);
     if (existing && existing.requirements && existing.requirements.length) {
       // Preservar contrato/requisitos existentes (PROPOSED/APPROVED/REJECTED):
@@ -2586,6 +2681,14 @@ const waitAMinute = {
     // tracked con 0 pendientes y sin declared files, lo que bloquea write/edit
     // (fail-closed) sin nada que aprobar. Untracked hasta tener >=1 requisito.
     if (!fresh.requirements || fresh.requirements.length === 0) {
+      return fresh;
+    }
+    const requireApproval = options.requireApproval === true;
+    const trivial = analysis?.intent?.classification === "trivial" || analysis?.strategy === "FAST";
+    if (requireApproval && !trivial) {
+      fresh.contract = { ...(fresh.contract || {}), status: "PROPOSED" };
+      fresh.nextAction = "Mostrar plan al usuario y esperar /wam contract approve (no ejecutar todavía)";
+      persistTaskState(taskId, fresh, root);
       return fresh;
     }
     const bootstrapped = applyBootstrapApproval(fresh, taskId, root);
@@ -2667,11 +2770,12 @@ const waitAMinute = {
       approvedAt: Date.now(),
       scope: inferredStrategy,
       allowedActions: [
-        "read", "search", "inspect", "test", "lint", "typecheck",
+        "read", "glob", "grep", "list", "webfetch",
+        "search", "inspect", "test", "lint", "typecheck",
         "install dependency", "install browser binary", "run validation",
         "modify source", "create fixture", "diagnose", "retry",
-        "write", "edit", "bash", "sh",
-        "task", "todowrite", "pty_spawn",
+        "write", "edit", "patch", "multiedit", "apply_patch", "bash", "sh",
+        "task", "todowrite", "todoread", "skill", "question", "pty_spawn",
         "openspec", "openspec new change", "openspec instructions",
         "openspec validate", "openspec archive",
         "git commit", "npm test", "pnpm test", "pnpm install",
@@ -2707,11 +2811,12 @@ const waitAMinute = {
   rejectContract: function(taskId, root) {
     const state = getTaskState(taskId, root);
     if (!state) return { ok: false, reason: "Sin estado de tarea" };
-    // Informativo: el rechazo se registra pero no bloquea ni cambia de fase.
-    state.contract = { ...(state.contract || {}), status: "APPROVED", rejectedAt: Date.now() };
-    state.nextAction = "Revisar contrato — /wam contract edit si algo no coincide";
+    const next = rejectContractLogic(state);
+    state.contract = { ...(state.contract || {}), status: next.status, rejectedAt: Date.now() };
+    state.phase = next.phase;
+    state.nextAction = next.nextAction;
     persistTaskState(taskId, state, root);
-    return { ok: true, status: "APPROVED", phase: state.phase, advisory: true };
+    return { ok: true, status: next.status, phase: next.phase };
   },
 
   /** Edita el contrato (JSON patch), vuelve a PROPOSED. */
@@ -2749,6 +2854,8 @@ const waitAMinute = {
     if (!state) return { ok: false, reason: "Sin estado de tarea" };
     const req = (state.requirements || []).find((r) => r.id === reqId);
     if (!req) return { ok: false, reason: `Requisito ${reqId} no existe` };
+    // Estados legacy/parciales pueden no traer evidence: normalizar antes de push.
+    if (!Array.isArray(req.evidence)) req.evidence = [];
     if ((status === "done" || status === "verified") && !(evidence && evidence.trim())) {
       return { ok: false, reason: `Requisito ${reqId}: evidencia requerida para marcar ${status}` };
     }
@@ -2762,7 +2869,7 @@ const waitAMinute = {
         const failedChecks = verdictResult.results?.filter(r => r.status !== "PASS").map(r => `${r.check_id}: ${r.status}`).join(", ") || "unknown";
         return { ok: false, reason: `Requisito ${reqId}: verificación falló (${failedChecks}).` };
       }
-      req.evidence.push(...verdictResult.evidence.map(e => `${e.check_type}:${e.check_id}`));
+      req.evidence.push(...(verdictResult.evidence || []).map(e => `${e.check_type}:${e.check_id}`));
     }
     if (status === "done" && req.status === "verified" && checksForReq.length > 0) {
       return { ok: false, reason: `Requisito ${reqId}: ya está verificado, no se puede retroceder a done.` };

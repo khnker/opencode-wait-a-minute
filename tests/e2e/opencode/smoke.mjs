@@ -17,7 +17,7 @@
  * Prerequisites:
  *   - `opencode` binary in PATH
  *   - `npm` (used for pack/install)
- *   - Node >=20
+ *   - Node >=22.6
  *
  * Exit codes:
  *   0 - pass
@@ -64,6 +64,9 @@ const START_TIMEOUT_MS = 60000; // 60s for opencode to start and load plugin
 const EVENT_TIMEOUT_MS = 30000; // 30s to observe a plugin event
 const EXPECTED = /\b42\b/;
 const SUMMARY_PREFIX = "WAM_E2E_SUMMARY ";
+const E2E_MODEL = process.env.WAM_E2E_MODEL || "opencode/beam-free";
+const E2E_BASE_URL = process.env.WAM_E2E_BASE_URL || "";
+const E2E_API_KEY = process.env.WAM_E2E_API_KEY || "x";
 
 // The model backend intermittently stalls (opencode emits no model output and
 // never exits), occasionally exits non-zero without a plugin error, and
@@ -561,14 +564,27 @@ async function main() {
   log("setup", `wrote plugin adapter at ${pluginEntryPath}`);
 
   // Step 3b: register the adapter via the project opencode.jsonc `plugin` array.
-  const configContent = JSON.stringify(
-    {
-      $schema: "https://opencode.ai/config.json",
-      plugin: ["./wam-e2e-entry.js"],
-    },
-    null,
-    2
-  );
+  // A local OpenAI-compatible endpoint can be used instead of a free model by
+  // setting WAM_E2E_BASE_URL (and optionally WAM_E2E_MODEL/API_KEY).
+  const config = {
+    $schema: "https://opencode.ai/config.json",
+    model: E2E_MODEL,
+    plugin: ["./wam-e2e-entry.js"],
+    permission: { edit: "allow", bash: "allow", webfetch: "allow" },
+  };
+  if (E2E_BASE_URL) {
+    const [providerId, ...modelParts] = E2E_MODEL.split("/");
+    const modelId = modelParts.join("/");
+    config.provider = {
+      [providerId]: {
+        npm: "@ai-sdk/openai-compatible",
+        name: providerId,
+        options: { baseURL: E2E_BASE_URL, apiKey: E2E_API_KEY },
+        models: { [modelId]: { name: modelId } },
+      },
+    };
+  }
+  const configContent = JSON.stringify(config, null, 2);
   writeFileSync(configPath, configContent, "utf8");
   log("setup", `created temporary opencode config at ${configPath}`);
 

@@ -10,7 +10,7 @@
  *
  * Prerequisites:
  *   - npm >=10
- *   - Node >=20
+ *   - Node >=22.6
  *
  * Exit codes:
  *   0 - success

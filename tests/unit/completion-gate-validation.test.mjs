@@ -217,6 +217,32 @@ test("e2e: el aviso advisory no se repite en claims consecutivos de la misma ses
   assertNoHardBlockDirective(second.parts);
 });
 
+test("e2e: enforce emite solo la directiva de bloqueo (sin 'procedo') y no hace dedupe", async () => {
+  const taskId = `cgv-enf-${Date.now()}`;
+  await runHook("implementar X y agregar tests", taskId, sid("e1"));
+  pluginDefault.approveContract(taskId);
+
+  const prev = process.env.WAM_COMPLETION_GATE_ENFORCE;
+  process.env.WAM_COMPLETION_GATE_ENFORCE = "true";
+  try {
+    const first = await runHook("Listo, ya está todo hecho", taskId, sid("enf"));
+    const second = await runHook("Listo, ya está todo hecho", taskId, sid("enf"));
+    const state = getTaskState(taskId);
+    cleanup(taskId);
+
+    const firstText = partText(first.parts);
+    assert.match(firstText, /⛔/, "el claim bloqueado recibe la directiva dura");
+    assert.match(firstText, /No declares DONE/i);
+    assert.doesNotMatch(firstText, /Recomendación: faltan/, "enforce no agrega la recomendación advisory");
+    assert.doesNotMatch(firstText, /procedo/, "sin instrucción contradictoria de continuar");
+    assert.match(partText(second.parts), /⛔/, "un DONE repetido vuelve a recibir el bloqueo");
+    assert.notEqual(state?.phase, "DONE", "el claim bloqueado no marca la tarea DONE");
+  } finally {
+    if (prev === undefined) delete process.env.WAM_COMPLETION_GATE_ENFORCE;
+    else process.env.WAM_COMPLETION_GATE_ENFORCE = prev;
+  }
+});
+
 test("unit: las partes inyectadas llevan sessionID, messageID e id único (schema 1.19)", async () => {
   const { injectWamParts } = await import("../../src/integration/part-provenance.js");
   const out = { parts: [] };

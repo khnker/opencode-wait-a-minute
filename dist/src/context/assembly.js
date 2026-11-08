@@ -38,7 +38,9 @@ import { ADMISSION } from "./context-router.js";
 import { assembleDesignAxis } from "../design/design-integration.js";
 import { classifyDesignTask, loadDesignContext } from "./design-context.js";
 import { nextActionFrom } from "../state/next-action.js";
+import { describeTaskStage } from "../execution/task-stage.js";
 import { readConfigFile } from "../config/wam-config.js";
+import { splitVisibleRequirements } from "./requirement-visibility.js";
 
 /**
  * Admission classes are sourced from Context Router.
@@ -90,53 +92,44 @@ function extractRelevantSections(docName, body, taskTokens, { base = false, maxS
   return "# " + hits.join("\n\n# ");
 }
 
-/**
- * Cap on individually-rendered requirement capsules in N3.
- *
- * Every requirement node is MANDATORY in the router, so a task with dozens of
- * requirements produces one capsule per requirement. The mandatory N2 line
- * already reports requirement counts, so listing each requirement here is
- * duplication that floods the pack. Above this cap the requirement set is
- * consolidated into a single summary line.
- */
-const MAX_VISIBLE_REQS = 8;
-
 function isRequirementCapsule(c) {
   return c?.scope === "requirement" || String(c?.context_id || "").startsWith("req-");
 }
 
 /**
  * Reduce un SKILL.md a un máximo de chars preservando Markdown (D).
- * Estrategia: si el contenido excede el presupuesto, conserva el bloque del
- * frontmatter inicial + las primeras secciones (encabezados `^##`) que mejor
- * coincidan con el `reason` de selección. Sólo si eso todavía excede, trunca
- * duro por longitud conservando saltos de línea.
+ * Estrategia: si el contenido excede el presupuesto, conserva el frontmatter
+ * inicial y las secciones completas en el orden original del documento. Sólo
+ * trunca la cola cuando el presupuesto se agota; nunca reordena ni descarta
+ * secciones por relevancia, para no omitir contenido que sí cabe.
  */
-function pruneBySection(content, maxChars, reason) {
+export function pruneBySection(content, maxChars) {
   if (content.length <= maxChars) return content;
   const markers = [];
   const re = /^#{1,6} .+$/gm;
   let m;
   while ((m = re.exec(content)) !== null) {
-    markers.push({ index: m.index, end: content.indexOf("\n\n", m.index) === -1 ? content.length : content.indexOf("\n\n", m.index), header: m[0] });
+    markers.push({ index: m.index, header: m[0] });
+  }
+  for (let i = 0; i < markers.length; i += 1) {
+    markers[i].end = i + 1 < markers.length ? markers[i + 1].index : content.length;
   }
   if (markers.length === 0) {
     return content.slice(0, maxChars) + "\n...[truncado]";
   }
-  // Rankea secciones por solap de tokens con el reason.
-  const reasonTokens = String(reason || "").toLowerCase().split(/[^a-záéíóúñü0-9]+/).filter(Boolean);
-  const ranked = markers.map((sec) => {
-    const body = content.slice(sec.index, sec.end === -1 ? content.length : sec.end);
-    const lower = body.toLowerCase();
-    let hits = 0;
-    for (const t of reasonTokens) if (t && lower.includes(t)) hits++;
-    return { sec, hits };
-  }).sort((a, b) => b.hits - a.hits);
 
+  const preamble = content.slice(0, markers[0].index).trim();
   const out = [];
   let total = 0;
-  for (const { sec } of ranked) {
-    const slice = content.slice(sec.index, sec.end === -1 ? content.length : sec.end);
+  if (preamble) {
+    if (preamble.length > maxChars) {
+      return preamble.slice(0, maxChars) + "\n...[truncado]";
+    }
+    out.push(preamble);
+    total += preamble.length;
+  }
+  for (const sec of markers) {
+    const slice = content.slice(sec.index, sec.end);
     if (total + slice.length > maxChars) {
       // Última oportunidad: cabe parcial.
       const room = maxChars - total;
@@ -150,7 +143,8 @@ function pruneBySection(content, maxChars, reason) {
   return out.join("\n\n");
 }
 
-const DEFAULT_SKILLS_MAX_CHARS = 4000;
+const DEFAULT_SKILLS_MAX_CHARS = Number.POSITIVE_INFINITY;
+const SKILL_FLEX_SHARE = 0.8;
 const SKILL_CARD_MAX_CHARS = 400;
 const SKILL_CARD_DESCRIPTION_MAX = 160;
 const SKILL_MIN_CHARS = 200;
@@ -158,10 +152,10 @@ const SKILL_MIN_CHARS = 200;
 function resolveSkillSettings(projectPath) {
   const file = readConfigFile(projectPath);
   const skills = file.skills && typeof file.skills === "object" ? file.skills : {};
+  const baseLoad = file.skillBaseLoad ?? skills.baseLoad;
   const fullBodies =
-    process.env.WAM_SKILLS_FULL === "1" ||
-    file.skillBaseLoad === "full" ||
-    skills.baseLoad === "full";
+    process.env.WAM_SKILLS_FULL !== "0" &&
+    (process.env.WAM_SKILLS_FULL === "1" || baseLoad !== "card");
   const configured = Number(
     file.skillsMaxChars ?? file.skillMaxChars ?? skills.maxChars,
   );
@@ -239,6 +233,7 @@ async function _assembleContextImpl({
   previousRequestTokens = null,
   useLegacySelector = false,
   collector = null,
+  contractApproval = "advisory",
 } = {}) {
   const levels = { N0: [], N1: [], N2: [], N3: [] };
   let candidates = [];
@@ -307,7 +302,9 @@ async function _assembleContextImpl({
   };
 
   // -- N0 Global/Policy (MANDATORY) -----------------------------------------
-  const n0Text = "[wam N0 policy] autonomy loop | 0 friction: advisory only (U1)";
+  const n0Text = contractApproval === "required"
+    ? "[wam N0 policy] autonomy loop | contract approval: required — writes paused until /wam contract approve"
+    : "[wam N0 policy] autonomy loop | 0 friction: advisory only (U1)";
   const n0Spent = reserve("N0", n0Text, ADMISSION.MANDATORY, "global policy");
 
   // -- N2 Task (reservado, obligatorio) -------------------------------------
@@ -323,9 +320,10 @@ async function _assembleContextImpl({
       ? nextActionFrom(taskState)
       : (taskState.nextAction || "—");
     const nextActionTruncated = computedNext.slice(0, 80);
+    const stage = describeTaskStage(taskState);
     liveBody = [
       `task: ${taskId} — ${taskState.phase} / ${taskState.contract?.status || "?"}`,
-      `req: ${pend}/${reqs.length} pend | next: ${nextActionTruncated}`,
+      `${stage.compact || stage.text} | req: ${pend}/${reqs.length} pend | next: ${nextActionTruncated}`,
     ].join("\n") || liveBody;
   }
   const n2Head = liveBody ? `[wam N2 task]\n${liveBody}` : "";
@@ -506,22 +504,26 @@ if (!isTrivial) {
 
       // Split requirement-derived capsules from everything else. Requirement
       // nodes are MANDATORY in the router, so a task with many requirements
-      // yields one capsule each; emitting them all is duplication of the N2
-      // summary. Above MAX_VISIBLE_REQS, consolidate into a single count line.
+      // yields one capsule each. Render up to the configurable cap individually
+      // and consolidate only the actual overflow, so a growing requirement set
+      // never hides all requirement IDs behind a single summary line.
       const requirementCapsules = (pkg.capsules || []).filter(isRequirementCapsule);
       const otherCapsules = (pkg.capsules || []).filter((c) => !isRequirementCapsule(c));
 
       for (const c of otherCapsules) emitCapsule(c);
 
-      if (requirementCapsules.length > MAX_VISIBLE_REQS) {
+      const {
+        visible: visibleRequirementCapsules,
+        overflow: overflowRequirementCapsules,
+      } = splitVisibleRequirements(requirementCapsules, { pendingFirst: false });
+      for (const c of visibleRequirementCapsules) emitCapsule(c);
+      if (overflowRequirementCapsules > 0) {
         spend(
           "N3",
-          `[wam N3 requirements] ${requirementCapsules.length} reqs consolidados — ver /wam req list`,
+          `[wam N3 requirements] +${overflowRequirementCapsules} reqs no listados (${requirementCapsules.length} en total) — ver /wam req list`,
           ADMISSION.OPTIONAL,
-          "requirement capsule consolidation"
+          "requirement capsule overflow"
         );
-      } else {
-        for (const c of requirementCapsules) emitCapsule(c);
       }
 
       // Router mandatory omissions: explicitly report as admission failures, never silently drop
@@ -587,7 +589,7 @@ if (!isTrivial) {
           p.state.cause = p.state.cause || "asking-clarification";
         }
       } else {
-        const skillBudget = Math.floor(flex * 0.4); // 40% del flex restante para skills
+        const skillBudget = Math.floor(flex * SKILL_FLEX_SHARE); // 80% del flex; 20% reservado para el resto del contexto
         const skillSettings = resolveSkillSettings(projectPath);
         let skillSpent = 0;
         let skillChars = 0;
@@ -603,7 +605,7 @@ if (!isTrivial) {
         });
 
         for (const { skill, state } of ordered) {
-          const skillContentMax = skill.base ? 8000 : 1200; // max chars por skill
+          const skillContentMax = skillSettings.maxChars; // Infinity = sin cap; solo poda por config o token budget
           if (skillSpent >= skillBudget) {
             state.state = "OMITTED";
             state.cause = "skill-budget-exhausted";
@@ -646,8 +648,8 @@ if (!isTrivial) {
           }
 
           // D: preservar estructura Markdown del contenido (no aplanar saltos).
-          // Si excede skillContentMax, priorizar secciones relevantes (heading-
-          // based pruning) antes de truncar el cuerpo.
+          // Si excede skillContentMax, conservar secciones en orden original
+          // (heading-based pruning) antes de truncar el cuerpo.
           let line;
           let truncated = false;
           if (useCard) {
@@ -655,11 +657,21 @@ if (!isTrivial) {
           } else {
             let finalContent = content;
             if (content.length > skillContentMax) {
-              finalContent = pruneBySection(content, skillContentMax, skill.reason || "");
+              finalContent = pruneBySection(content, skillContentMax);
               truncated = true;
             }
             const head = `[wam N3 skill] ${skill.id} — ${(skill.reason || "").slice(0, 100)}`;
             line = `${head}\n${finalContent}`;
+          }
+
+          if (!useCard) {
+            const skillTokensLeft = skillBudget - skillSpent;
+            if (skillTokensLeft > 0 && estTokens(line) > skillTokensLeft) {
+              const ratio = line.length / Math.max(1, estTokens(line));
+              const maxChars = Math.max(SKILL_MIN_CHARS, Math.floor(skillTokensLeft * ratio));
+              line = pruneBySection(line, maxChars);
+              truncated = true;
+            }
           }
 
           const remaining = skillSettings.maxChars - skillChars;
@@ -670,7 +682,7 @@ if (!isTrivial) {
               rationale.push(`N3: ${skill.id} omitida por límite N3 (${skillChars}/${skillSettings.maxChars} chars)`);
               continue;
             }
-            line = pruneBySection(line, remaining, skill.reason || "").slice(0, remaining);
+            line = pruneBySection(line, remaining).slice(0, remaining);
             truncated = true;
           }
           const skillAdmission = isBase ? ADMISSION.OPTIONAL : ADMISSION.CONDITIONAL;

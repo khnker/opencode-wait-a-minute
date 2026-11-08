@@ -29,7 +29,8 @@ function nodeTooOld(v = process.versions.node) {
 }
 
 function hasSqlite() {
-  try { require('node:sqlite'); return true } catch { return false }
+  try { require('node:sqlite'); return true } catch {}
+  try { require('bun:sqlite'); return true } catch { return false }
 }
 
 const asArray = (v) => (Array.isArray(v) ? v : v == null ? [] : [v])

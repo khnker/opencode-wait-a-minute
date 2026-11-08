@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   agentSignalForLoop,
+  carriesSurfaced,
   isTerminalAgentSignal,
   reopenTerminalAgentRun,
   resetAuthorizationSurface,
@@ -115,4 +116,38 @@ test("resetAuthorizationSurface clears the surfaced authorization marker", () =>
   assert.equal(state.authorizationSurfacedId, null);
   assert.equal(resetAuthorizationSurface(state), false);
   assert.equal(resetAuthorizationSurface(null), false);
+});
+
+test("carriesSurfaced only carries the marker for the same terminal signal", () => {
+  const previous = { status: "FAILED", failureCode: "PROMPT_FAILED", exhausted: false, surfaced: true };
+  assert.equal(carriesSurfaced(previous, { ...previous, surfaced: false }), true);
+  assert.equal(
+    carriesSurfaced(previous, { ...previous, failureCode: "AGENT_TIMEOUT" }),
+    false,
+  );
+  assert.equal(carriesSurfaced({ ...previous, surfaced: false }, previous), false);
+  assert.equal(carriesSurfaced(previous, { status: "COMPLETED", verdict: "ACCEPTED" }), false);
+});
+
+test("agentSignalForLoop carries surfaced from a matching persisted run", () => {
+  const outcome = { status: "FAILED", stoppedAt: "agent", failureCode: "PROMPT_FAILED" };
+  const task = { agentRun: { ...outcome, surfaced: true } };
+  const signal = agentSignalForLoop(outcome, task);
+  assert.notEqual(signal, outcome);
+  assert.equal(signal.surfaced, true);
+
+  const changed = agentSignalForLoop(
+    { ...outcome, failureCode: "AGENT_TIMEOUT" },
+    task,
+  );
+  assert.equal(changed.surfaced, undefined);
+});
+
+test("reopenTerminalAgentRun resets the failure streak", () => {
+  const state = {
+    agentRun: { status: "FAILED", exhausted: false, surfaced: true, failureStreak: 3 },
+  };
+  assert.equal(reopenTerminalAgentRun(state), true);
+  assert.equal(state.agentRun.failureStreak, 0);
+  assert.equal(state.agentRun.surfaced, false);
 });

@@ -384,6 +384,54 @@ test("shouldRunTaskAgentPass skips terminal outcomes and allows retries", () => 
   );
 });
 
+test("shouldRunTaskAgentPass stops after the consecutive failure budget", () => {
+  const failed = { ...baseTask(), agentRun: { status: "FAILED", failureStreak: 3 } };
+  assert.equal(shouldRunTaskAgentPass(failed), false);
+  assert.equal(shouldRunTaskAgentPass(failed, { maxConsecutiveFailures: 5 }), true);
+  assert.equal(
+    shouldRunTaskAgentPass({ ...failed, agentRun: { status: "FAILED", failureStreak: 2 } }),
+    true,
+  );
+});
+
+test("applyAgentFailure preserves surfaced and counts consecutive failures", () => {
+  let task = {
+    ...baseTask(),
+    agentRun: {
+      status: "FAILED",
+      failureCode: "PROMPT_FAILED",
+      exhausted: false,
+      surfaced: true,
+    },
+  };
+
+  task = applyAgentFailure(task, "prompt failed", { failureCode: "PROMPT_FAILED", now: 1 });
+  assert.equal(task.agentRun.surfaced, true);
+  assert.equal(task.agentRun.failureStreak, 1);
+
+  task = applyAgentFailure(task, "prompt failed", { failureCode: "PROMPT_FAILED", now: 2 });
+  assert.equal(task.agentRun.surfaced, true);
+  assert.equal(task.agentRun.failureStreak, 2);
+
+  task = applyAgentFailure(task, "timed out", { failureCode: "AGENT_TIMEOUT", now: 3 });
+  assert.equal(task.agentRun.surfaced, false);
+  assert.equal(task.agentRun.failureStreak, 3);
+});
+
+test("applyAgentRun resets the failure streak on success", () => {
+  const task = {
+    ...baseTask(),
+    agentRun: { status: "FAILED", failureStreak: 2, surfaced: true },
+  };
+  const next = applyAgentRun(task, {
+    status: "COMPLETED",
+    verdict: "ACCEPTED",
+    results: [],
+  });
+  assert.equal(next.agentRun.failureStreak, 0);
+  assert.equal(next.agentRun.surfaced, false);
+});
+
 test("runConfiguredTaskAgentStep stays inert when agents are disabled", async () => {
   const adapter = makeAdapter();
   const persisted = [];
@@ -459,6 +507,36 @@ test("buildTaskAgentInput collects reviewArtifacts, diff and patch", () => {
     { ref: "src/a.js", content: "+a" },
     { ref: "patch", content: "--- a\n+++ b" },
   ]);
+});
+
+test("buildTaskAgentInput selects the layer engineer from artifacts", () => {
+  assert.equal(
+    buildTaskAgentInput(baseTask({ artifacts: ["src/components/Button.jsx"] })).implementationRole,
+    "FRONTEND_ENGINEER",
+  );
+  assert.equal(
+    buildTaskAgentInput(baseTask({ artifacts: ["src/api/users.controller.ts"] })).implementationRole,
+    "BACKEND_ENGINEER",
+  );
+  assert.equal(
+    buildTaskAgentInput(baseTask({ artifacts: ["src/shared/util.js"] })).implementationRole,
+    "BUILDER",
+  );
+});
+
+test("runTaskAgentStep uses the layer engineer as the builder pass", async () => {
+  const adapter = makeAdapter();
+  const result = await runTaskAgentStep({
+    task: baseTask({ artifacts: ["src/components/Button.jsx"] }),
+    adapter,
+    now: 42,
+  });
+
+  assert.deepEqual(
+    adapter.calls.map((call) => call.role),
+    ["ANALYST", "ARCHITECT", "FRONTEND_ENGINEER", "REVIEWER"],
+  );
+  assert.equal(result.outcome.status, "COMPLETED");
 });
 
 test("buildTaskAgentInput defaults to an empty reviewArtifacts array", () => {

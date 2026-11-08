@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { assembleContext } from "./assembly.js";
+import { assembleContext, pruneBySection } from "./assembly.js";
 
 const REGISTRY = {
   "matched-skill": { id: "matched-skill", content: "MATCHED_BODY ".repeat(30) },
@@ -57,32 +57,93 @@ test("MANDATORY items are never truncated even when they exceed total budget", a
       "budget_violation flag must reflect the overrun");
   });
 
-test("dropByAdmission drops CONDITIONAL before OPTIONAL when budget is tight", async () => {
+test("required contract approval is reflected in N0 policy", async () => {
     const pack = await assembleContext({
-      prompt: "do a normal task",
-      taskId: "t-drop",
-      classification: "normal",
-      mode: "NORMAL",
-      budget: 2000,
-      skillRegistry: REGISTRY,
-      selectedSkills: [
-        { id: "base-skill", reason: "base", relevance: 0, base: true },
-        { id: "matched-skill", reason: "score 9", relevance: 9, base: false },
-      ],
+      prompt: "do a task",
+      budget: 8000,
+      taskState: { phase: "start" },
+      contractApproval: "required",
     });
     const text = pack.lines.join("\n");
-    // CONDITIONAL (matched-skill) is dropped before OPTIONAL (base-skill) when budget is tight.
-    assert.ok(text.includes("[wam N3 skill-ref] base-skill"),
-      "OPTIONAL base-skill must survive when CONDITIONAL is dropped first");
+    assert.ok(
+      text.includes("contract approval: required — writes paused until /wam contract approve"),
+      "required mode must be visible in N0 policy"
+    );
+    assert.ok(!text.includes("advisory only (U1)"), "required mode must not claim advisory");
+  });
+
+test("dropByAdmission drops CONDITIONAL before OPTIONAL when budget is tight", async () => {
+    const projectPath = tempProject();
+    try {
+      fs.mkdirSync(path.join(projectPath, ".wam"), { recursive: true });
+      fs.writeFileSync(
+        path.join(projectPath, ".wam", "config.json"),
+        JSON.stringify({ skillBaseLoad: "card" }),
+      );
+      const pack = await assembleContext({
+        prompt: "do a normal task",
+        taskId: "t-drop",
+        classification: "normal",
+        mode: "NORMAL",
+        budget: 2000,
+        projectPath,
+        skillRegistry: REGISTRY,
+        selectedSkills: [
+          { id: "base-skill", reason: "base", relevance: 0, base: true },
+          { id: "matched-skill", reason: "score 9", relevance: 9, base: false },
+        ],
+      });
+      const text = pack.lines.join("\n");
+      // CONDITIONAL (matched-skill) is dropped before OPTIONAL (base-skill) when budget is tight.
+      assert.ok(text.includes("[wam N3 skill-ref] base-skill"),
+        "OPTIONAL base-skill must survive when CONDITIONAL is dropped first");
+    } finally {
+      fs.rmSync(projectPath, { recursive: true, force: true });
+    }
   });
 
 function tempProject() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "wam-assembly-"));
 }
 
-test("base skills render as cards by default", async () => {
+test("base skills inject their full body by default", async () => {
   const projectPath = tempProject();
   try {
+    const pack = await assembleContext({
+      prompt: "do a normal task",
+      taskId: "t-base-full",
+      classification: "normal",
+      mode: "NORMAL",
+      budget: 8000,
+      projectPath,
+      skillRegistry: {
+        "codebase-design": {
+          id: "codebase-design",
+          description: "Design deep modules behind small interfaces",
+          loadStrategy: "base",
+          path: "skills/codebase-design/SKILL.md",
+          content: "FULL_BODY ".repeat(400),
+        },
+      },
+      selectedSkills: [{ id: "codebase-design", reason: "base", relevance: 0, base: true }],
+    });
+    const text = pack.lines.join("\n");
+    assert.ok(text.includes("[wam N3 skill] codebase-design"), "base skill must inject its body");
+    assert.ok(text.includes("FULL_BODY"), "base body must be injected by default");
+    assert.ok(!text.includes("[wam N3 skill-ref] codebase-design"), "default must not render a card");
+  } finally {
+    fs.rmSync(projectPath, { recursive: true, force: true });
+  }
+});
+
+test("skillBaseLoad: card opts base skills back into cards", async () => {
+  const projectPath = tempProject();
+  try {
+    fs.mkdirSync(path.join(projectPath, ".wam"), { recursive: true });
+    fs.writeFileSync(
+      path.join(projectPath, ".wam", "config.json"),
+      JSON.stringify({ skillBaseLoad: "card" }),
+    );
     const pack = await assembleContext({
       prompt: "do a normal task",
       taskId: "t-card",
@@ -107,7 +168,7 @@ test("base skills render as cards by default", async () => {
     assert.ok(card.length <= 400, "card must stay within 400 chars");
     assert.match(card, /\[wam N3 skill-ref\] codebase-design — Design deep modules/);
     assert.match(card, /\n  load: read .*skills\/codebase-design\/SKILL\.md/);
-    assert.ok(!text.includes("FULL_BODY"), "base body must not be injected by default");
+    assert.ok(!text.includes("FULL_BODY"), "card mode must not inject the body");
   } finally {
     fs.rmSync(projectPath, { recursive: true, force: true });
   }
@@ -145,7 +206,7 @@ test("WAM_SKILLS_FULL=1 injects the full base body", async () => {
   }
 });
 
-test("N3 skill content is capped at skillsMaxChars (4000 by default)", async () => {
+test("N3 skill content has no default char cap", async () => {
   const projectPath = tempProject();
   try {
     const registry = {};
@@ -174,13 +235,32 @@ test("N3 skill content is capped at skillsMaxChars (4000 by default)", async () 
     });
     const n3 = pack.lines.filter((line) => line.includes("[wam N3 skill"));
     const chars = n3.reduce((sum, line) => sum + line.length, 0);
-    assert.ok(chars <= 4000, `N3 content must stay <= 4000 chars (got ${chars})`);
+    assert.ok(chars > 4000, `N3 content must not be capped at 4000 chars (got ${chars})`);
+    assert.ok(!n3.some((line) => line.includes("...[truncado]")), "skills must be injected whole");
   } finally {
     fs.rmSync(projectPath, { recursive: true, force: true });
   }
 });
 
-test("synthetic first turn with 3 base and 3 on-demand skills stays <= 8000 chars", async () => {
+test("skills may use up to 80% of flex, leaving a 20% reserve", async () => {
+  const pack = await assembleContext({
+    prompt: "do a normal task",
+    taskId: "t-skill-share",
+    classification: "normal",
+    mode: "NORMAL",
+    budget: 8000,
+    skillRegistry: {
+      long: { id: "long", content: "L".repeat(20000) },
+    },
+    selectedSkills: [{ id: "long", reason: "score 9", relevance: 9, base: false }],
+  });
+  const state = pack.skillStates.find((item) => item.id === "long");
+  assert.ok(state, "long skill must be tracked");
+  assert.equal(state.truncated, false, "skill must fit in the 80% share");
+  assert.ok(pack.flex > 0, "20% reserve must remain after skills");
+});
+
+test("synthetic first turn with 3 base and 3 on-demand skills keeps full bodies", async () => {
   const projectPath = tempProject();
   try {
     const registry = {
@@ -210,7 +290,8 @@ test("synthetic first turn with 3 base and 3 on-demand skills stays <= 8000 char
       selectedSkills,
     });
     const total = pack.lines.join("\n").length;
-    assert.ok(total <= 8000, `synthetic first turn must stay <= 8000 chars (got ${total})`);
+    assert.ok(total > 8000, `base full bodies must exceed the old card budget (got ${total})`);
+    assert.ok(total <= 16000, `synthetic first turn must stay <= 16000 chars (got ${total})`);
   } finally {
     fs.rmSync(projectPath, { recursive: true, force: true });
   }
@@ -241,6 +322,78 @@ test("skillsMaxChars is overridable from .wam/config.json", async () => {
     const chars = n3.reduce((sum, line) => sum + line.length, 0);
     assert.ok(chars <= 300, `skillsMaxChars must override the default cap (got ${chars})`);
   } finally {
+    fs.rmSync(projectPath, { recursive: true, force: true });
+  }
+});
+
+test("pruneBySection preserves document order and keeps low-relevance sections that fit", () => {
+  const alpha = `## Alpha\n${"alpha ".repeat(20)}`;
+  const beta = `## Beta\n${"beta ".repeat(20)}`;
+  const gamma = `## Gamma\n${"gamma ".repeat(200)}`;
+  const content = `${alpha}\n${beta}\n${gamma}`;
+  const pruned = pruneBySection(content, beta.length + alpha.length + 10);
+  assert.ok(pruned.includes("## Alpha"), "early low-relevance section must be kept");
+  assert.ok(pruned.includes("## Beta"), "later section must be kept");
+  assert.ok(!pruned.includes("## Gamma"), "only the overflowing tail is dropped");
+  assert.ok(
+    pruned.indexOf("## Alpha") < pruned.indexOf("## Beta"),
+    "sections must keep their original document order",
+  );
+});
+
+test("a single on-demand skill longer than 4000 chars is injected whole", async () => {
+  const projectPath = tempProject();
+  try {
+    const content = `## Intro\n${"X".repeat(9000)}`;
+    const pack = await assembleContext({
+      prompt: "do a normal task",
+      taskId: "t-long-single",
+      classification: "normal",
+      mode: "NORMAL",
+      budget: 64000,
+      projectPath,
+      skillRegistry: { "long-skill": { id: "long-skill", content } },
+      selectedSkills: [{ id: "long-skill", reason: "score 9", relevance: 9, base: false }],
+    });
+    const line = pack.lines.find((l) => l.includes("[wam N3 skill] long-skill"));
+    assert.ok(line, "long skill must be injected");
+    assert.ok(!line.includes("...[truncado]"), "default cap must not truncate the skill");
+    assert.ok(line.includes("X".repeat(9000)), "full body must be present");
+  } finally {
+    fs.rmSync(projectPath, { recursive: true, force: true });
+  }
+});
+
+test("a single base skill in full-body mode longer than 8000 chars is not capped", async () => {
+  const projectPath = tempProject();
+  const previous = process.env.WAM_SKILLS_FULL;
+  process.env.WAM_SKILLS_FULL = "1";
+  try {
+    const content = `## Base\n${"B".repeat(9000)}`;
+    const pack = await assembleContext({
+      prompt: "do a normal task",
+      taskId: "t-long-base",
+      classification: "normal",
+      mode: "NORMAL",
+      budget: 64000,
+      projectPath,
+      skillRegistry: {
+        "long-base": {
+          id: "long-base",
+          loadStrategy: "base",
+          description: "long base",
+          content,
+        },
+      },
+      selectedSkills: [{ id: "long-base", reason: "base", relevance: 0, base: true }],
+    });
+    const line = pack.lines.find((l) => l.includes("[wam N3 skill] long-base"));
+    assert.ok(line, "base full body must be injected");
+    assert.ok(!line.includes("...[truncado]"), "base full body must not be capped at 8000");
+    assert.ok(line.includes("B".repeat(9000)), "full base body must be present");
+  } finally {
+    if (previous === undefined) delete process.env.WAM_SKILLS_FULL;
+    else process.env.WAM_SKILLS_FULL = previous;
     fs.rmSync(projectPath, { recursive: true, force: true });
   }
 });

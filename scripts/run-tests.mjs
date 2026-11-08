@@ -155,6 +155,7 @@ export function collectTests(dir) {
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
+      if (entry.name.startsWith(".")) continue;
       if (IGNORE_DIRS.has(entry.name)) continue;
       out.push(...collectTests(full));
     } else if (entry.isFile() && entry.name.endsWith(".test.mjs")) {

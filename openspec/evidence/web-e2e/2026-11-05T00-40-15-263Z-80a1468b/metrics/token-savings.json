@@ -1,0 +1,21 @@
+[
+  {
+    "taskId": "task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE",
+    "timestamp": 1793839218699,
+    "firstAt": 1793839218699,
+    "lastAt": 1793839218699,
+    "occurrences": 1,
+    "actualTokens": 5176,
+    "actualRequestTokens": null,
+    "usageSource": "none",
+    "promptTokens": 58,
+    "baselineTokens": 6000,
+    "baselineSource": "synthetic",
+    "claimable": false,
+    "estimator": "chars/4",
+    "scope": "wam-injected-lines",
+    "savingsPct": null,
+    "savingsTokens": 0,
+    "deltaTokens": 824
+  }
+]

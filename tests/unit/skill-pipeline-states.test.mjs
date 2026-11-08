@@ -22,16 +22,14 @@ import path from "node:path";
 import os from "node:os";
 
 import { assembleContext } from "../../src/context/assembly.js";
-import { routeSkillsV2, getTaskState } from "../../src/skills/engine.js";
+import { buildRegistry, routeSkillsV2, getTaskState } from "../../src/skills/engine.js";
+import { discoverSkills } from "../../src/policy/skill-routing.js";
 import { handleMessage } from "../../src/integration/message-handler.js";
 import { createState } from "../../src/state/task-state.js";
 
 function loadBundledRegistry() {
-  const p = path.join(process.cwd(), "skills", "registry.json");
-  const entries = JSON.parse(fs.readFileSync(p, "utf-8"));
-  const reg = {};
-  for (const skill of entries) reg[skill.id] = skill;
-  return reg;
+  const available = discoverSkills({ root: process.cwd() });
+  return buildRegistry(available, process.cwd()).registry;
 }
 const REGISTRY = loadBundledRegistry();
 

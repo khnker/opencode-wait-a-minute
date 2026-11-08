@@ -1,0 +1,664 @@
+[
+  {
+    "info": {
+      "id": "msg_1b21234fd001JTo3MdXqXmAdz0",
+      "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+      "role": "user",
+      "time": {
+        "created": 1793988900093
+      },
+      "summary": {
+        "diffs": []
+      },
+      "agent": "build",
+      "model": {
+        "providerID": "omni",
+        "modelID": "cost-saver"
+      }
+    },
+    "parts": [
+      {
+        "id": "prt_1b2123502001wbLX6mRRWWE7Dg",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b21234fd001JTo3MdXqXmAdz0",
+        "type": "text",
+        "text": "Implementá add.js con una función que sume dos números y add.test.mjs usando node:test. Antes de completar, usá la skill verify y mostrá evidencia de la verificación con node --test add.test.mjs."
+      },
+      {
+        "id": "prt_460df501c82bf02c",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b21234fd001JTo3MdXqXmAdz0",
+        "type": "text",
+        "text": "[wam CPC] canonical project context\n[wam CPC fact] Proyecto wam-web-e2e-fixture-FtnEUq (wam-web-e2e-fixture-FtnEUq)",
+        "synthetic": true,
+        "metadata": {
+          "wam": true,
+          "wamMessageId": "msg_1b21234fd001JTo3MdXqXmAdz0",
+          "wamPhase": "cpc"
+        }
+      },
+      {
+        "id": "prt_aaceeb027ce60ec5",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b21234fd001JTo3MdXqXmAdz0",
+        "type": "text",
+        "text": "[wam][start]\n[wam N0 policy] autonomy loop | contract approval: required — writes paused until /wam contract approve\n[wam N1 project] Proyecto: - Proyecto wam-web-e2e-fixture-FtnEUq (wam-web-e2e-fixture-FtnEUq)\n[wam N2 task]\ntask: task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v — PROPOSED / PROPOSED\nreq: 2/2 pend | next: Implementá add.js con una función que sume dos números y add.test.mjs usando ...\n[wam N3 user_decided] req-1 — requirement: req-1\n  content: Implementá add.js con una función que sume dos números y add.test.mjs usando node:test\n[wam N3 user_decided] req-2 — requirement: req-2\n  content: Agregar tests para el cambio\n[wam N3 skill] verify — score 30.52208598044823 (name,trigger:verify,trigger:verificación,trigger:evidencia)\n# Verify\n\nThe implementation is not the result. The executed check is not the result. The\nresult is the observed evidence that the acceptance criterion is satisfied.\n\nA completion claim is allowed only after the runtime completion gate reports no\npending work. The gate is authoritative; this skill is the procedure that\nproduces the state the gate evaluates.\n\n## Activation boundary\n\nUse this skill when:\n\n- the user asks to verify, validate, test, check, or confirm work;\n- you are about to say `DONE`, `COMPLETED`, `FIXED`, `working`, `solved`,\n  `ready`, or an equivalent in any language;\n- a task has acceptance criteria, an outcome contract, or a definition of done.\n\nDo not use it for exploratory reading, speculative design, or casual\nconversation with no completion decision.\n\n## Runtime invariants\n\nThese are non-negotiable. A failure in any invariant means: do not claim\ncompletion.\n\n| ID | Invariant | What blocks completion |\n| --- | --- | --- |\n| V1 | Fail-closed | Missing, malformed, unknown, or ambiguous state |\n| V2 | Decisions resolved | Blocking unknown or unresolved `DECISION_CRITICAL` assumption |\n| V3 | Requirements closed | Any mandatory requirement not verified, or verified without evidence |\n| V4 | Evidence provenance | Cross-session, stale, expired, or unsupported-by-source evidence |\n| V5 | No contradictions | Supporting and contradicting evidence for the same requirement |\n| V6 | Sufficient strength | Critical requirement without direct evidence; non-critical without observation |\n| V7 | No pending backlog | Any backlog item still `pending` |\n| V8 | Contract satisfied | Completion criterion `FAIL`/`UNKNOWN`, missing outcome contract, or outcome not `ACHIEVED` |\n| V9 | Legal state | Any transition to `COMPLETED` other than from `VERIFYING` |\n\nOptional requirements never block completion. They may be reported as\nlimitations, but they are not completion criteria.\n\nThe runtime implementation is:\n\n- `src/integration/orchestration.js` — `evaluateCompletionGate`;\n- `src/verification/completion-invariants.js` — structured evidence checks;\n- `src/verification/verification-lifecycle.js` — requirement verification and\n  outstanding work;\n- `src/execution/execution-state.js` — legal state transitions;\n- `src/quality/task-quality-contract.js` — strength, freshness, contradiction.\n\nDo not reimplement these rules in prose or claim a stronger guarantee than the\ngate reports.\n\n## Procedure\n\n### 1. Establish the contract\n\nRead the task state and list the mandatory acceptance criteria. For each\ncriterion, name the observable result that proves it. If a criterion has no\nobservable check, say so and do not claim it as verified.\n\nDo not infer criteria from the implementation. The contract, outcome contract,\nand requirement list are the only sources of completion criteria.\n\n### 2. Map criterion to check\n\nChoose the cheapest check that produces sufficient evidence:\n\n1. existing automated test;\n2. targeted command;\n3. targeted inspection;\n4. minimal reproduction;\n5. broader test suite.\n\nEvery check must identify what it proves and what it does not prove. A passing\nbuild is not proof of runtime behavior. A file existing is not proof that it is\nimported or executed.\n\n### 3. Execute the check\n\nRun the check. Record:\n\n- the exact command or inspection;\n- the observed result;\n- the scope and limitations;\n- the source or artifact the evidence refers to;\n- when it was observed.\n\nIf the environment prevents the check, record the block. A blocked check is not\na success, and it is not evidence against the implementation.\n\n### 4. Record evidence\n\nEvidence must be traceable to the criterion it supports. Prefer direct or\nverification evidence over inference. Never use:\n\n- the change itself as proof that the change works;\n- the absence of an error as proof of correctness;\n- an unrelated passing test as proof of this criterion;\n- a previous session's observation for the current task;\n- a stale observation after the source changed.\n\nDo not mark a requirement verified yourself. Record the evidence through the\nnormal task-state path so the runtime can evaluate it.\n\n### 5. Ask the gate\n\nCall or observe the runtime completion gate. If it reports `pending`, those items\nare the remaining work. Do not claim completion. Report:\n\n- what is verified;\n- what is pending;\n- the evidence that would resolve each pending item;\n- any environmental limitation.\n\nIf `completionGate.enforce` is off, the runtime is advisory. The skill is still\nbinding: do not use the advisory downgrade as permission to claim DONE.\n\n### 6. Claim completion\n\nClaim completion only when:\n\n- every mandatory invariant passes;\n- the gate reports `allDone` or an empty pending set;\n- the task is in `VERIFYING` and can legally transition to `COMPLETED`.\n\nState the evidence directly. Do not say \"should work\", \"looks correct\", or\n\"tests pass\" without naming the check and result.\n\n## Failure handling\n\nWhen a check fails:\n\n1. record the failure and its cause;\n2. keep the requirement unverified;\n3. fix the cause or report the block;\n4. re-run the check before claiming completion.\n\nNever convert a timeout, missing dependency, flaky run, or partial output into a\npass. A retry is allowed only when it produces a new observation, not to hide a\nconsistent failure.\n\n## Output contract\n\nWhen verification is incomplete, return:\n\n```text\nVerified:\n- <criterion>: <check> -> <observed result>\n\nPending:\n- <criterion>: <what is missing> -> <evidence that would resolve it>\n\nLimitations:\n- <environment or scope limitation>\n\nStatus: NOT DONE\n```\n\nWhen verification is complete, return the same evidence summary and then the\ncompletion claim. The claim must be supported by the listed evidence.\n\n## Anti-patterns\n\n- Declaring DONE because the code was written.\n- Treating a successful command as proof of every criterion.\n- Using another session's evidence.\n- Accepting stale evidence after editing the source.\n- Ignoring contradicting observations.\n- Marking optional criteria as blockers, or optional failures as success.\n- Bypassing the gate because enforcement is advisory.\n[wam N3 skill] craftsman — Skill base (loadStrategy: \"base\")\n# Craftsman\n\nBuild the simplest solution that satisfies the requirement while preserving domain integrity and existing architecture.\n\nDo not impose patterns or architectures by convention. Every abstraction, dependency and structure must justify its existence.\n\nScope: software engineering only; do not manage workflows, task states or agent coordination.\n\n## 1. Engineering Invariants\n\n| ID     | Invariant             | Rule                                                                                    |\n| ------ | --------------------- | --------------------------------------------------------------------------------------- |\n| INV-01 | Validated Boundaries  | Validate external data before admitting it into the domain.                             |\n| INV-02 | Valid Domain States   | Prevent representations of mutually exclusive states from coexisting.                   |\n| INV-03 | Pure Core             | Keep deterministic business rules independent of I/O.                                   |\n| INV-04 | Concrete by Default   | Avoid 1:1 abstractions without a genuine decoupling need.                               |\n| INV-05 | Error Causality       | Preserve technical error causes; never silently swallow failures without explicit recovery. |\n\nAdditional constraints:\n\n- No boolean flags selecting divergent domain behaviors.\n- Prefer explicit names, cohesion and readable control flow.\n\n## 2. Craftsman Ladder\n\nEvaluate each relevant artifact in order: EVALUATE → MATCH → ACTION → HALT; stop at the first rung that resolves it.\n\n### RUNG-1: LOCALITY\n\nDoes the artifact have a single consumer?\n\n- Yes: implement locally, preferably privately.\n- Avoid unnecessary files, modules and exports.\n\nLocality determines scope, not whether responsibilities must be separated.\n\n### RUNG-2: REPETITION — N >= 3\n\nHow many independent implementations exist?\n\n- N = 1 or 2: keep implementations local.\n- N >= 3: consider extraction when semantics and reasons to change are shared.\n- Different reasons to change: keep implementations separate.\n\nN=3 is an evaluation threshold, not an automatic extraction command.\n\n### RUNG-3: NATIVE CAPABILITIES\n\nDoes the language, runtime or framework already provide the capability?\n\n- Prefer native APIs and existing dependencies.\n- Avoid redundant wrappers and utilities.\n\n### RUNG-4: PURE CORE / IMPERATIVE SHELL\n\nAre deterministic rules mixed with side effects?\n\n- Pure Core: calculations, transformations and domain rules.\n- Imperative Shell: I/O, persistence, transport and integration.\n\nSeparate when it improves isolation, clarity or testability. Avoid artificial layers.\n\n### RUNG-5: POLYMORPHIC JUSTIFICATION\n\nIs there a genuine need to replace or decouple implementations?\n\n- Single implementation, no meaningful boundary: use the concrete type.\n- Multiple implementations: evaluate a shared contract.\n- Single infrastructure implementation: abstract only when it protects the domain or provides meaningful decoupling.\n\nNever introduce interfaces speculatively.\n\n## 3. Implementation Directives\n\nBefore modifying code:\n\n- Inspect related code, models and conventions.\n- Review dependencies and native capabilities.\n- Identify contracts and behavior that must remain intact.\n- Reuse existing structures when their semantics are compatible.\n\nDuring implementation:\n\n- Organize by domain or feature, respecting the existing project.\n- Avoid incohesive \"utils\", \"helpers\" and \"common\" modules.\n- Do not introduce unnecessary dependencies or hypothetical requirements.\n- Adapt decisions to the language and programming paradigm.\n\n## AI Metadata\n\nUse only when preserving non-obvious context:\n\n- `@ai-invariant`: critical constraint.\n- `@ai-boundary`: data or side-effect boundary.\n- `@ai-decision`: significant design decision.\n- `@ai-mutation-risk`: shared-state or concurrency risk.\n\nNever narrate code or add decorative comments.\n\n## 4. Diff Audit\n\nInspect the diff and correct:\n\n- Unjustified abstractions.\n- Poorly abstracted duplication.\n- Avoidable I/O and domain coupling.\n- Behavioral boolean flags.\n- Errors that lose their original cause.\n- Invalid domain states.\n- Unnecessary complexity or comments.\n- Regressions in existing contracts.\n\nRun relevant tests, compilation or static analysis. Never claim verification that was not performed.\n\n## 5. Output Contract\n\nProvide a report proportional to the change:\n\n**Artifacts & Changes**: created or modified files and their responsibilities.\n\n**Ladder Decisions**: relevant design decisions and rationale. Omit trivial decisions.\n\n**Verification**: executed tests, results and outstanding limitations.\n\n---\n\nDIRECTIVE: Prefer the simplest solution that preserves domain integrity, minimizes coupling and supports reasonable software evolution.\n[wam N3 skill] codebase-design — Skill base (loadStrategy: \"base\")\n# Codebase Design\n\nDesign **deep modules**: a lot of behaviour behind a small interface, placed at a clean seam, testable through that interface. Aim for leverage for callers, locality for maintainers, and testability for everyone.\n\n## Glossary\n\nUse these terms exactly: don't substitute \"component,\" \"service,\" \"API,\" or \"boundary.\"\n\n**Module**: anything with an interface and an implementation; deliberately scale-agnostic (a function, class, package, or tier-spanning slice). _Avoid_: unit, component, service.\n\n**Interface**: everything a caller must know to use the module correctly: the type signature, plus invariants, ordering constraints, error modes, required configuration, and performance characteristics. _Avoid_: API, signature (too narrow: they refer only to the type-level surface).\n\n**Implementation**: the code inside a module. Distinct from **Adapter**: a small adapter can have a large implementation (a Postgres repo); a large adapter can have a small implementation (an in-memory fake). Use \"adapter\" when the seam is the topic, \"implementation\" otherwise.\n\n**Depth**: leverage at the interface: the behaviour a caller or test can exercise per unit of interface learned. A module is **deep** when a large amount of behaviour sits behind a small interface, **shallow** when the interface is nearly as complex as the implementation.\n\n**Seam** _(Michael Feathers)_: a place where you can alter behaviour without editing in that place; the location at which a module's interface lives. Where to put the seam is a design decision distinct from what goes behind it. _Avoid_: boundary (overloaded with DDD's bounded context).\n\n**Adapter**: a concrete thing that satisfies an interface at a seam. Describes a role, not a substance.\n\n**Leverage**: what callers get from depth: more capability per unit of interface learned; one implementation pays back across N call sites and M tests.\n\n**Locality**: what maintainers get from depth: change, bugs, knowledge, and verification concentrate in one place rather than spreading across callers. Fix once, fixed everywhere.\n\n## Deep vs shallow\n\nDeep = small interface + lots of implementation. Shallow = large interface + little implementation (avoid).\n\nWhen designing an interface, ask: can I reduce the number of methods, simplify the parameters, or hide more complexity inside?\n\n## Principles\n\n- **Depth is a property of the interface, not the implementation.** A deep module can be internally composed of small, mockable, swappable parts; they just aren't part of the interface. A module can have **internal seams** (private to its implementation, used by its own tests) as well as the **external seam** at its interface.\n- **The deletion test.** Imagine deleting the module. If complexity vanishes, it was a pass-through. If complexity reappears across N callers, it was earning its keep.\n- **The interface is the test surface.** Callers and tests cross the same seam. If you want to test *past* the interface, the module is probably the wrong shape.\n- **One adapter means a hypothetical seam. Two adapters means a real one.** Don't introduce a seam unless something actually varies across it.\n\n## Designing for testability\n\n1. **Accept dependencies, don't create them.** Pass collaborators in as parameters; a module that constructs its own gateway cannot be tested in isolation.\n2. **Return results, don't produce side effects.** Return new values rather than mutating shared state.\n3. **Small surface area.** Fewer methods and params mean fewer tests and simpler setup.\n\n## Relationships\n\n- A **Module** has exactly one **Interface** (the surface it presents to callers and tests).\n- **Depth** is a property of a **Module**, measured against its **Interface**.\n- A **Seam** is where a **Module**'s **Interface** lives.\n- An **Adapter** sits at a **Seam** and satisfies the **Interface**.\n- **Depth** produces **Leverage** for callers and **Locality** for maintainers.\n\n## Rejected framings\n\n- **Depth as ratio of implementation-lines to interface-lines** (Ousterhout): rewards padding the implementation. We use depth-as-leverage instead.\n- **\"Interface\" as the TypeScript `interface` keyword or a class's public methods**: too narrow: interface here includes every fact a caller must know.\n- **\"Boundary\"**: overloaded with DDD's bounded context. Say **seam** or **interface**.\n\n## Going deeper\n\n- **Deepening a cluster given its dependencies**, see [DEEPENING.md](DEEPENING.md): dependency categories, seam discipline, and replace-don't-layer testing.\n- **Exploring alternative interfaces**, see [DESIGN-IT-TWICE.md](DESIGN-IT-TWICE.md): spin up parallel sub-agents to design the interface several radically different ways, then compare on depth, locality, and seam placement.\n[wam N3 skill] writing-for-agents — Skill base (loadStrategy: \"base\")\nReference for writing any document an agent consumes: a skill, an `AGENTS.md` / `CLAUDE.md`, a doc reached by a pointer. The packaging differs; the writing does not: the same levers make each one predictable, since the agent takes the same _process_ every run rather than producing the same output.\n\nWhen the document you're writing is a skill, read [`SKILL-MECHANICS.md`](SKILL-MECHANICS.md) for frontmatter, invocation choice, and router skills.\n\n## Context pointers\n\nA **context pointer** is a reference held in the agent's context that names some out-of-context material and encodes the condition for reaching it. A skill's description is one; a line in `AGENTS.md` naming a doc is the same object. The pointer's _wording_, not its target, decides when the agent reaches the material, and how reliably. A must-have target behind a weakly worded pointer is a variance bug: sharpen the wording first, and inline the material only if sharpening fails.\n\nA pointer does two jobs: state what the material is, and list the **branches** that should trigger reaching it (a branch is a distinct case the document handles, so different runs take different paths through it). Every word of an always-loaded pointer costs on every turn, so it earns even harder pruning than the body:\n\n- **Front-load the leading word**: the pointer is where it does its triggering work.\n- **One trigger per branch.** Synonyms that rename a single branch are one branch written twice; collapse them and keep only genuinely distinct branches.\n- **Cut identity the body already carries.**\n\n## The two loads\n\nEvery document and pointer you add spends one of two budgets:\n\n- **Context load** is the cost of always-loaded material on the agent's window: an `AGENTS.md` line, a skill description, anything sitting in context every turn, spending tokens and attention whether or not it fires.\n- **Cognitive load** is the cost on the human: which documents exist and when to reach for each. The human is the index. Not a cost to minimise: it is the price of human agency; spend it where human judgement matters, remove it where it does not.\n\nMaterial reached only through a pointer escapes context load at the price of the pointer's own line; material with no pointer at all rides entirely on cognitive load.\n\n## Information hierarchy\n\nA document is built from two content types: **steps** (the ordered actions the agent performs) and **reference** (definitions, rules, facts consulted on demand). The two mix freely: all steps (a recipe), all reference (a review's rules, this skill), or both. The core decision is where each piece sits on the **information hierarchy**, a ladder ranked by how immediately the agent needs the material:\n\n1. **In-file step** is the primary tier: what the agent does, in order.\n2. **In-file reference** is consulted on demand. Often a legitimately flat peer-set (every rule of a review on one rung), which is a fine arrangement, not a smell.\n3. **Disclosed reference** is pushed out into a separate file, reached by a context pointer, loaded only when the pointer fires. Spans a sibling file in the same folder through fully external reference that lives anywhere and any document can point at.\n\nPush too little down and the top bloats; push too much and you hide material the agent actually needs. That tension is the whole decision.\n\n**Progressive disclosure** is the move down the ladder (out of the main file and behind a pointer) so the top stays legible. Not primarily a token optimisation: it is how the hierarchy is protected. Branching is the cleanest disclosure test: inline what every branch needs, and push behind a pointer what only some branches reach. When a document has steps, in-file reference that should be disclosed buries them and turns attending to them into a coin-flip: a variance lever, not just a legibility one.\n\n**Co-location** is the within-file companion: where the ladder decides _how far down_ a piece sits, co-location decides _what sits beside it_ once there. Keep a concept's definition, rules, and caveats under one heading rather than scattered, so reading one part brings its neighbours with it. The test: the document should read like documentation written for the agent. Grouped material reads that way; scattered material does not. (Distinct from duplication: that repeats one meaning in two places; scattering fragments one meaning across many.)\n\n**Sprawl** is the failure mode here: a document simply too long, even when every line is live and unique. Attention thins across the excess, and every extra line is one more to keep relevant. The cure is the ladder: disclose reference behind pointers, and split by branch or sequence so each path carries only what it needs.\n\n## Steps and completion criteria\n\nEvery step ends on a **completion criterion**, the condition that tells the agent the work is done. Two properties make it a lever:\n\n- **Clarity**: can the agent tell done from not-done? A vague bound (\"understanding reached\") invites **premature completion**: ending the step before it is genuinely done, attention slipping to _being done_. The visible steps still ahead (the **post-completion steps**) supply the pull; the criterion's clarity is the resistance. Defend in order: **sharpen the bound first** (local and cheap); only if it is irreducibly fuzzy _and_ you observe the rush, hide the later steps by splitting the sequence. Hiding only works across a real context boundary (a hand-off or a subagent dispatch; an inline call leaves the later steps in context and clears nothing).\n- **Demand**: how much it requires. \"Every modified model accounted for\" forces thorough work where \"produce a change list\" does not. Demand drives **legwork** (the digging the agent does within the work, latent in the wording rather than written as its own step), and it is not step-bound: \"every rule applied\" binds a body of flat reference just as \"every step done\" binds a sequence, which is how an all-reference document still carries an exhaustiveness bar.\n\nThe strongest criteria are both checkable and exhaustive.\n\n## When to split\n\nSplitting one document into two spends one of the two loads, so split only when the cut earns it:\n\n- **By sequence**: split a run of steps where the post-completion steps tempt the agent to rush the one in front of it. Keeping them out of view drives more legwork on the current task. Beware the reverse: merging sequences exposes each step's later steps to what follows, inviting premature completion.\n- **By invocation**, skill-specific: see [`SKILL-MECHANICS.md`](SKILL-MECHANICS.md).\n\n## Leading words\n\nA **leading word** is a compact concept already living in the model's pretraining that the agent thinks with while running the document (_lesson_, _fog of war_, _tracer bullets_). Repeated as a token, never as a sentence, it accumulates a distributed definition and anchors a whole region of behaviour in the fewest tokens, by recruiting priors the model already holds. Coining your own works if you define it clearly, but a made-up word recruits no priors: you pay in definition tokens what a pretrained word gives free; reach for an existing word first.\n\nIt anchors twice. In the body, _execution_: the agent reaches for the same behaviour every time the word appears, and inside flat reference it focuses attention on a class of thing to look for. In a pointer, _invocation_: when the same word lives in your prompts, your docs, and your codebase, the agent links that shared language to the material and reaches it more reliably.\n\nHunt for opportunities to refactor with leading words. A triad spelled out at three sites, a pointer spending a sentence to gesture at one idea. Each is a passage begging to collapse into a single token:\n\n- \"fast, deterministic, low-overhead\" → _tight_ (a _tight_ loop).\n- \"a loop you believe in\" → _red_, turning a fuzzy gate into a binary observable state (the loop goes _red_ on the bug, or it doesn't).\n\nYou win twice: fewer tokens, and a sharper hook for the agent to hang its thinking on. Assume every document is carrying restatements that leading words retire. Go find them.\n\n**Negation** is the failure mode beside this lever: steering by prohibition drags the forbidden behaviour into context and makes it _more_ available, not less. _Don't think of an elephant_, and the elephant is all there is; the negation is a weak modifier the strongly-activated concept overruns, so the ban half-reads as an instruction to do the thing. Prompt the **positive**: state the target behaviour (\"write one-line comments\") so the banned one is never spoken. A prohibition earns its place only as a hard guardrail you cannot phrase positively; even then, pair it with the positive target so attention lands on what to do.\n\n## Pruning\n\n- Keep each meaning in a **single source of truth**: one authoritative place, so changing the behaviour is a one-place edit. **Duplication** (the same meaning in more than one place) costs maintenance and tokens, and inflates a meaning's prominence on the ladder past its real rank. (The accidental inverse of a leading word, which repeats a token on purpose, never the meaning.)\n- The **environment** is a source of truth too (`package.json` scripts, config files, the directory layout, `--help` output), and a document that restates it is a **cache**: a copy of a lookup, earning its load only when the lookup is expensive. Cache what the agent cannot find by looking: the unwritten convention, the reason behind a choice, the gotcha no config confesses. Leave the one-file, one-command lookups to the environment, where they cannot go stale.\n- Check every line for **relevance**: does it still bear on what the document does? A line loses relevance by never bearing on the task (mere exposition, or a branch that should be disclosed) or by going stale as the behaviour or world it describes changes. Shorter documents are easier to keep relevant. Without a pruning discipline the default fate is **sediment**: stale layers that settle because adding feels safe and removing feels risky, until you must core down through them to find what is still live.\n- Hunt **no-ops** sentence by sentence: an instruction the model already obeys by default pays load to say nothing. The test (does it change behaviour versus the default?) is model-relative, not reader-relative: two people disagreeing about a no-op disagree about the default, and settle it by running the document, not by debate. When a sentence fails, delete the whole sentence rather than trim words from it. The test also grades leading words: a word too weak to beat the default (_be thorough_ when the agent is already thorough-ish) is a no-op, and the fix is a stronger word (_relentless_), not a different technique.\n\n## Skill reduction\n\nReduction is maintenance, not shortening: lower context cost without changing activation, decisions, constraints, or failure handling. Apply this policy when pruning or restructuring an existing skill. Keep it in one authoritative place: this skill.\n\n1. Name the skill's unique responsibility.\n2. List every instruction that changes agent behaviour.\n3. Remove no-ops, duplication, and stale content.\n4. Preserve decision rules, constraints, and failure handling.\n5. Move conditional knowledge behind an on-demand pointer.\n6. Consolidate overlapping responsibilities before deleting content.\n7. Keep explicit activation and exclusion boundaries.\n8. Measure the token delta with the target tokenizer.\n9. Validate activation, behaviour, and regression on representative tasks.\n\nReduce by type: routers aggressively; engineering moderately; diagnostic and verification conservatively; architecture selectively; UI after consolidating one authority per dimension; prototypes and handoff lightly; meta-skills with semantic validation. Prefer R1 pruning → R2 compression → R3 disclosure → R4 consolidation → R5 removal; never merge before each skill's differential behaviour is named.\n\nThe full rule set (`RED-01`..`RED-10`), type checklists, severity levels, and validation dimensions live in `references/skill-reduction.md`.\n\n⛔ [wait-a-minute] CONTRATO PENDIENTE — mostrá al usuario este plan y esperá /wam contract approve antes de ejecutar.\nObjetivo: pending\nPlan (2/2 pendientes):\n  - Implementá add.js con una función que sume dos números y add.test.mjs usando node:test\n  - Agregar tests para el cambio\nVerificación: Ejecutar suite de tests relevante\nSkills cargadas: craftsman, codebase-design, writing-for-agents, verify\nEn tu mensaje visible incluí: objetivo, plan, sección \"Skills cargadas\" con esos nombres, verificación y pedido de /wam contract approve.\nNo ejecutes write/edit/apply_patch hasta que el usuario apruebe. El comando es /wam contract approve.\nRecomendación — contrato PROPOSED (fase PROPOSED); procedo\nskills activas: craftsman,codebase-design,writing-for-agents,verify\nrequisitos: Implementá add.js con una función que sume dos números y add.test.mjs usando node:test; Agregar tests para el cambio\nPlan: Ejecutar lo pedido con soporte de skills WAM.\n/wam contract edit → ajustar contrato | /wam compress → resumen terse\nfase PROPOSED → Mostrar plan y esperar /wam contract approve\n[wam history]\n- (task:task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v) Implementá add.js con una función que sume dos números y add.test.mjs usando node:test; Agregar tests para el cambio — Implementá add.js con una función que sume dos números y add.test.mjs usando node\n[wam][end]",
+        "synthetic": true,
+        "metadata": {
+          "wam": true,
+          "wamMessageId": "msg_1b21234fd001JTo3MdXqXmAdz0",
+          "wamPhase": "emit"
+        }
+      }
+    ]
+  },
+  {
+    "info": {
+      "id": "msg_1b2123ad5001CHwbjtCO9GWGJi",
+      "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+      "role": "assistant",
+      "time": {
+        "created": 1793988901589,
+        "completed": 1793988908429
+      },
+      "parentID": "msg_1b21234fd001JTo3MdXqXmAdz0",
+      "modelID": "cost-saver",
+      "providerID": "omni",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/tmp/wam-web-e2e-fixture-FtnEUq",
+        "root": "/tmp/wam-web-e2e-fixture-FtnEUq"
+      },
+      "cost": 0,
+      "tokens": {
+        "total": 27025,
+        "input": 24945,
+        "output": 199,
+        "reasoning": 89,
+        "cache": {
+          "read": 1792,
+          "write": 0
+        }
+      },
+      "finish": "stop"
+    },
+    "parts": [
+      {
+        "id": "prt_1b212430e001FvYP5maRtgidqp",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b2123ad5001CHwbjtCO9GWGJi",
+        "type": "step-start",
+        "snapshot": "2e1068f7e8e825dbaf3acc6dd516767d05782b4d"
+      },
+      {
+        "id": "prt_1b21245b7001hkA8wutoEwDv8O",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b2123ad5001CHwbjtCO9GWGJi",
+        "type": "reasoning",
+        "text": "The user wants me to implement add.js and add.test.mjs, but WAM has a pending contract requiring `/wam contract approve` before writes. I must show the plan and ask for approval, not execute writes.\n\nThe instruction says I must not execute write/edit until approval. I should present the visible message with objective, plan, skills loaded, verification, and request for /wam contract approve.\n\nKeep concise but include required sections.",
+        "time": {
+          "start": 1793988904375,
+          "end": 1793988906620
+        }
+      },
+      {
+        "id": "prt_1b2124e7e001Ch8AueCugj34X0",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b2123ad5001CHwbjtCO9GWGJi",
+        "type": "text",
+        "text": "**Objetivo:** Implementar `add.js` (suma de dos números) y `add.test.mjs` con `node:test`, y verificar con `node --test add.test.mjs`.\n\n**Plan (2/2 pendientes):**\n- Implementá add.js con una función que sume dos números y add.test.mjs usando node:test\n- Agregar tests para el cambio\n\n**Skills cargadas:** craftsman, codebase-design, writing-for-agents, verify\n\n**Verificación:** Ejecutar suite de tests relevante → `node --test add.test.mjs`, mostrando la evidencia del resultado.\n\n⛔ Contrato **PROPOSED** pendiente. No ejecutaré `write`/`edit` hasta que apruebes.\n\nPara continuar: `/wam contract approve`\nPara ajustar: `/wam contract edit` · Resumen terse: `/wam compress`",
+        "time": {
+          "start": 1793988906622,
+          "end": 1793988908401
+        }
+      },
+      {
+        "id": "prt_1b212557f001gOe7Jh47WJJjCW",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b2123ad5001CHwbjtCO9GWGJi",
+        "type": "step-finish",
+        "reason": "stop",
+        "snapshot": "2e1068f7e8e825dbaf3acc6dd516767d05782b4d",
+        "cost": 0,
+        "tokens": {
+          "total": 27025,
+          "input": 24945,
+          "output": 199,
+          "reasoning": 89,
+          "cache": {
+            "read": 1792,
+            "write": 0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "info": {
+      "id": "msg_1b21258aa001n1qGAqYSYIDiRE",
+      "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+      "role": "user",
+      "time": {
+        "created": 1793988909226
+      },
+      "summary": {
+        "diffs": [
+          {
+            "file": ".wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/cognition/observations.jsonl",
+            "patch": "Index: .wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/cognition/observations.jsonl\n===================================================================\n--- .wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/cognition/observations.jsonl\t\n+++ .wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/cognition/observations.jsonl\t\n@@ -0,0 +1,4 @@\n+{\"id\":\"Omw5aog1eoy5s\",\"experimentId\":null,\"result\":\"INCONCLUSIVE\",\"facts\":[\"ev-1793988912434-vq04ha\"],\"actual\":null,\"unexpected\":[],\"provenance\":\"agent-tool-bash-success\",\"createdAt\":1793988912434}\n+{\"id\":\"Omw5aoi2bfa7q\",\"experimentId\":null,\"result\":\"INCONCLUSIVE\",\"facts\":[\"ev-1793988915059-m75yso\"],\"actual\":null,\"unexpected\":[],\"provenance\":\"agent-tool-write-success\",\"createdAt\":1793988915059}\n+{\"id\":\"Omw5aoise9ij4\",\"experimentId\":null,\"result\":\"INCONCLUSIVE\",\"facts\":[\"ev-1793988915998-ftuwk5\"],\"actual\":null,\"unexpected\":[],\"provenance\":\"agent-tool-write-success\",\"createdAt\":1793988915998}\n+{\"id\":\"Omw5aojpzuy64\",\"experimentId\":null,\"result\":\"INCONCLUSIVE\",\"facts\":[\"ev-1793988917207-864de3\"],\"actual\":null,\"unexpected\":[],\"provenance\":\"agent-tool-bash-success\",\"createdAt\":1793988917207}\n",
+            "additions": 4,
+            "deletions": 0,
+            "status": "added"
+          },
+          {
+            "file": ".wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988912434-vq04ha.json",
+            "patch": "Index: .wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988912434-vq04ha.json\n===================================================================\n--- .wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988912434-vq04ha.json\t\n+++ .wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988912434-vq04ha.json\t\n@@ -0,0 +1,11 @@\n+{\n+  \"requirementId\": \"req-1\",\n+  \"content\": \"total 8\\ndrwx------     4 nicolas nicolas    120 Nov  6 15:14 .\\ndrwxrwxrwt 18419 root    root    377560 Nov  6 15:15 ..\\ndrwxr-xr-x     7 nicolas nicolas    260 Nov  6 15:14 .git\\ndrwxr-xr-x     9 nicolas nicolas    240 Nov  6 15:15 .wam\\n-rw-r--r--     1 nicolas nicolas     22 Nov  6 15:14 README.md\\n-rw-r--r--     1 nicolas nicolas     82 Nov  6 15:14 package.json\\n{\\n  \\\"type\\\": \\\"module\\\",\\n  \\\"scripts\\\"...\",\n+  \"type\": \"TOOL_OUTPUT\",\n+  \"source\": \"execution-engine\",\n+  \"id\": \"ev-1793988912434-vq04ha\",\n+  \"status\": \"unverified\",\n+  \"createdAt\": \"2026-11-06T18:15:12.434Z\",\n+  \"experimentId\": null,\n+  \"observationId\": \"Omw5aog1eoy5s\"\n+}\n\\ No newline at end of file\n",
+            "additions": 11,
+            "deletions": 0,
+            "status": "added"
+          },
+          {
+            "file": ".wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988915059-m75yso.json",
+            "patch": "Index: .wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988915059-m75yso.json\n===================================================================\n--- .wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988915059-m75yso.json\t\n+++ .wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988915059-m75yso.json\t\n@@ -0,0 +1,11 @@\n+{\n+  \"requirementId\": \"req-1\",\n+  \"content\": \"Wrote file successfully.\",\n+  \"type\": \"TOOL_OUTPUT\",\n+  \"source\": \"execution-engine\",\n+  \"id\": \"ev-1793988915059-m75yso\",\n+  \"status\": \"unverified\",\n+  \"createdAt\": \"2026-11-06T18:15:15.059Z\",\n+  \"experimentId\": null,\n+  \"observationId\": \"Omw5aoi2bfa7q\"\n+}\n\\ No newline at end of file\n",
+            "additions": 11,
+            "deletions": 0,
+            "status": "added"
+          },
+          {
+            "file": ".wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988915998-ftuwk5.json",
+            "patch": "Index: .wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988915998-ftuwk5.json\n===================================================================\n--- .wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988915998-ftuwk5.json\t\n+++ .wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988915998-ftuwk5.json\t\n@@ -0,0 +1,11 @@\n+{\n+  \"requirementId\": \"req-1\",\n+  \"content\": \"Wrote file successfully.\",\n+  \"type\": \"TOOL_OUTPUT\",\n+  \"source\": \"execution-engine\",\n+  \"id\": \"ev-1793988915998-ftuwk5\",\n+  \"status\": \"unverified\",\n+  \"createdAt\": \"2026-11-06T18:15:15.998Z\",\n+  \"experimentId\": null,\n+  \"observationId\": \"Omw5aoise9ij4\"\n+}\n\\ No newline at end of file\n",
+            "additions": 11,
+            "deletions": 0,
+            "status": "added"
+          },
+          {
+            "file": ".wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988917207-864de3.json",
+            "patch": "Index: .wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988917207-864de3.json\n===================================================================\n--- .wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988917207-864de3.json\t\n+++ .wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988917207-864de3.json\t\n@@ -0,0 +1,11 @@\n+{\n+  \"requirementId\": \"req-1\",\n+  \"content\": \"✔ suma dos números positivos (0.730851ms)\\n✔ suma números negativos (0.117769ms)\\n✔ suma con cero (0.12568ms)\\nℹ tests 3\\nℹ suites 0\\nℹ pass 3\\nℹ fail 0\\nℹ cancelled 0\\nℹ skipped 0\\nℹ todo 0\\nℹ duration_ms 57.660061\\n\",\n+  \"type\": \"TOOL_OUTPUT\",\n+  \"source\": \"execution-engine\",\n+  \"id\": \"ev-1793988917207-864de3\",\n+  \"status\": \"unverified\",\n+  \"createdAt\": \"2026-11-06T18:15:17.207Z\",\n+  \"experimentId\": null,\n+  \"observationId\": \"Omw5aojpzuy64\"\n+}\n\\ No newline at end of file\n",
+            "additions": 11,
+            "deletions": 0,
+            "status": "added"
+          },
+          {
+            "file": "add.js",
+            "patch": "Index: add.js\n===================================================================\n--- add.js\t\n+++ add.js\t\n@@ -0,0 +1,3 @@\n+export function add(a, b) {\n+  return a + b;\n+}\n",
+            "additions": 3,
+            "deletions": 0,
+            "status": "added"
+          },
+          {
+            "file": "add.test.mjs",
+            "patch": "Index: add.test.mjs\n===================================================================\n--- add.test.mjs\t\n+++ add.test.mjs\t\n@@ -0,0 +1,16 @@\n+import test from \"node:test\";\n+import assert from \"node:assert/strict\";\n+\n+import { add } from \"./add.js\";\n+\n+test(\"suma dos números positivos\", () => {\n+  assert.equal(add(2, 3), 5);\n+});\n+\n+test(\"suma números negativos\", () => {\n+  assert.equal(add(-2, -3), -5);\n+});\n+\n+test(\"suma con cero\", () => {\n+  assert.equal(add(7, 0), 7);\n+});\n",
+            "additions": 16,
+            "deletions": 0,
+            "status": "added"
+          }
+        ]
+      },
+      "agent": "build",
+      "model": {
+        "providerID": "omni",
+        "modelID": "cost-saver"
+      }
+    },
+    "parts": [
+      {
+        "id": "prt_1b21258ab001VUIycWjxjSZQRt",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b21258aa001n1qGAqYSYIDiRE",
+        "type": "text",
+        "text": "contract approve"
+      },
+      {
+        "id": "prt_8ee6fe783e7936b4",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b21258aa001n1qGAqYSYIDiRE",
+        "type": "text",
+        "text": "[wam] [wam continuation] Contexto reconstruido (no-changes)\n\n[wam N2 task]\n# Live Task Context\ntask: task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v — IMPLEMENTING / APPROVED\nreq: 2 pend de 2\nnext: Implementá add.js con una función que sume dos números y add.test.mjs usando ... (req-1 pending)\n\n[wam delegation] PROPUESTA sin fricción: por defecto, delegá cada req pendiente independiente a un subagente via Task, en paralelo. Contexto justo por subagente: SOLO objetivo del req + dominio/archivos relevantes + criterio de aceptación; nunca el historial completo. No delegues tareas triviales (≤1 edición): resolvelas inline. La sesión principal puede editar/escribir inline sin pedir permiso. Fallback: secuencial → tier más barato → inline con evidencia. Nunca abortar en silencio por fallo de delegación.\n\n  req-1 → Task(parallel) \"Implementá add.js con una función que sume dos números y add.test.mjs usando node:test\" [contexto: tests]\n\n  req-2 → Task(parallel) \"Agregar tests para el cambio\" [contexto: tests]\n",
+        "synthetic": true,
+        "metadata": {
+          "wam": true,
+          "wamMessageId": "msg_1b21258aa001n1qGAqYSYIDiRE",
+          "wamPhase": "emit"
+        }
+      },
+      {
+        "id": "prt_a32337cff56ca5db",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b21258aa001n1qGAqYSYIDiRE",
+        "type": "text",
+        "text": "[wam] {\"ok\":true,\"status\":\"APPROVED\",\"phase\":\"IMPLEMENTING\"}",
+        "synthetic": false,
+        "metadata": {
+          "wam": true,
+          "wamMessageId": null,
+          "wamPhase": "emit"
+        }
+      }
+    ]
+  },
+  {
+    "info": {
+      "id": "msg_1b21258c50012pKeiIB3VPqEdH",
+      "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+      "role": "assistant",
+      "time": {
+        "created": 1793988909253,
+        "completed": 1793988912477
+      },
+      "parentID": "msg_1b21258aa001n1qGAqYSYIDiRE",
+      "modelID": "cost-saver",
+      "providerID": "omni",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/tmp/wam-web-e2e-fixture-FtnEUq",
+        "root": "/tmp/wam-web-e2e-fixture-FtnEUq"
+      },
+      "cost": 0,
+      "tokens": {
+        "total": 27488,
+        "input": 345,
+        "output": 51,
+        "reasoning": 84,
+        "cache": {
+          "read": 27008,
+          "write": 0
+        }
+      },
+      "finish": "tool-calls"
+    },
+    "parts": [
+      {
+        "id": "prt_1b2125ce2001icoFnNRg7TjdF8",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b21258c50012pKeiIB3VPqEdH",
+        "type": "step-start",
+        "snapshot": "22e4bfde7ead9b31f259a13259fb90cc3699c266"
+      },
+      {
+        "id": "prt_1b21260c4001yWserAEKwUbMPB",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b21258c50012pKeiIB3VPqEdH",
+        "type": "reasoning",
+        "text": "Approved. Now implement. These two requirements are essentially one task (add.js + test file). It's trivial (2 edits) — resolve inline per delegation guidance. But I need to check existing files first. Let me look at directory.\n\nI'm orchestrator with delegation protocol, but WAM says trivial ≤1 edit inline; this is 2 small files. I can do inline. Let me check dir.",
+        "time": {
+          "start": 1793988911300,
+          "end": 1793988912148
+        }
+      },
+      {
+        "id": "prt_1b212641d001IEFnyT279wQEme",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b21258c50012pKeiIB3VPqEdH",
+        "type": "tool",
+        "callID": "chatcmpl-tool-881e8259d4f8e249",
+        "tool": "bash",
+        "state": {
+          "status": "completed",
+          "input": {
+            "command": "ls -la && cat package.json 2>/dev/null || true"
+          },
+          "output": "total 8\ndrwx------     4 nicolas nicolas    120 Nov  6 15:14 .\ndrwxrwxrwt 18419 root    root    377560 Nov  6 15:15 ..\ndrwxr-xr-x     7 nicolas nicolas    260 Nov  6 15:14 .git\ndrwxr-xr-x     9 nicolas nicolas    240 Nov  6 15:15 .wam\n-rw-r--r--     1 nicolas nicolas     22 Nov  6 15:14 README.md\n-rw-r--r--     1 nicolas nicolas     82 Nov  6 15:14 package.json\n{\n  \"type\": \"module\",\n  \"scripts\": {\n    \"test\": \"node --test add.test.mjs\"\n  }\n}\n",
+          "title": "ls -la && cat package.json 2>/dev/null || true",
+          "metadata": {
+            "output": "total 8\ndrwx------     4 nicolas nicolas    120 Nov  6 15:14 .\ndrwxrwxrwt 18419 root    root    377560 Nov  6 15:15 ..\ndrwxr-xr-x     7 nicolas nicolas    260 Nov  6 15:14 .git\ndrwxr-xr-x     9 nicolas nicolas    240 Nov  6 15:15 .wam\n-rw-r--r--     1 nicolas nicolas     22 Nov  6 15:14 README.md\n-rw-r--r--     1 nicolas nicolas     82 Nov  6 15:14 package.json\n{\n  \"type\": \"module\",\n  \"scripts\": {\n    \"test\": \"node --test add.test.mjs\"\n  }\n}\n",
+            "exit": 0,
+            "truncated": false
+          },
+          "time": {
+            "start": 1793988912373,
+            "end": 1793988912438
+          }
+        }
+      },
+      {
+        "id": "prt_1b212654e001ZsdfOxeS7OrNvy",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b21258c50012pKeiIB3VPqEdH",
+        "type": "step-finish",
+        "reason": "tool-calls",
+        "snapshot": "f68746379940f414700469dae795a525369eb1e8",
+        "cost": 0,
+        "tokens": {
+          "total": 27488,
+          "input": 345,
+          "output": 51,
+          "reasoning": 84,
+          "cache": {
+            "read": 27008,
+            "write": 0
+          }
+        }
+      },
+      {
+        "id": "prt_1b212655b001Dl8a5yleVRlz94",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b21258c50012pKeiIB3VPqEdH",
+        "type": "patch",
+        "hash": "22e4bfde7ead9b31f259a13259fb90cc3699c266",
+        "files": [
+          "/tmp/wam-web-e2e-fixture-FtnEUq/.wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/cognition/observations.jsonl",
+          "/tmp/wam-web-e2e-fixture-FtnEUq/.wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988912434-vq04ha.json"
+        ]
+      }
+    ]
+  },
+  {
+    "info": {
+      "id": "msg_1b212655f001KxSvIy3chgmtVA",
+      "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+      "role": "assistant",
+      "time": {
+        "created": 1793988912479,
+        "completed": 1793988916036
+      },
+      "parentID": "msg_1b21258aa001n1qGAqYSYIDiRE",
+      "modelID": "cost-saver",
+      "providerID": "omni",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/tmp/wam-web-e2e-fixture-FtnEUq",
+        "root": "/tmp/wam-web-e2e-fixture-FtnEUq"
+      },
+      "cost": 0,
+      "tokens": {
+        "total": 28000,
+        "input": 290,
+        "output": 246,
+        "reasoning": 72,
+        "cache": {
+          "read": 27392,
+          "write": 0
+        }
+      },
+      "finish": "tool-calls"
+    },
+    "parts": [
+      {
+        "id": "prt_1b2126974001neKWybz30I4gL2",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b212655f001KxSvIy3chgmtVA",
+        "type": "step-start",
+        "snapshot": "f68746379940f414700469dae795a525369eb1e8"
+      },
+      {
+        "id": "prt_1b2126b7a001mIIZCtmvpQAJQR",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b212655f001KxSvIy3chgmtVA",
+        "type": "reasoning",
+        "text": "Empty repo, type module. Implement add.js and add.test.mjs.\n\nNeed to decide export style. ESM. Export default or named? Use named export `sum`? Task says \"una función que sume dos números\". Name `add` matches file. Let's export function add(a,b). Test imports { add }.\n\nWrite both files.",
+        "time": {
+          "start": 1793988914042,
+          "end": 1793988915010
+        }
+      },
+      {
+        "id": "prt_1b2126f49001twJE3CmjvkehkW",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b212655f001KxSvIy3chgmtVA",
+        "type": "tool",
+        "callID": "chatcmpl-tool-97f37a041037bf2b",
+        "tool": "write",
+        "state": {
+          "status": "completed",
+          "input": {
+            "filePath": "/tmp/wam-web-e2e-fixture-FtnEUq/add.js",
+            "content": "export function add(a, b) {\n  return a + b;\n}\n"
+          },
+          "output": "Wrote file successfully.",
+          "title": "add.js",
+          "metadata": {
+            "diagnostics": {},
+            "filepath": "/tmp/wam-web-e2e-fixture-FtnEUq/add.js",
+            "exists": false,
+            "truncated": false
+          },
+          "time": {
+            "start": 1793988915042,
+            "end": 1793988915061
+          }
+        }
+      },
+      {
+        "id": "prt_1b2126f680013HmHskiTgXl8yH",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b212655f001KxSvIy3chgmtVA",
+        "type": "tool",
+        "callID": "chatcmpl-tool-b661b08382a42c0a",
+        "tool": "write",
+        "state": {
+          "status": "completed",
+          "input": {
+            "filePath": "/tmp/wam-web-e2e-fixture-FtnEUq/add.test.mjs",
+            "content": "import test from \"node:test\";\nimport assert from \"node:assert/strict\";\n\nimport { add } from \"./add.js\";\n\ntest(\"suma dos números positivos\", () => {\n  assert.equal(add(2, 3), 5);\n});\n\ntest(\"suma números negativos\", () => {\n  assert.equal(add(-2, -3), -5);\n});\n\ntest(\"suma con cero\", () => {\n  assert.equal(add(7, 0), 7);\n});\n"
+          },
+          "output": "Wrote file successfully.",
+          "title": "add.test.mjs",
+          "metadata": {
+            "diagnostics": {},
+            "filepath": "/tmp/wam-web-e2e-fixture-FtnEUq/add.test.mjs",
+            "exists": false,
+            "truncated": false
+          },
+          "time": {
+            "start": 1793988915993,
+            "end": 1793988915999
+          }
+        }
+      },
+      {
+        "id": "prt_1b2127335001zxxILGzEMbR1FY",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b212655f001KxSvIy3chgmtVA",
+        "type": "step-finish",
+        "reason": "tool-calls",
+        "snapshot": "f3e8b7e8bc1b26cde47c2cdbd6f5147e43bdc3b4",
+        "cost": 0,
+        "tokens": {
+          "total": 28000,
+          "input": 290,
+          "output": 246,
+          "reasoning": 72,
+          "cache": {
+            "read": 27392,
+            "write": 0
+          }
+        }
+      },
+      {
+        "id": "prt_1b2127342001YjJvedlYBeTj45",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b212655f001KxSvIy3chgmtVA",
+        "type": "patch",
+        "hash": "f68746379940f414700469dae795a525369eb1e8",
+        "files": [
+          "/tmp/wam-web-e2e-fixture-FtnEUq/.wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/cognition/observations.jsonl",
+          "/tmp/wam-web-e2e-fixture-FtnEUq/.wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988915059-m75yso.json",
+          "/tmp/wam-web-e2e-fixture-FtnEUq/.wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988915998-ftuwk5.json",
+          "/tmp/wam-web-e2e-fixture-FtnEUq/add.js",
+          "/tmp/wam-web-e2e-fixture-FtnEUq/add.test.mjs"
+        ]
+      }
+    ]
+  },
+  {
+    "info": {
+      "id": "msg_1b2127347001mL2DSbVBzwR4hD",
+      "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+      "role": "assistant",
+      "time": {
+        "created": 1793988916039,
+        "completed": 1793988917243
+      },
+      "parentID": "msg_1b21258aa001n1qGAqYSYIDiRE",
+      "modelID": "cost-saver",
+      "providerID": "omni",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/tmp/wam-web-e2e-fixture-FtnEUq",
+        "root": "/tmp/wam-web-e2e-fixture-FtnEUq"
+      },
+      "cost": 0,
+      "tokens": {
+        "total": 28071,
+        "input": 123,
+        "output": 44,
+        "reasoning": 0,
+        "cache": {
+          "read": 27904,
+          "write": 0
+        }
+      },
+      "finish": "tool-calls"
+    },
+    "parts": [
+      {
+        "id": "prt_1b21276ab001umrl6XVkKUAv5d",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b2127347001mL2DSbVBzwR4hD",
+        "type": "step-start",
+        "snapshot": "f3e8b7e8bc1b26cde47c2cdbd6f5147e43bdc3b4"
+      },
+      {
+        "id": "prt_1b21276b3001GNNT6yi2zC7utu",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b2127347001mL2DSbVBzwR4hD",
+        "type": "tool",
+        "callID": "chatcmpl-tool-8846b085f526274c",
+        "tool": "bash",
+        "state": {
+          "status": "completed",
+          "input": {
+            "command": "node --test add.test.mjs"
+          },
+          "output": "✔ suma dos números positivos (0.730851ms)\n✔ suma números negativos (0.117769ms)\n✔ suma con cero (0.12568ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 57.660061\n",
+          "title": "node --test add.test.mjs",
+          "metadata": {
+            "output": "✔ suma dos números positivos (0.730851ms)\n✔ suma números negativos (0.117769ms)\n✔ suma con cero (0.12568ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 57.660061\n",
+            "exit": 0,
+            "truncated": false
+          },
+          "time": {
+            "start": 1793988917079,
+            "end": 1793988917208
+          }
+        }
+      },
+      {
+        "id": "prt_1b21277ed0017ffYxR4j9yokBp",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b2127347001mL2DSbVBzwR4hD",
+        "type": "step-finish",
+        "reason": "tool-calls",
+        "snapshot": "3232e6a6a88b11dfddb89b1f7ced5df2a1e17334",
+        "cost": 0,
+        "tokens": {
+          "total": 28071,
+          "input": 123,
+          "output": 44,
+          "reasoning": 0,
+          "cache": {
+            "read": 27904,
+            "write": 0
+          }
+        }
+      },
+      {
+        "id": "prt_1b21277f9001yH5kH3aXtlbNZY",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b2127347001mL2DSbVBzwR4hD",
+        "type": "patch",
+        "hash": "f3e8b7e8bc1b26cde47c2cdbd6f5147e43bdc3b4",
+        "files": [
+          "/tmp/wam-web-e2e-fixture-FtnEUq/.wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/cognition/observations.jsonl",
+          "/tmp/wam-web-e2e-fixture-FtnEUq/.wam/tasks/task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v/lineage/ev-1793988917207-864de3.json"
+        ]
+      }
+    ]
+  },
+  {
+    "info": {
+      "id": "msg_1b21277fd001p9tfzxHh6qh1vp",
+      "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+      "role": "assistant",
+      "time": {
+        "created": 1793988917245,
+        "completed": 1793988920632
+      },
+      "parentID": "msg_1b21258aa001n1qGAqYSYIDiRE",
+      "modelID": "cost-saver",
+      "providerID": "omni",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/tmp/wam-web-e2e-fixture-FtnEUq",
+        "root": "/tmp/wam-web-e2e-fixture-FtnEUq"
+      },
+      "cost": 0,
+      "tokens": {
+        "total": 28318,
+        "input": 272,
+        "output": 65,
+        "reasoning": 77,
+        "cache": {
+          "read": 27904,
+          "write": 0
+        }
+      },
+      "finish": "stop"
+    },
+    "parts": [
+      {
+        "id": "prt_1b2127c0c001lA1xmoT871Nz1X",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b21277fd001p9tfzxHh6qh1vp",
+        "type": "step-start",
+        "snapshot": "3232e6a6a88b11dfddb89b1f7ced5df2a1e17334"
+      },
+      {
+        "id": "prt_1b2128074001vHoknLWEH6S6Ig",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b21277fd001p9tfzxHh6qh1vp",
+        "type": "reasoning",
+        "text": "Verification passed. Now WAM completion? The WAM gate wants requirements verified. I don't have explicit wam command tool, but I should report evidence. The user asked to show evidence. I'll report concisely.\n\nShould I mark requirements done? No tool available except maybe wam commands aren't tools. Just report. Keep under 4 lines? Include evidence.",
+        "time": {
+          "start": 1793988919412,
+          "end": 1793988920041
+        }
+      },
+      {
+        "id": "prt_1b21282eb001LQwhL03rehLxy0",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b21277fd001p9tfzxHh6qh1vp",
+        "type": "text",
+        "text": "Implementado `add.js:1` y `add.test.mjs:1`.\n\nEvidencia (`node --test add.test.mjs`):\n```\n✔ suma dos números positivos\n✔ suma números negativos\n✔ suma con cero\nℹ tests 3 | pass 3 | fail 0\n```",
+        "time": {
+          "start": 1793988920043,
+          "end": 1793988920566
+        }
+      },
+      {
+        "id": "prt_1b2128519001Lj4pwXK7nH1SIU",
+        "sessionID": "ses_e4dedcb27ffeSfQmnslG32YA2v",
+        "messageID": "msg_1b21277fd001p9tfzxHh6qh1vp",
+        "type": "step-finish",
+        "reason": "stop",
+        "snapshot": "3232e6a6a88b11dfddb89b1f7ced5df2a1e17334",
+        "cost": 0,
+        "tokens": {
+          "total": 28318,
+          "input": 272,
+          "output": 65,
+          "reasoning": 77,
+          "cache": {
+            "read": 27904,
+            "write": 0
+          }
+        }
+      }
+    ]
+  }
+]

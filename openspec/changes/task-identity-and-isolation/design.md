@@ -15,3 +15,10 @@
 
 ## 4. Test Isolation
 - Create isolated temporary roots for tests so no two tests share `.wam/`.
+
+## 5. Loop Snapshot Isolation
+- A persisted loop snapshot is resumed only when `taskId` and `sessionId` match.
+  A foreign snapshot is discarded and a fresh loop state starts.
+- A same-attempt `STOPPED` snapshot still owns its stop decision so it surfaces
+  once; the recorded state then starts from fresh counters so the stop does not
+  leak into the next attempt.

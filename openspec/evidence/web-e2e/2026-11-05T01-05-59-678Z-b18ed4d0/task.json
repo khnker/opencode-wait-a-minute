@@ -1,0 +1,92 @@
+{
+  "contract": {
+    "status": "APPROVED",
+    "rigor": "NORMAL",
+    "requirements": [
+      "Escribí un README para agentes que explique cómo usar este proyecto. No implementes código; solo documentación"
+    ],
+    "verification": [
+      "Evidencia de satisfacción del contrato"
+    ],
+    "constraints": [
+      "solo documentación"
+    ],
+    "unknowns": [],
+    "assumptions": [],
+    "approvedBy": "bootstrap"
+  },
+  "questions": [],
+  "requirements": [
+    {
+      "id": "req-1",
+      "title": "Escribí un README para agentes que explique cómo usar este proyecto. No implementes código; solo documentación",
+      "status": "pending",
+      "evidence": []
+    }
+  ],
+  "persistentPolicies": [
+    "scope",
+    "verify",
+    "simplify"
+  ],
+  "activeGates": [
+    "scope-creep",
+    "surface-change",
+    "completion-gate",
+    "evidence-required",
+    "speculative-abstraction",
+    "unnecessary-deps"
+  ],
+  "phase": "IMPLEMENTING",
+  "nextAction": "Implementar — contrato bootstrap aprobado",
+  "lastAction": "Escribí un README para agentes que explique cómo usar este proyecto. No implementes código; solo documentación.",
+  "projectPath": "/tmp/wam-web-e2e-fixture-9u5PeP",
+  "outcomeContract": {
+    "taskId": "task-escribi-un-readme-para-agentes-que-explique-sess-HsTrSIMa",
+    "objective": "Escribí un README para agentes que explique cómo usar este proyecto. No implementes código; solo documentación",
+    "acceptanceCriteria": [
+      {
+        "id": "outcome-evaluation",
+        "description": "Task outcome verified by evidence",
+        "mandatory": true
+      }
+    ]
+  },
+  "executionIntent": "IMPLEMENT",
+  "dialogue": {
+    "version": 1,
+    "stage": "CONTRACTING",
+    "pendingQuestion": null,
+    "contributions": [
+      {
+        "kind": "constraint",
+        "text": "solo documentación.",
+        "confidence": 0.7
+      }
+    ],
+    "lastIntent": "PROVIDE_REQUIREMENT",
+    "updatedAt": 1793840763122
+  },
+  "cqeCalls": 1,
+  "cqeStats": {
+    "calls": 1,
+    "ok": 0,
+    "empty": 1,
+    "error": 0,
+    "timeout": 0,
+    "busy": 0,
+    "warming": 0
+  },
+  "permissionPreflight": {
+    "required": [
+      {
+        "type": "edit",
+        "reason": "La implementación aprobada requiere editar archivos"
+      }
+    ],
+    "status": "pending",
+    "granted": [],
+    "approvedAt": null
+  },
+  "permissionPreflightNotified": true
+}

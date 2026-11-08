@@ -638,3 +638,27 @@ test("handleMessage: mensaje no-DONE no encola avisos de completitud", async () 
 
   assert.equal(notices.length, 0);
 });
+
+test("handleMessage: resume sin binding lee el puntero con scope de sesión", async () => {
+  const deps = baseDeps();
+  let captured = null;
+  deps.readActiveTaskIdFresh = (root, options) => {
+    captured = { root, options };
+    return null;
+  };
+
+  const out = { message: {}, parts: [] };
+  await handleMessage(
+    {
+      sessionID: "s-resume-scope",
+      messageID: "m-resume-scope",
+      message: { parts: [{ type: "text", text: "sigamos" }] },
+    },
+    out,
+    deps,
+  );
+
+  assert.ok(captured, "resume sin binding debe consultar el puntero en disco");
+  assert.equal(captured.options?.sessionId, "s-resume-scope");
+  assert.equal(captured.options?.projectRoot, ROOT);
+});

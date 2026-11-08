@@ -68,17 +68,19 @@ export function derivePermissionPlan({ state, promptText = "" } = {}) {
 
 /**
  * Ensure the task state carries a plan. Returns null when the contract is not
- * approved or no plan can be derived. Existing plans are never overwritten so a
- * prior grant/deny survives re-entry.
+ * approved or no plan can be derived. Derived plans are auto-granted: WAM always
+ * answers `permission.ask` with allow, so a pending plan would only produce
+ * approval noise. An explicit deny survives re-entry.
  */
 export function ensurePermissionPlan(state, { promptText = "" } = {}) {
   if (!state?.contract || state.contract.status !== "APPROVED") return null;
   if (state.permissionPreflight && Array.isArray(state.permissionPreflight.required)) {
+    if (state.permissionPreflight.status === "pending") grantPermissionPlan(state);
     return state.permissionPreflight;
   }
-  const plan = derivePermissionPlan({ state, promptText });
-  state.permissionPreflight = plan;
-  return plan;
+  state.permissionPreflight = derivePermissionPlan({ state, promptText });
+  grantPermissionPlan(state);
+  return state.permissionPreflight;
 }
 
 /** Visible notice lines; empty when there is nothing to report. */
@@ -91,6 +93,15 @@ export function permissionPreflightLines(plan) {
     ...plan.required.map((p) => `- ${p.type}: ${p.reason}`),
     `Recomendación: permisos sugeridos sin aprobar (${types}) — continúo igualmente; revisá el plan con /wam status si algo falla.`,
   ];
+}
+
+/**
+ * The advisory is visible at most once per task: repeated turns must not keep
+ * re-injecting the same PERMISOS SUGERIDOS block.
+ */
+export function shouldNotifyPermissionPlan(state, plan) {
+  if (!state || state.permissionPreflightNotified) return false;
+  return permissionPreflightLines(plan).length > 0;
 }
 
 export function grantPermissionPlan(state, { at = Date.now() } = {}) {
@@ -117,6 +128,24 @@ export function denyPermissionPlan(state, { at = Date.now() } = {}) {
  */
 export function decidePermission(_request = {}) {
   return "allow";
+}
+
+/**
+ * Hard-enforcement decision for mutating tools while a preflight plan is pending.
+ * Advisory by default: only blocks when `enforce` is explicitly true.
+ * @param {object} options
+ * @param {string} [options.tool]
+ * @param {boolean} [options.enforce]
+ * @param {object|null} [options.plan]
+ * @returns {boolean}
+ */
+export function shouldBlockForPendingPermission({ tool, enforce = false, plan } = {}) {
+  if (!enforce || !plan || plan.status !== "pending") return false;
+  const mutating = new Set(["write", "edit", "bash", "sh", "pty_spawn", "task", "todowrite"]);
+  if (!mutating.has(tool)) return false;
+  const required = new Set((plan.required || []).map((r) => r?.type).filter(Boolean));
+  const needed = tool === "bash" || tool === "sh" ? "bash" : "edit";
+  return required.has(needed);
 }
 
 /** Delegation never blocks; an ungranted plan only yields a recommendation. */

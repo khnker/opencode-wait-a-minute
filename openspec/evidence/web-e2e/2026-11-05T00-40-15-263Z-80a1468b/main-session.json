@@ -1,0 +1,726 @@
+[
+  {
+    "info": {
+      "id": "msg_1a9263f9a001Wz7AMT8vGRFQwa",
+      "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+      "role": "user",
+      "time": {
+        "created": 1793839218586
+      },
+      "summary": {
+        "diffs": [
+          {
+            "file": ".wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/cognition/observations.jsonl",
+            "patch": "Index: .wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/cognition/observations.jsonl\n===================================================================\n--- .wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/cognition/observations.jsonl\t\n+++ .wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/cognition/observations.jsonl\t\n@@ -0,0 +1,1 @@\n+{\"id\":\"Omw2tk3nj6119\",\"experimentId\":null,\"result\":\"INCONCLUSIVE\",\"facts\":[\"ev-1793839223935-06uiv8\"],\"actual\":null,\"unexpected\":[],\"provenance\":\"agent-tool-read-success\",\"createdAt\":1793839223936}\n",
+            "additions": 1,
+            "deletions": 0,
+            "status": "added"
+          },
+          {
+            "file": ".wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/lineage/ev-1793839223935-06uiv8.json",
+            "patch": "Index: .wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/lineage/ev-1793839223935-06uiv8.json\n===================================================================\n--- .wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/lineage/ev-1793839223935-06uiv8.json\t\n+++ .wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/lineage/ev-1793839223935-06uiv8.json\t\n@@ -0,0 +1,11 @@\n+{\n+  \"requirementId\": \"req-1\",\n+  \"content\": \"<path>/tmp/wam-web-e2e-fixture-WLt1Q2/package.json</path>\\n<type>file</type>\\n<content>\\n1: {\\n2:   \\\"type\\\": \\\"module\\\",\\n3:   \\\"scripts\\\": {\\n4:     \\\"test\\\": \\\"node --test add.test.mjs\\\"\\n5:   }\\n6: }\\n\\n(End of file - total 6 lines)\\n</content>\",\n+  \"type\": \"TOOL_OUTPUT\",\n+  \"source\": \"execution-engine\",\n+  \"id\": \"ev-1793839223935-06uiv8\",\n+  \"status\": \"unverified\",\n+  \"createdAt\": \"2026-11-05T00:40:23.935Z\",\n+  \"experimentId\": null,\n+  \"observationId\": \"Omw2tk3nj6119\"\n+}\n\\ No newline at end of file\n",
+            "additions": 11,
+            "deletions": 0,
+            "status": "added"
+          },
+          {
+            "file": ".wam/traces/default.json",
+            "patch": "Index: .wam/traces/default.json\n===================================================================\n--- .wam/traces/default.json\t\n+++ .wam/traces/default.json\t\n@@ -0,0 +1,119 @@\n+{\n+  \"traceId\": \"default\",\n+  \"timestamp\": \"2026-11-05T00:40:18.617Z\",\n+  \"entries\": [\n+    {\n+      \"type\": \"CONCEPT_EXTRACTION\",\n+      \"timestamp\": \"2026-11-05T00:40:18.617Z\",\n+      \"concept\": \"Analiza el archivo package.json del proyecto y entrega un diagnóstico. No implementes nada ni modifiques archivos. Si encontrás un problema, indicá cómo resolverlo. Requisito: la versión del proyecto debe ser exactamente 999.0.0.\",\n+      \"metadata\": {\n+        \"source\": \"user\"\n+      }\n+    },\n+    {\n+      \"type\": \"CANDIDATE_RETRIEVAL\",\n+      \"timestamp\": \"2026-11-05T00:40:18.617Z\",\n+      \"query\": \"Analiza el archivo package.json del proyecto y entrega un diagnóstico. No implementes nada ni modifiques archivos. Si encontrás un problema, indicá cómo resolverlo. Requisito: la versión del proyecto debe ser exactamente 999.0.0.\",\n+      \"candidatesCount\": 491,\n+      \"metadata\": {\n+        \"source\": \"registry\"\n+      }\n+    },\n+    {\n+      \"type\": \"SELECTION_DECISION\",\n+      \"timestamp\": \"2026-11-05T00:40:18.622Z\",\n+      \"candidateId\": \"codebase-design\",\n+      \"evidenceClassification\": 0,\n+      \"reason\": {\n+        \"reason\": \"Skill base (loadStrategy: \\\"base\\\") — siempre seleccionada\"\n+      },\n+      \"metadata\": {}\n+    },\n+    {\n+      \"type\": \"SELECTION_DECISION\",\n+      \"timestamp\": \"2026-11-05T00:40:18.623Z\",\n+      \"candidateId\": \"writing-for-agents\",\n+      \"evidenceClassification\": 0,\n+      \"reason\": {\n+        \"reason\": \"Skill base (loadStrategy: \\\"base\\\") — siempre seleccionada\"\n+      },\n+      \"metadata\": {}\n+    },\n+    {\n+      \"type\": \"SELECTION_DECISION\",\n+      \"timestamp\": \"2026-11-05T00:40:18.664Z\",\n+      \"candidateId\": \"dietrichgebert-ponytail-ponytail\",\n+      \"evidenceClassification\": 0,\n+      \"reason\": {\n+        \"reason\": \"Skill base (loadStrategy: \\\"base\\\") — siempre seleccionada\"\n+      },\n+      \"metadata\": {}\n+    },\n+    {\n+      \"type\": \"SELECTION_DECISION\",\n+      \"timestamp\": \"2026-11-05T00:40:18.664Z\",\n+      \"candidateId\": \"codebase-design\",\n+      \"evidenceClassification\": 0,\n+      \"reason\": {\n+        \"reason\": \"Skill base (loadStrategy: \\\"base\\\") — siempre seleccionada\"\n+      },\n+      \"metadata\": {}\n+    },\n+    {\n+      \"type\": \"SELECTION_DECISION\",\n+      \"timestamp\": \"2026-11-05T00:40:18.664Z\",\n+      \"candidateId\": \"writing-for-agents\",\n+      \"evidenceClassification\": 0,\n+      \"reason\": {\n+        \"reason\": \"Skill base (loadStrategy: \\\"base\\\") — siempre seleccionada\"\n+      },\n+      \"metadata\": {}\n+    },\n+    {\n+      \"type\": \"SELECTION_DECISION\",\n+      \"timestamp\": \"2026-11-05T00:40:18.664Z\",\n+      \"candidateId\": \"dietrichgebert-ponytail-ponytail\",\n+      \"evidenceClassification\": 0,\n+      \"reason\": {\n+        \"reason\": \"Skill base (loadStrategy: \\\"base\\\") — siempre seleccionada\"\n+      },\n+      \"metadata\": {}\n+    },\n+    {\n+      \"type\": \"SELECTION_DECISION\",\n+      \"timestamp\": \"2026-11-05T00:40:18.665Z\",\n+      \"evidenceClassification\": 0,\n+      \"reason\": {\n+        \"reason\": \"señales insuficientes (trigger:implement)\"\n+      },\n+      \"metadata\": {}\n+    },\n+    {\n+      \"type\": \"SELECTION_DECISION\",\n+      \"timestamp\": \"2026-11-05T00:40:18.665Z\",\n+      \"evidenceClassification\": 0,\n+      \"reason\": {\n+        \"reason\": \"señales insuficientes (keyword:package)\"\n+      },\n+      \"metadata\": {}\n+    },\n+    {\n+      \"type\": \"SELECTION_DECISION\",\n+      \"timestamp\": \"2026-11-05T00:40:18.665Z\",\n+      \"evidenceClassification\": 0,\n+      \"reason\": {\n+        \"reason\": \"señales insuficientes (keyword:json)\"\n+      },\n+      \"metadata\": {}\n+    },\n+    {\n+      \"type\": \"SELECTION_DECISION\",\n+      \"timestamp\": \"2026-11-05T00:40:18.665Z\",\n+      \"evidenceClassification\": 0,\n+      \"reason\": {\n+        \"reason\": \"señales insuficientes (keyword:implement)\"\n+      },\n+      \"metadata\": {}\n+    }\n+  ]\n+}\n\\ No newline at end of file\n",
+            "additions": 119,
+            "deletions": 0,
+            "status": "added"
+          }
+        ]
+      },
+      "agent": "build",
+      "model": {
+        "providerID": "omni",
+        "modelID": "cost-saver"
+      }
+    },
+    "parts": [
+      {
+        "id": "prt_1a9263f9e001n7EHJP21AXuxmE",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a9263f9a001Wz7AMT8vGRFQwa",
+        "type": "text",
+        "text": "Analiza el archivo package.json del proyecto y entrega un diagnóstico. No implementes nada ni modifiques archivos. Si encontrás un problema, indicá cómo resolverlo. Requisito: la versión del proyecto debe ser exactamente 999.0.0."
+      },
+      {
+        "id": "prt_cbb9829f196f17dc",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a9263f9a001Wz7AMT8vGRFQwa",
+        "type": "text",
+        "text": "[wam][start]\n[wam N0 policy] autonomy loop | 0 friction: advisory only (U1)\n[wam N1 project] Proyecto: - Proyecto wam-web-e2e-fixture-WLt1Q2 (wam-web-e2e-fixture-WLt1Q2)\n[wam N2 task]\ntask: task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE — IMPLEMENTING / APPROVED\nreq: 1/1 pend | next: Analiza el archivo package.json del proyecto y entrega un diagnóstico (req-1 pen\n[wam N3 user_decided] constraint-1 — constraint: constraint-1\n  content: Requisito: la versión del proyecto debe ser exactamente 999.0.0\n[wam N3 user_decided] req-1 — requirement: req-1\n  content: Analiza el archivo package.json del proyecto y entrega un diagnóstico\n[wam N3 skill] codebase-design — Skill base (loadStrategy: \"base\")\n# Codebase Design\n\nDesign **deep modules**: a lot of behaviour behind a small interface, placed at a clean seam, testable through that interface. Aim for leverage for callers, locality for maintainers, and testability for everyone.\n\n## Glossary\n\nUse these terms exactly: don't substitute \"component,\" \"service,\" \"API,\" or \"boundary.\"\n\n**Module**: anything with an interface and an implementation; deliberately scale-agnostic (a function, class, package, or tier-spanning slice). _Avoid_: unit, component, service.\n\n**Interface**: everything a caller must know to use the module correctly: the type signature, plus invariants, ordering constraints, error modes, required configuration, and performance characteristics. _Avoid_: API, signature (too narrow: they refer only to the type-level surface).\n\n**Implementation**: the code inside a module. Distinct from **Adapter**: a small adapter can have a large implementation (a Postgres repo); a large adapter can have a small implementation (an in-memory fake). Use \"adapter\" when the seam is the topic, \"implementation\" otherwise.\n\n**Depth**: leverage at the interface: the behaviour a caller or test can exercise per unit of interface learned. A module is **deep** when a large amount of behaviour sits behind a small interface, **shallow** when the interface is nearly as complex as the implementation.\n\n**Seam** _(Michael Feathers)_: a place where you can alter behaviour without editing in that place; the location at which a module's interface lives. Where to put the seam is a design decision distinct from what goes behind it. _Avoid_: boundary (overloaded with DDD's bounded context).\n\n**Adapter**: a concrete thing that satisfies an interface at a seam. Describes a role, not a substance.\n\n**Leverage**: what callers get from depth: more capability per unit of interface learned; one implementation pays back across N call sites and M tests.\n\n**Locality**: what maintainers get from depth: change, bugs, knowledge, and verification concentrate in one place rather than spreading across callers. Fix once, fixed everywhere.\n\n## Deep vs shallow\n\nDeep = small interface + lots of implementation. Shallow = large interface + little implementation (avoid).\n\nWhen designing an interface, ask: can I reduce the number of methods, simplify the parameters, or hide more complexity inside?\n\n## Principles\n\n- **Depth is a property of the interface, not the implementation.** A deep module can be internally composed of small, mockable, swappable parts; they just aren't part of the interface. A module can have **internal seams** (private to its implementation, used by its own tests) as well as the **external seam** at its interface.\n- **The deletion test.** Imagine deleting the module. If complexity vanishes, it was a pass-through. If complexity reappears across N callers, it was earning its keep.\n- **The interface is the test surface.** Callers and tests cross the same seam. If you want to test *past* the interface, the module is probably the wrong shape.\n- **One adapter means a hypothetical seam. Two adapters means a real one.** Don't introduce a seam unless something actually varies across it.\n\n## Designing for testability\n\n1. **Accept dependencies, don't create them.** Pass collaborators in as parameters; a module that constructs its own gateway cannot be tested in isolation.\n2. **Return results, don't produce side effects.** Return new values rather than mutating shared state.\n3. **Small surface area.** Fewer methods and params mean fewer tests and simpler setup.\n\n## Relationships\n\n- A **Module** has exactly one **Interface** (the surface it presents to callers and tests).\n- **Depth** is a property of a **Module**, measured against its **Interface**.\n- A **Seam** is where a **Module**'s **Interface** lives.\n- An **Adapter** sits at a **Seam** and satisfies the **Interface**.\n- **Depth** produces **Leverage** for callers and **Locality** for maintainers.\n\n## Rejected framings\n\n- **Depth as ratio of implementation-lines to interface-lines** (Ousterhout): rewards padding the implementation. We use depth-as-leverage instead.\n- **\"Interface\" as the TypeScript `interface` keyword or a class's public methods**: too narrow: interface here includes every fact a caller must know.\n- **\"Boundary\"**: overloaded with DDD's bounded context. Say **seam** or **interface**.\n\n## Going deeper\n\n- **Deepening a cluster given its dependencies**, see [DEEPENING.md](DEEPENING.md): dependency categories, seam discipline, and replace-don't-layer testing.\n- **Exploring alternative interfaces**, see [DESIGN-IT-TWICE.md](DESIGN-IT-TWICE.md): spin up parallel sub-agents to design the interface several radically different ways, then compare on depth, locality, and seam placement.\n[wam N3 skill] writing-for-agents — Skill base (loadStrategy: \"base\")\nReference for writing any document an agent consumes: a skill, an `AGENTS.md` / `CLAUDE.md`, a doc reached by a pointer. The packaging differs; the writing does not: the same levers make each one predictable, since the agent takes the same _process_ every run rather than producing the same output.\n\nWhen the document you're writing is a skill, read [`SKILL-MECHANICS.md`](SKILL-MECHANICS.md) for frontmatter, invocation choice, and router skills.\n\n## Context pointers\n\nA **context pointer** is a reference held in the agent's context that names some out-of-context material and encodes the condition for reaching it. A skill's description is one; a line in `AGENTS.md` naming a doc is the same object. The pointer's _wording_, not its target, decides when the agent reaches the material, and how reliably. A must-have target behind a weakly worded pointer is a variance bug: sharpen the wording first, and inline the material only if sharpening fails.\n\nA pointer does two jobs: state what the material is, and list the **branches** that should trigger reaching it (a branch is a distinct case the document handles, so different runs take different paths through it). Every word of an always-loaded pointer costs on every turn, so it earns even harder pruning than the body:\n\n- **Front-load the leading word**: the pointer is where it does its triggering work.\n- **One trigger per branch.** Synonyms that rename a single branch are one branch written twice; collapse them and keep only genuinely distinct branches.\n- **Cut identity the body already carries.**\n\n## The two loads\n\nEvery document and pointer you add spends one of two budgets:\n\n- **Context load** is the cost of always-loaded material on the agent's window: an `AGENTS.md` line, a skill description, anything sitting in context every turn, spending tokens and attention whether or not it fires.\n- **Cognitive load** is the cost on the human: which documents exist and when to reach for each. The human is the index. Not a cost to minimise: it is the price of human agency; spend it where human judgement matters, remove it where it does not.\n\nMaterial reached only through a pointer escapes context load at the price of the pointer's own line; material with no pointer at all rides entirely on cognitive load.\n\n## Information hierarchy\n\nA document is built from two content types: **steps** (the ordered actions the agent performs) and **reference** (definitions, rules, facts consulted on demand). The two mix freely: all steps (a recipe), all reference (a review's rules, this skill), or both. The core decision is where each piece sits on the **information hierarchy**, a ladder ranked by how immediately the agent needs the material:\n\n1. **In-file step** is the primary tier: what the agent does, in order.\n2. **In-file reference** is consulted on demand. Often a legitimately flat peer-set (every rule of a review on one rung), which is a fine arrangement, not a smell.\n3. **Disclosed reference** is pushed out into a separate file, reached by a context pointer, loaded only when the pointer fires. Spans a sibling file in the same folder through fully external reference that lives anywhere and any document can point at.\n\nPush too little down and the top bloats; push too much and you hide material the agent actually needs. That tension is the whole decision.\n\n**Progressive disclosure** is the move down the ladder (out of the main file and behind a pointer) so the top stays legible. Not primarily a token optimisation: it is how the hierarchy is protected. Branching is the cleanest disclosure test: inline what every branch needs, and push behind a pointer what only some branches reach. When a document has steps, in-file reference that should be disclosed buries them and turns attending to them into a coin-flip: a variance lever, not just a legibility one.\n\n**Co-location** is the within-file companion: where the ladder decides _how far down_ a piece sits, co-location decides _what sits beside it_ once there. Keep a concept's definition, rules, and caveats under one heading rather than scattered, so reading one part brings its neighbours with it. The test: the document should read like documentation written for the agent. Grouped material reads that way; scattered material does not. (Distinct from duplication: that repeats one meaning in two places; scattering fragments one meaning across many.)\n\n**Sprawl** is the failure mode here: a document simply too long, even when every line is live and unique. Attention thins across the excess, and every extra line is one more to keep relevant. The cure is the ladder: disclose reference behind pointers, and split by branch or sequence so each path carries only what it needs.\n\n## Steps and completion criteria\n\nEvery step ends on a **completion criterion**, the condition that tells the agent the work is done. Two properties make it a lever:\n\n- **Clarity**: can the agent tell done from not-done? A vague bound (\"understanding reached\") invites **premature completion**: ending the step before it is genuinely done, attention slipping to _being done_. The visible steps still ahead (the **post-completion steps**) supply the pull; the criterion's clarity is the resistance. Defend in order: **sharpen the bound first** (local and cheap); only if it is irreducibly fuzzy _and_ you observe the rush, hide the later steps by splitting the sequence. Hiding only works across a real context boundary (a hand-off or a subagent dispatch; an inline call leaves the later steps in context and clears nothing).\n- **Demand**: how much it requires. \"Every modified model accounted for\" forces thorough work where \"produce a change list\" does not. Demand drives **legwork** (the digging the agent does within the work, latent in the wording rather than written as its own step), and it is not step-bound: \"every rule applied\" binds a body of flat reference just as \"every step done\" binds a sequence, which is how an all-reference document still carries an exhaustiveness bar.\n\nThe strongest criteria are both checkable and exhaustive.\n\n## When to split\n\nSplitting one document into two spends one of the two loads, so split only when the cut earns it:\n\n- **By sequence**: split a run of steps where the post-completion steps tempt the agent to rush the one in front of it. Keeping them out of view drives more legwork on the current task. Beware the reverse: merging sequences exposes each step's later steps to what follows, inviting premature completion.\n- **By invocation**, skill-specific: see [`SKILL-MECHANICS.md`](SKILL-MECHANICS.md).\n\n## Leading words\n\nA **leading word** is a compact concept already living in the model's pretraining that the agent thinks with while running the document (_lesson_, _fog of war_, _tracer bullets_). Repeated as a token, never as a sentence, it accumulates a distributed definition and anchors a whole region of behaviour in the fewest tokens, by recruiting priors the model already holds. Coining your own works if you define it clearly, but a made-up word recruits no priors: you pay in definition tokens what a pretrained word gives free; reach for an existing word first.\n\nIt anchors twice. In the body, _execution_: the agent reaches for the same behaviour every time the word appears, and inside flat reference it focuses attention on a class of thing to look for. In a pointer, _invocation_: when the same word lives in your prompts, your docs, and your codebase, the agent links that shared language to the material and reaches it more reliably.\n\nHunt for opportunities to refactor with leading words. A triad spelled out at three sites, a pointer spending a sentence to gesture at one idea. Each is a passage begging to collapse into a single token:\n\n- \"fast, deterministic, low-overhead\" → _tight_ (a _tight_ loop).\n- \"a loop you believe in\" → _red_, turning a fuzzy gate into a binary observable state (the loop goes _red_ on the bug, or it doesn't).\n\nYou win twice: fewer tokens, and a sharper hook for the agent to hang its thinking on. Assume every document is carrying restatements that leading words retire. Go find them.\n\n**Negation** is the failure mode beside this lever: steering by prohibition drags the forbidden behaviour into context and makes it _more_ available, not less. _Don't think of an elephant_, and the elephant is all there is; the negation is a weak modifier the strongly-activated concept overruns, so the ban half-reads as an instruction to do the thing. Prompt the **positive**: state the target behaviour (\"write one-line comments\") so the banned one is never spoken. A prohibition earns its place only as a hard guardrail you cannot phrase positively; even then, pair it with the positive target so attention lands on what to do.\n\n## Pruning\n\n- Keep each meaning in a **single source of truth**: one authoritative place, so changing the behaviour is a one-place edit. **Duplication** (the same meaning in more than one place) costs maintenance and tokens, and inflates a meaning's prominence on the ladder past its real rank. (The accidental inverse of a leading word, which repeats a token on purpose, never the meaning.)\n- The **environment** is a source of truth too (`package.json` scripts, config files, the directory layout, `--help` output), and a document that restates it is a **cache**: a copy of a lookup, earning its load only when the lookup is expensive. Cache what the agent cannot find by looking: the unwritten convention, the reason behind a choice, the gotcha no config confesses. Leave the one-file, one-command lookups to the environment, where they cannot go stale.\n- Check every line for **relevance**: does it still bear on what the document does? A line loses relevance by never bearing on the task (mere exposition, or a branch that should be disclosed) or by going stale as the behaviour or world it describes changes. Shorter documents are easier to keep relevant. Without a pruning discipline the default fate is **sediment**: stale layers that settle because adding feels safe and removing feels risky, until you must core down through them to find what is still live.\n- Hunt **no-ops** sentence by sentence: an instruction the model already obeys by default pays load to say nothing. The test (does it change behaviour versus the default?) is model-relative, not reader-relative: two people disagreeing about a no-op disagree about the default, and settle it by running the document, not by debate. When a sentence fails, delete the whole sentence rather than trim words from it. The test also grades leading words: a word too weak to beat the default (_be thorough_ when the agent is already thorough-ish) is a no-op, and the fix is a stronger word (_relentless_), not a different technique.\n\n## Skill reduction\n\nReduction is maintenance, not shortening: lower context cost without changing activation, decisions, constraints, or failure handling. Apply this policy when pruning or restructuring an existing skill. Keep it in one authoritative place: this skill.\n\n1. Name the skill's unique responsibility.\n2. List every instruction that changes agent behaviour.\n3. Remove no-ops, duplication, and stale content.\n4. Preserve decision rules, constraints, and failure handling.\n5. Move conditional knowledge behind an on-demand pointer.\n6. Consolidate overlapping responsibilities before deleting content.\n7. Keep explicit activation and exclusion boundaries.\n8. Measure the token delta with the target tokenizer.\n9. Validate activation, behaviour, and regression on representative tasks.\n\nReduce by type: routers aggressively; engineering moderately; diagnostic and verification conservatively; architecture selectively; UI after consolidating one authority per dimension; prototypes and handoff lightly; meta-skills with semantic validation. Prefer R1 pruning → R2 compression → R3 disclosure → R4 consolidation → R5 removal; never merge before each skill's differential behaviour is named.\n\nThe full rule set (`RED-01`..`RED-10`), type checklists, severity levels, and validation dimensions live in `references/skill-reduction.md`.\n[wam N3 skill] dietrichgebert-ponytail-ponytail — Skill base (loadStrategy: \"base\")\n# Ponytail\n\nYou are a lazy senior developer. The best code is the code never written. You solve the whole problem with the least new code. End your reply with one or two lines: what you skipped or did not check, and any risk the user must know.\n\nActive for the whole session until the user says \"stop ponytail\" or \"normal mode\". Switch level: `/ponytail lite|full|ultra`.\n\n## Before you write\n\nRead the task and the code it touches. List every place your change must reach: callers, tests, fixtures, config, exports. Check what your change could break for users: data it would destroy or expose, callers that stop working. That is scope. Extra features are not.\n\n## The smallest complete change\n\nTake the first option that fully works:\n\n1. Does it need to exist? Skip features, options and flexibility nobody asked for, and name them in one line. A vague request (\"build me X\") gets the smallest version that does the core job.\n2. Already in this codebase (a helper, component, service, pattern)? Use it the way the surrounding code does.\n3. Standard library or a platform feature? Use it, unless the project has its own. A house component beats a native widget.\n4. An installed dependency? Use it. Never add a dependency for a few lines.\n5. Can it be one line a reader gets at a glance? One line.\n6. Otherwise: the minimum code that works.\n\n- Be lazy about the solution, never about the change itself: finish every part the task needs, including the callers, tests and fixtures your change breaks.\n- No abstraction, wrapper, type conversion, option, config, boilerplate or \"for later\" code nobody asked for. Keep values in the form the platform already gives you. Deletion beats addition. Keep the structure the codebase already has: its layers, interfaces and conventions.\n- The shortest working diff wins, once you know everything it must touch. A one-liner that needs decoding is not short.\n- Comment only the why the code cannot show, in one line.\n- Bug fix: before you edit, grep every caller of the function you touch, then fix the root cause once in the shared code.\n- Code you move or merge keeps its error handling and validation.\n- Between options of equal size, take the one that is correct on edge cases.\n- Lazy code without its check is unfinished: new non-trivial logic (a branch, a loop, a parser, money or security, or a whole new script or app) leaves one small test or an assert-based self-check. Trivial changes need none.\n- A shortcut with a known limit gets a `ponytail:` comment that names the limit and when to upgrade.\n\nNever cut: validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs, anything the user asked for.\n\n## Levels\n\n| Level | Behavior |\n|-------|----------|\n| **lite** | Build what was asked. Name the smaller option in one line and let the user pick. |\n| **full** | The rules above. Default. |\n| **ultra** | Also question the request: before building, push back on any part the need does not justify. |\n\n\n[wam cqe file_context: 1 archivos en 168ms, fuente cqe]\n  - package.json:1 (score 0.9, ~8 tok) {\n[wam delegation] PROPUESTA sin fricción: por defecto, delegá cada req pendiente independiente a un subagente via Task, en paralelo. Contexto justo por subagente: SOLO objetivo del req + dominio/archivos relevantes + criterio de aceptación; nunca el historial completo. No delegues tareas triviales (≤1 edición): resolvelas inline. La sesión principal puede editar/escribir inline sin pedir permiso. Fallback: secuencial → tier más barato → inline con evidencia. Nunca abortar en silencio por fallo de delegación.\n  req-1 → Task(parallel) \"Analiza el archivo package.json del proyecto y entrega un diagnóstico\"\n🔐 [wait-a-minute] PERMISOS SUGERIDOS (informativo, no bloquea)\n- edit: La implementación aprobada requiere editar archivos\nRecomendación: permisos sugeridos sin aprobar (edit) — continúo igualmente; revisá el plan con /wam status si algo falla.\nskills activas: codebase-design,writing-for-agents,ponytail\nrequisitos: Analiza el archivo package.json del proyecto y entrega un diagnóstico\nPlan: Ejecutar lo pedido con soporte de skills WAM.\n/wam contract edit → ajustar contrato | /wam compress → resumen terse\nfase IMPLEMENTING → Implementar — contrato bootstrap aprobado\n[wam history]\n- (task:task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE) Analiza el archivo package.json del proyecto y entrega un diagnóstico — Analiza el archivo package.json del proyecto y entrega un diagnóstico. No implementes nada ni modifiques archivos. Si encontrás\n[wam][end]",
+        "synthetic": true,
+        "metadata": {
+          "wam": true,
+          "wamMessageId": "msg_1a9263f9a001Wz7AMT8vGRFQwa",
+          "wamPhase": "emit"
+        }
+      }
+    ]
+  },
+  {
+    "info": {
+      "id": "msg_1a926462b001N8K317TQNCkT0P",
+      "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+      "role": "assistant",
+      "time": {
+        "created": 1793839220267,
+        "completed": 1793839224010
+      },
+      "parentID": "msg_1a9263f9a001Wz7AMT8vGRFQwa",
+      "modelID": "cost-saver",
+      "providerID": "omni",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/tmp/wam-web-e2e-fixture-WLt1Q2",
+        "root": "/tmp/wam-web-e2e-fixture-WLt1Q2"
+      },
+      "cost": 0,
+      "tokens": {
+        "total": 25317,
+        "input": 23409,
+        "output": 116,
+        "reasoning": 0,
+        "cache": {
+          "read": 1792,
+          "write": 0
+        }
+      },
+      "finish": "tool-calls"
+    },
+    "parts": [
+      {
+        "id": "prt_1a9264dea001IcESLBOKSHy4so",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a926462b001N8K317TQNCkT0P",
+        "type": "step-start",
+        "snapshot": "a5cc3dfb22594f83c04c46047ea278e0ed2eb30c"
+      },
+      {
+        "id": "prt_1a92652a7001fBw2CeccImKFNT",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a926462b001N8K317TQNCkT0P",
+        "type": "reasoning",
+        "text": "The task: analyze package.json, give diagnosis. Requirement: version must be exactly 999.0.0. Don't modify files. Read-only. Trivial, ≤1 read call → do inline (allowed by orchestrator self-cap ≤2 read-only calls).\n\nLet me read package.json.",
+        "time": {
+          "start": 1793839223463,
+          "end": 1793839223782
+        }
+      },
+      {
+        "id": "prt_1a92653ed001UkR0q3YTRrxQ2g",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a926462b001N8K317TQNCkT0P",
+        "type": "tool",
+        "callID": "call_00_lwlsg3ni237ieapfnymkvh8v",
+        "tool": "read",
+        "state": {
+          "status": "completed",
+          "input": {
+            "filePath": "/tmp/wam-web-e2e-fixture-WLt1Q2/package.json"
+          },
+          "output": "<path>/tmp/wam-web-e2e-fixture-WLt1Q2/package.json</path>\n<type>file</type>\n<content>\n1: {\n2:   \"type\": \"module\",\n3:   \"scripts\": {\n4:     \"test\": \"node --test add.test.mjs\"\n5:   }\n6: }\n\n(End of file - total 6 lines)\n</content>",
+          "title": "package.json",
+          "metadata": {
+            "preview": "{\n  \"type\": \"module\",\n  \"scripts\": {\n    \"test\": \"node --test add.test.mjs\"\n  }\n}",
+            "truncated": false,
+            "loaded": [],
+            "display": {
+              "type": "file",
+              "path": "/tmp/wam-web-e2e-fixture-WLt1Q2/package.json",
+              "text": "{\n  \"type\": \"module\",\n  \"scripts\": {\n    \"test\": \"node --test add.test.mjs\"\n  }\n}",
+              "lineStart": 1,
+              "lineEnd": 6,
+              "totalLines": 6,
+              "truncated": false
+            }
+          },
+          "time": {
+            "start": 1793839223927,
+            "end": 1793839223939
+          }
+        }
+      },
+      {
+        "id": "prt_1a92654b80016ZGdtOsTv8C3nv",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a926462b001N8K317TQNCkT0P",
+        "type": "step-finish",
+        "reason": "tool-calls",
+        "snapshot": "096e2ea4dcc7334fb158eefc88acfd722923b595",
+        "cost": 0,
+        "tokens": {
+          "total": 25317,
+          "input": 23409,
+          "output": 116,
+          "reasoning": 0,
+          "cache": {
+            "read": 1792,
+            "write": 0
+          }
+        }
+      },
+      {
+        "id": "prt_1a92654c7001T6larUhqtLpPR3",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a926462b001N8K317TQNCkT0P",
+        "type": "patch",
+        "hash": "a5cc3dfb22594f83c04c46047ea278e0ed2eb30c",
+        "files": [
+          "/tmp/wam-web-e2e-fixture-WLt1Q2/.wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/cognition/observations.jsonl",
+          "/tmp/wam-web-e2e-fixture-WLt1Q2/.wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/lineage/ev-1793839223935-06uiv8.json",
+          "/tmp/wam-web-e2e-fixture-WLt1Q2/.wam/traces/default.json"
+        ]
+      }
+    ]
+  },
+  {
+    "info": {
+      "id": "msg_1a92654cd001WBlMkcvndV1CxR",
+      "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+      "role": "assistant",
+      "time": {
+        "created": 1793839224013,
+        "completed": 1793839227017
+      },
+      "parentID": "msg_1a9263f9a001Wz7AMT8vGRFQwa",
+      "modelID": "cost-saver",
+      "providerID": "omni",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/tmp/wam-web-e2e-fixture-WLt1Q2",
+        "root": "/tmp/wam-web-e2e-fixture-WLt1Q2"
+      },
+      "cost": 0,
+      "tokens": {
+        "total": 25668,
+        "input": 327,
+        "output": 253,
+        "reasoning": 0,
+        "cache": {
+          "read": 25088,
+          "write": 0
+        }
+      },
+      "finish": "stop"
+    },
+    "parts": [
+      {
+        "id": "prt_1a92658dc0015L45e0sOvAEikm",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a92654cd001WBlMkcvndV1CxR",
+        "type": "step-start",
+        "snapshot": "096e2ea4dcc7334fb158eefc88acfd722923b595"
+      },
+      {
+        "id": "prt_1a9265b08001MHMD4EIDgdxkvS",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a92654cd001WBlMkcvndV1CxR",
+        "type": "reasoning",
+        "text": "package.json has no name, no version. Requirement: version exactly 999.0.0. So diagnosis: version field missing. Fix: add `\"version\": \"999.0.0\"`. Don't modify. Also note missing name field (npm requires name+version for publish; node --test works fine).\n\nConcise answer.",
+        "time": {
+          "start": 1793839225608,
+          "end": 1793839226007
+        }
+      },
+      {
+        "id": "prt_1a9265c99001mUpGTDzFDlNoTM",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a92654cd001WBlMkcvndV1CxR",
+        "type": "text",
+        "text": "**Diagnóstico** — `package.json:1-6`:\n\n- **No existe el campo `version`** → no cumple el requisito `999.0.0`.\n- Falta `name` (npm lo exige para publicar; no afecta `node --test`).\n- El resto es válido: ESM (`type: module`), script `test` correcto.\n\n**Cómo resolverlo** (sin tocar nada, solo indicado):\n\n```json\n{\n  \"name\": \"wam-web-e2e-fixture-wlt1q2\",\n  \"version\": \"999.0.0\",\n  \"type\": \"module\",\n  ...\n}\n```\n\nBasta con añadir `\"version\": \"999.0.0\"`; `name` es opcional para el objetivo. No implementé ni modifiqué archivos.",
+        "time": {
+          "start": 1793839226009,
+          "end": 1793839226992
+        }
+      },
+      {
+        "id": "prt_1a926607d001wwjEpMPqYsM8cN",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a92654cd001WBlMkcvndV1CxR",
+        "type": "step-finish",
+        "reason": "stop",
+        "snapshot": "096e2ea4dcc7334fb158eefc88acfd722923b595",
+        "cost": 0,
+        "tokens": {
+          "total": 25668,
+          "input": 327,
+          "output": 253,
+          "reasoning": 0,
+          "cache": {
+            "read": 25088,
+            "write": 0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "info": {
+      "id": "msg_1a9273877001tMhzorZ4OY5LZS",
+      "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+      "role": "user",
+      "time": {
+        "created": 1793839282295
+      },
+      "summary": {
+        "diffs": [
+          {
+            "file": ".wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/cognition/observations.jsonl",
+            "patch": "Index: .wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/cognition/observations.jsonl\n===================================================================\n--- .wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/cognition/observations.jsonl\t\n+++ .wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/cognition/observations.jsonl\t\n@@ -1,1 +1,2 @@\n {\"id\":\"Omw2tk3nj6119\",\"experimentId\":null,\"result\":\"INCONCLUSIVE\",\"facts\":[\"ev-1793839223935-06uiv8\"],\"actual\":null,\"unexpected\":[],\"provenance\":\"agent-tool-read-success\",\"createdAt\":1793839223936}\n+{\"id\":\"Omw2tlf7a1bf6\",\"experimentId\":null,\"result\":\"INCONCLUSIVE\",\"facts\":[\"ev-1793839285557-e4avmv\"],\"actual\":null,\"unexpected\":[],\"provenance\":\"agent-tool-read-success\",\"createdAt\":1793839285558}\n",
+            "additions": 1,
+            "deletions": 0,
+            "status": "modified"
+          },
+          {
+            "file": ".wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/lineage/ev-1793839285557-e4avmv.json",
+            "patch": "Index: .wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/lineage/ev-1793839285557-e4avmv.json\n===================================================================\n--- .wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/lineage/ev-1793839285557-e4avmv.json\t\n+++ .wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/lineage/ev-1793839285557-e4avmv.json\t\n@@ -0,0 +1,11 @@\n+{\n+  \"requirementId\": \"req-1\",\n+  \"content\": \"<path>/tmp/wam-web-e2e-fixture-WLt1Q2/package.json</path>\\n<type>file</type>\\n<content>\\n1: {\\n2:   \\\"type\\\": \\\"module\\\",\\n3:   \\\"scripts\\\": {\\n4:     \\\"test\\\": \\\"node --test add.test.mjs\\\"\\n5:   }\\n6: }\\n\\n(End of file - total 6 lines)\\n</content>\",\n+  \"type\": \"TOOL_OUTPUT\",\n+  \"source\": \"execution-engine\",\n+  \"id\": \"ev-1793839285557-e4avmv\",\n+  \"status\": \"unverified\",\n+  \"createdAt\": \"2026-11-05T00:41:25.557Z\",\n+  \"experimentId\": null,\n+  \"observationId\": \"Omw2tlf7a1bf6\"\n+}\n\\ No newline at end of file\n",
+            "additions": 11,
+            "deletions": 0,
+            "status": "added"
+          }
+        ]
+      },
+      "agent": "build",
+      "model": {
+        "providerID": "omni",
+        "modelID": "cost-saver"
+      }
+    },
+    "parts": [
+      {
+        "id": "prt_1a9273877002Kp45GTwLVkPfFQ",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a9273877001tMhzorZ4OY5LZS",
+        "type": "text",
+        "text": "WAM task loop: VERIFY (agent-review-accepted)\nPending verification:\n- req-1 — Analiza el archivo package.json del proyecto y entrega un diagnóstico",
+        "synthetic": true
+      },
+      {
+        "id": "prt_e611b683e50e704f",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a9273877001tMhzorZ4OY5LZS",
+        "type": "text",
+        "text": "[wam] [wam continuation] Contexto reconstruido (no-changes)\n\n[wam N2 task]\n# Live Task Context\ntask: task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE — IMPLEMENTING / APPROVED\nreq: 1 pend de 1\nnext: Implementar — contrato bootstrap aprobado\n",
+        "synthetic": true,
+        "metadata": {
+          "wam": true,
+          "wamMessageId": "msg_1a9273877001tMhzorZ4OY5LZS",
+          "wamPhase": "emit"
+        }
+      }
+    ]
+  },
+  {
+    "info": {
+      "id": "msg_1a9273883001bYj8VvLw37cyi9",
+      "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+      "role": "assistant",
+      "time": {
+        "created": 1793839282307,
+        "completed": 1793839285670
+      },
+      "parentID": "msg_1a9273877001tMhzorZ4OY5LZS",
+      "modelID": "cost-saver",
+      "providerID": "omni",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/tmp/wam-web-e2e-fixture-WLt1Q2",
+        "root": "/tmp/wam-web-e2e-fixture-WLt1Q2"
+      },
+      "cost": 0,
+      "tokens": {
+        "total": 25998,
+        "input": 448,
+        "output": 206,
+        "reasoning": 0,
+        "cache": {
+          "read": 25344,
+          "write": 0
+        }
+      },
+      "finish": "tool-calls"
+    },
+    "parts": [
+      {
+        "id": "prt_1a9273cbb001V159a9P8g91Nbd",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a9273883001bYj8VvLw37cyi9",
+        "type": "step-start",
+        "snapshot": "549caea0321cfefece29275de48e7f6cc77e4dcb"
+      },
+      {
+        "id": "prt_1a9273fc8001yq5KlzxYhoTJGg",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a9273883001bYj8VvLw37cyi9",
+        "type": "reasoning",
+        "text": "The WAM task loop asks to verify req-1: \"Analiza el archivo package.json del proyecto y entrega un diagnóstico\". I already did the analysis and delivered a diagnosis, no files modified. Verification: confirm the diagnosis is correct against the file and requirement.\n\nreq-1 also includes constraint: version must be exactly 999.0.0. The requirement req-1 is just analysis diagnosis. Constraint-1 separate.\n\nI should verify: re-read file? Already read once this turn? It's a new turn. Trivial check — one read allowed. Let me verify the diagnosis holds: file still has no version. Then report req-1 verified/accepted.\n\nLet me do a quick read to confirm no changes.",
+        "time": {
+          "start": 1793839284168,
+          "end": 1793839285377
+        }
+      },
+      {
+        "id": "prt_1a9274486001DGeUUJ08KfmhAB",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a9273883001bYj8VvLw37cyi9",
+        "type": "tool",
+        "callID": "call_00_dqeor5ic5jz5licuglljuqsp",
+        "tool": "read",
+        "state": {
+          "status": "completed",
+          "input": {
+            "filePath": "/tmp/wam-web-e2e-fixture-WLt1Q2/package.json"
+          },
+          "output": "<path>/tmp/wam-web-e2e-fixture-WLt1Q2/package.json</path>\n<type>file</type>\n<content>\n1: {\n2:   \"type\": \"module\",\n3:   \"scripts\": {\n4:     \"test\": \"node --test add.test.mjs\"\n5:   }\n6: }\n\n(End of file - total 6 lines)\n</content>",
+          "title": "package.json",
+          "metadata": {
+            "preview": "{\n  \"type\": \"module\",\n  \"scripts\": {\n    \"test\": \"node --test add.test.mjs\"\n  }\n}",
+            "truncated": false,
+            "loaded": [],
+            "display": {
+              "type": "file",
+              "path": "/tmp/wam-web-e2e-fixture-WLt1Q2/package.json",
+              "text": "{\n  \"type\": \"module\",\n  \"scripts\": {\n    \"test\": \"node --test add.test.mjs\"\n  }\n}",
+              "lineStart": 1,
+              "lineEnd": 6,
+              "totalLines": 6,
+              "truncated": false
+            }
+          },
+          "time": {
+            "start": 1793839285545,
+            "end": 1793839285560
+          }
+        }
+      },
+      {
+        "id": "prt_1a9274588001nTmyuRWP2tOgot",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a9273883001bYj8VvLw37cyi9",
+        "type": "step-finish",
+        "reason": "tool-calls",
+        "snapshot": "c8c46d4a92bd47945d64364d817ff8cc3d58d5e6",
+        "cost": 0,
+        "tokens": {
+          "total": 25998,
+          "input": 448,
+          "output": 206,
+          "reasoning": 0,
+          "cache": {
+            "read": 25344,
+            "write": 0
+          }
+        }
+      },
+      {
+        "id": "prt_1a92745a3001HBAHmQK2yGBYrH",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a9273883001bYj8VvLw37cyi9",
+        "type": "patch",
+        "hash": "549caea0321cfefece29275de48e7f6cc77e4dcb",
+        "files": [
+          "/tmp/wam-web-e2e-fixture-WLt1Q2/.wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/cognition/observations.jsonl",
+          "/tmp/wam-web-e2e-fixture-WLt1Q2/.wam/tasks/task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE/lineage/ev-1793839285557-e4avmv.json"
+        ]
+      }
+    ]
+  },
+  {
+    "info": {
+      "id": "msg_1a92745ad001Zkswg06nFM3ymA",
+      "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+      "role": "assistant",
+      "time": {
+        "created": 1793839285677,
+        "completed": 1793839288067
+      },
+      "parentID": "msg_1a9273877001tMhzorZ4OY5LZS",
+      "modelID": "cost-saver",
+      "providerID": "omni",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/tmp/wam-web-e2e-fixture-WLt1Q2",
+        "root": "/tmp/wam-web-e2e-fixture-WLt1Q2"
+      },
+      "cost": 0,
+      "tokens": {
+        "total": 26229,
+        "input": 368,
+        "output": 133,
+        "reasoning": 0,
+        "cache": {
+          "read": 25728,
+          "write": 0
+        }
+      },
+      "finish": "stop"
+    },
+    "parts": [
+      {
+        "id": "prt_1a92749bc001hSAvpw8VBbQ2DQ",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a92745ad001Zkswg06nFM3ymA",
+        "type": "step-start",
+        "snapshot": "c8c46d4a92bd47945d64364d817ff8cc3d58d5e6"
+      },
+      {
+        "id": "prt_1a9274c21001Ly6qN535taCTfS",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a92745ad001Zkswg06nFM3ymA",
+        "type": "text",
+        "text": "**req-1 VERIFICADO** ✅\n\n- Archivo sin cambios (`package.json:1-6`, 6 líneas).\n- Diagnóstico correcto: falta `version` (no cumple `999.0.0`), falta `name`; ESM y script `test` válidos.\n- No se modificó nada, conforme al requisito.\n\n**Constraint-1 pendiente**: la versión `999.0.0` aún no existe en el archivo. Para cerrarla hace falta añadir `\"version\": \"999.0.0\"` — no lo apliqué porque pediste solo diagnóstico.",
+        "time": {
+          "start": 1793839287329,
+          "end": 1793839288047
+        }
+      },
+      {
+        "id": "prt_1a9274ef9001Gj1yV5WMrf1gh7",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a92745ad001Zkswg06nFM3ymA",
+        "type": "step-finish",
+        "reason": "stop",
+        "snapshot": "c8c46d4a92bd47945d64364d817ff8cc3d58d5e6",
+        "cost": 0,
+        "tokens": {
+          "total": 26229,
+          "input": 368,
+          "output": 133,
+          "reasoning": 0,
+          "cache": {
+            "read": 25728,
+            "write": 0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "info": {
+      "id": "msg_1a9274f76001UBZXB6v9knhHmW",
+      "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+      "role": "user",
+      "time": {
+        "created": 1793839288182
+      },
+      "summary": {
+        "diffs": []
+      },
+      "agent": "build",
+      "model": {
+        "providerID": "omni",
+        "modelID": "cost-saver"
+      }
+    },
+    "parts": [
+      {
+        "id": "prt_1a9274f77001cf8oxUeOC8Zuu7",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a9274f76001UBZXB6v9knhHmW",
+        "type": "text",
+        "text": "WAM task loop: CONTINUE (work-remaining)\nNext: continue",
+        "synthetic": true
+      }
+    ]
+  },
+  {
+    "info": {
+      "id": "msg_1a9274f90001wEvD3XOsEZS3y3",
+      "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+      "role": "assistant",
+      "time": {
+        "created": 1793839288208,
+        "completed": 1793839293238
+      },
+      "parentID": "msg_1a9274f76001UBZXB6v9knhHmW",
+      "modelID": "cost-saver",
+      "providerID": "omni",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/tmp/wam-web-e2e-fixture-WLt1Q2",
+        "root": "/tmp/wam-web-e2e-fixture-WLt1Q2"
+      },
+      "cost": 0,
+      "tokens": {
+        "total": 26708,
+        "input": 208,
+        "output": 516,
+        "reasoning": 0,
+        "cache": {
+          "read": 25984,
+          "write": 0
+        }
+      },
+      "finish": "stop"
+    },
+    "parts": [
+      {
+        "id": "prt_1a92753a8001e2ylvxUcp70Nbc",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a9274f90001wEvD3XOsEZS3y3",
+        "type": "step-start",
+        "snapshot": "2c2a7f23befadd255fa22d147e67f135d6dd47a4"
+      },
+      {
+        "id": "prt_1a927579c00165PzMN0ytDns4r",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a9274f90001wEvD3XOsEZS3y3",
+        "type": "reasoning",
+        "text": "The task loop says CONTINUE (work-remaining). Next: continue. Work remaining? req-1 done/verified. But constraint-1 (version 999.0.0) is not satisfied. The original user said \"No implementes nada ni modifiques archivos\" — but that's about analysis. However the requirement states version must be exactly 999.0.0. The constraint is pendiente.\n\nHmm. The WAM loop wants work-remaining → the constraint-1 remains unmet. But the user explicitly said don't implement or modify files. Should I modify package.json to set version 999.0.0? The requirement \"la versión del proyecto debe ser exactamente 999.0.0\" could be interpreted as a constraint to check/verify, not necessarily to implement. The instruction \"No implementes nada ni modifiques archivos\" is explicit and overriding.\n\nSo the work remaining is only to state that constraint-1 cannot be closed without modifying the file, which conflicts with the explicit no-modification instruction. Do not modify. Report.\n\nActually, maybe the correct action: the constraint must be satisfied for the task to be complete, but the user's explicit constraint forbids modification. So I should ask/flag. Since no interactive? I can use question tool? Or just report the conflict.\n\nLet me check if there's anything else. req-1 verified. Constraint-1 remains. I'll report clearly that no further work can be done without violating \"no modificar archivos\", and offer the one-line change.\n\nPerhaps use the question tool to ask whether to apply it? That could be appropriate. But keep concise. The user prompt is automated loop. I'll state the conflict and offer.\n\nI'll keep it short.",
+        "time": {
+          "start": 1793839290268,
+          "end": 1793839292297
+        }
+      },
+      {
+        "id": "prt_1a9275f8b001BVpR3p9XWvXvjQ",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a9274f90001wEvD3XOsEZS3y3",
+        "type": "text",
+        "text": "**No hay trabajo ejecutable restante sin violar tu instrucción explícita.**\n\n- req-1: completado y verificado (diagnóstico entregado, sin cambios).\n- constraint-1 (`version === \"999.0.0\"`): **no satisfecho** y solo se cierra editando `package.json`, lo que tú prohibiste (\"no modifiques archivos\").\n\nSi querés que lo cierre, confirmá y aplico el único cambio mínimo en `package.json:1-6`:\n\n```json\n\"version\": \"999.0.0\",\n```\n\nAñadido junto a `type` (y opcionalmente `\"name\"`). Sin tu confirmación, no toco el archivo.",
+        "time": {
+          "start": 1793839292299,
+          "end": 1793839293218
+        }
+      },
+      {
+        "id": "prt_1a927632d001e5Va4jO754V9DG",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a9274f90001wEvD3XOsEZS3y3",
+        "type": "step-finish",
+        "reason": "stop",
+        "snapshot": "2c2a7f23befadd255fa22d147e67f135d6dd47a4",
+        "cost": 0,
+        "tokens": {
+          "total": 26708,
+          "input": 208,
+          "output": 516,
+          "reasoning": 0,
+          "cache": {
+            "read": 25984,
+            "write": 0
+          }
+        }
+      }
+    ]
+  },
+  {
+    "info": {
+      "id": "msg_1a92763c2001JJhCZHBPAu1il4",
+      "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+      "role": "user",
+      "time": {
+        "created": 1793839293378
+      },
+      "summary": {
+        "diffs": []
+      },
+      "agent": "build",
+      "model": {
+        "providerID": "omni",
+        "modelID": "cost-saver"
+      }
+    },
+    "parts": [
+      {
+        "id": "prt_1a92763c3001ajxRue7q547HYX",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a92763c2001JJhCZHBPAu1il4",
+        "type": "text",
+        "text": "WAM task loop: STOP_STAGNATION (no-progress)\nStopped: no-progress\nNext: reply with a concrete change or resume command to continue.\nStop: no-progress",
+        "synthetic": true
+      }
+    ]
+  },
+  {
+    "info": {
+      "id": "msg_1a92763d200126PiAIpf7ZQpd5",
+      "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+      "role": "assistant",
+      "time": {
+        "created": 1793839293394,
+        "completed": 1793839297583
+      },
+      "parentID": "msg_1a92763c2001JJhCZHBPAu1il4",
+      "modelID": "cost-saver",
+      "providerID": "omni",
+      "mode": "build",
+      "agent": "build",
+      "path": {
+        "cwd": "/tmp/wam-web-e2e-fixture-WLt1Q2",
+        "root": "/tmp/wam-web-e2e-fixture-WLt1Q2"
+      },
+      "cost": 0,
+      "tokens": {
+        "total": 27134,
+        "input": 641,
+        "output": 381,
+        "reasoning": 0,
+        "cache": {
+          "read": 26112,
+          "write": 0
+        }
+      },
+      "finish": "stop"
+    },
+    "parts": [
+      {
+        "id": "prt_1a92767e6001bAF32iNVqdLYHp",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a92763d200126PiAIpf7ZQpd5",
+        "type": "step-start",
+        "snapshot": "3ea6cc3f78dfa7e952bcc4abecb1f8e20d3e50ac"
+      },
+      {
+        "id": "prt_1a9276adb001O7xWhtgGGX1QXK",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a92763d200126PiAIpf7ZQpd5",
+        "type": "reasoning",
+        "text": "The loop stopped due to no progress. Need to reply with a concrete change or resume command. The situation: user forbade modifications, but constraint requires version 999.0.0. This is a blocked-on-conflict situation. I should give a concrete change proposal (diff) that they can approve, or a resume command.\n\nConcrete change: add version. Provide exact diff. And give resume command. Keep concise.\n\nMaybe check AGENTS governance: no commit/push without approval. Editing is allowed inline per delegation note (\"La sesión principal puede editar/escribir inline sin pedir permiso\") but user explicitly said don't modify. So I should present concrete change and wait.\n\nProvide the exact edit and resume command like `/wam continue` or approval. WAM commands: `/wam contract approve`, etc. Resume command perhaps `/wam resume`.\n\nGive concise.",
+        "time": {
+          "start": 1793839295195,
+          "end": 1793839296379
+        }
+      },
+      {
+        "id": "prt_1a9276f7c001SmpEfSrpnRZ01o",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a92763d200126PiAIpf7ZQpd5",
+        "type": "text",
+        "text": "**Cambio concreto propuesto** (`package.json`) — pendiente de tu OK por tu restricción de no modificar:\n\n```diff\n {\n+  \"name\": \"wam-web-e2e-fixture-wlt1q2\",\n+  \"version\": \"999.0.0\",\n   \"type\": \"module\",\n   \"scripts\": {\n     \"test\": \"node --test add.test.mjs\"\n   }\n }\n```\n\n- Mínimo indispensable: `\"version\": \"999.0.0\"`. `\"name\"` es opcional.\n- Verificación tras aplicar: `node -e \"console.log(require('./package.json').version)\"` → `999.0.0`.\n\n**Para continuar**, respondé `aplicá el cambio` (o `/wam resume`) y lo edito. Sin esa señal, el loop queda bloqueado por conflicto entre el requisito y \"no modifiques archivos\".",
+        "time": {
+          "start": 1793839296380,
+          "end": 1793839297546
+        }
+      },
+      {
+        "id": "prt_1a927741d001ifiVDcxmV9bqq2",
+        "sessionID": "ses_e56d9c08bffeG9t15nb5BhQbhE",
+        "messageID": "msg_1a92763d200126PiAIpf7ZQpd5",
+        "type": "step-finish",
+        "reason": "stop",
+        "snapshot": "3ea6cc3f78dfa7e952bcc4abecb1f8e20d3e50ac",
+        "cost": 0,
+        "tokens": {
+          "total": 27134,
+          "input": 641,
+          "output": 381,
+          "reasoning": 0,
+          "cache": {
+            "read": 26112,
+            "write": 0
+          }
+        }
+      }
+    ]
+  }
+]

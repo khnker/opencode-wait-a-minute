@@ -99,3 +99,23 @@ export function normalizeReviewArtifacts(values, limits = {}) {
 export function assertReviewArtifacts(values, limits) {
   return normalizeReviewArtifacts(values, limits);
 }
+
+const FAILURE_MARKERS = [
+  /(?:^|\n)\s*✖(?:\s|$)/,
+  /(?:^|\n)\s*not ok(?:\s|$)/i,
+  /(?:^|\n)\s*FAIL(?:ED)?\b/,
+  /(?:^|\n)\s*AssertionError\b/,
+  /\b(?:fail(?:ed|ures?)?|failing)\s*[:=]?\s*[1-9]\d*\b/i,
+  /\b[1-9]\d*\s+(?:failed|failing|failures?)\b/i,
+];
+
+export function detectReviewArtifactFailure(artifacts) {
+  if (!Array.isArray(artifacts)) return null;
+  for (const artifact of artifacts) {
+    const content = String(artifact?.content ?? "");
+    if (FAILURE_MARKERS.some((pattern) => pattern.test(content))) {
+      return { ref: String(artifact?.ref ?? ""), content };
+    }
+  }
+  return null;
+}

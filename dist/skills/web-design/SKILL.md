@@ -1,6 +1,12 @@
-# Web Design Context System SKILL
+---
+name: web-design
+description: Routes UI/frontend design work — interfaces, components, design systems, tokens, responsive layouts, accessibility, visual review, anti-slop, DESIGN.md.
+---
 
-Routing and activation skill for UI/Frontend development tasks in WAM.
+# Web Design Router
+
+Routes UI/frontend work to the reference that owns each decision; it does not define
+principles or implementation steps.
 
 ## When to Activate
 
@@ -8,12 +14,12 @@ Routing and activation skill for UI/Frontend development tasks in WAM.
 - Working with design systems, design tokens, responsive layouts, or accessibility
 - Performing visual reviews, anti-slop checks, or handling `DESIGN.md`
 
-## Workflow
+## Routing
 
-1. **Pre-flight Classification**: `classifyDesignTask(prompt)` determines UI task category (13 categories).
-2. **Context Assembly**: `loadDesignContext(root)` discovers `DESIGN.md` and loads minimum sufficient references into the `design` axis.
-3. **Execution**: Agent implements UI changes using semantic tokens (`color.action.primary`) over raw values (`#3B82F6`).
-4. **Verification**: Visual review gates and anti-slop checks validate output against principles.
+1. **Classify** the UI task category.
+2. **Load context**: discover `DESIGN.md`; load the minimum sufficient references into the
+   `design` axis.
+3. **Hand off**: implementation and verification follow the owning reference below.
 
 ## References
 

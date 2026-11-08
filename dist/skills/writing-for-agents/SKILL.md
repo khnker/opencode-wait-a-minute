@@ -1,6 +1,6 @@
 ---
 name: writing-for-agents
-description: Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md.
+description: Writing and reducing documents for agents. Use when creating, editing, pruning, or restructuring skills, or modifying AGENTS.md or CLAUDE.md.
 ---
 
 Reference for writing any document an agent consumes: a skill, an `AGENTS.md` / `CLAUDE.md`, a doc reached by a pointer. The packaging differs; the writing does not: the same levers make each one predictable, since the agent takes the same _process_ every run rather than producing the same output.
@@ -79,3 +79,21 @@ You win twice: fewer tokens, and a sharper hook for the agent to hang its thinki
 - The **environment** is a source of truth too (`package.json` scripts, config files, the directory layout, `--help` output), and a document that restates it is a **cache**: a copy of a lookup, earning its load only when the lookup is expensive. Cache what the agent cannot find by looking: the unwritten convention, the reason behind a choice, the gotcha no config confesses. Leave the one-file, one-command lookups to the environment, where they cannot go stale.
 - Check every line for **relevance**: does it still bear on what the document does? A line loses relevance by never bearing on the task (mere exposition, or a branch that should be disclosed) or by going stale as the behaviour or world it describes changes. Shorter documents are easier to keep relevant. Without a pruning discipline the default fate is **sediment**: stale layers that settle because adding feels safe and removing feels risky, until you must core down through them to find what is still live.
 - Hunt **no-ops** sentence by sentence: an instruction the model already obeys by default pays load to say nothing. The test (does it change behaviour versus the default?) is model-relative, not reader-relative: two people disagreeing about a no-op disagree about the default, and settle it by running the document, not by debate. When a sentence fails, delete the whole sentence rather than trim words from it. The test also grades leading words: a word too weak to beat the default (_be thorough_ when the agent is already thorough-ish) is a no-op, and the fix is a stronger word (_relentless_), not a different technique.
+
+## Skill reduction
+
+Reduction is maintenance, not shortening: lower context cost without changing activation, decisions, constraints, or failure handling. Apply this policy when pruning or restructuring an existing skill. Keep it in one authoritative place: this skill.
+
+1. Name the skill's unique responsibility.
+2. List every instruction that changes agent behaviour.
+3. Remove no-ops, duplication, and stale content.
+4. Preserve decision rules, constraints, and failure handling.
+5. Move conditional knowledge behind an on-demand pointer.
+6. Consolidate overlapping responsibilities before deleting content.
+7. Keep explicit activation and exclusion boundaries.
+8. Measure the token delta with the target tokenizer.
+9. Validate activation, behaviour, and regression on representative tasks.
+
+Reduce by type: routers aggressively; engineering moderately; diagnostic and verification conservatively; architecture selectively; UI after consolidating one authority per dimension; prototypes and handoff lightly; meta-skills with semantic validation. Prefer R1 pruning → R2 compression → R3 disclosure → R4 consolidation → R5 removal; never merge before each skill's differential behaviour is named.
+
+The full rule set (`RED-01`..`RED-10`), type checklists, severity levels, and validation dimensions live in `references/skill-reduction.md`.

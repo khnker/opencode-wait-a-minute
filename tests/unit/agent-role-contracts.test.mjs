@@ -10,6 +10,8 @@ import {
   assertAgentResult,
   getRoleCapabilities,
   getRoleDefinition,
+  builderRoleForLayer,
+  isBuilderRole,
   validateAgentRequest,
   validateAgentResult,
 } from "../../src/agents/role-contracts.js";
@@ -73,12 +75,15 @@ function reviewFinding(overrides = {}) {
 }
 
 describe("role catalog", () => {
-  it("defines exactly the four initial roles", () => {
+  it("defines the pipeline roles plus backend/frontend/UX specializations", () => {
     assert.deepEqual(Object.values(AGENT_ROLES).sort(), [
       "ANALYST",
       "ARCHITECT",
+      "BACKEND_ENGINEER",
       "BUILDER",
+      "FRONTEND_ENGINEER",
       "REVIEWER",
+      "UX_DESIGNER",
     ]);
   });
 
@@ -106,6 +111,23 @@ describe("role catalog", () => {
     assert.throws(() => getRoleDefinition("VERIFIER"), RoleContractError);
   });
 
+  it("selects a layer-aware implementation role", () => {
+    assert.equal(builderRoleForLayer("backend"), AGENT_ROLES.BACKEND_ENGINEER);
+    assert.equal(builderRoleForLayer("frontend"), AGENT_ROLES.FRONTEND_ENGINEER);
+    assert.equal(builderRoleForLayer("shared"), AGENT_ROLES.BUILDER);
+    assert.equal(isBuilderRole(AGENT_ROLES.BACKEND_ENGINEER), true);
+    assert.equal(isBuilderRole(AGENT_ROLES.UX_DESIGNER), false);
+  });
+
+  it("declares layer, focus and preferred skills for specialized roles", () => {
+    assert.equal(getRoleDefinition(AGENT_ROLES.BACKEND_ENGINEER).layer, "backend");
+    assert.equal(getRoleDefinition(AGENT_ROLES.FRONTEND_ENGINEER).layer, "frontend");
+    assert.equal(getRoleDefinition(AGENT_ROLES.UX_DESIGNER).layer, "frontend");
+    assert.ok(getRoleDefinition(AGENT_ROLES.UX_DESIGNER).focus.includes("accessibility"));
+    assert.ok(getRoleDefinition(AGENT_ROLES.BACKEND_ENGINEER).skills.includes("backend-integrity"));
+    assert.ok(getRoleDefinition(AGENT_ROLES.FRONTEND_ENGINEER).skills.includes("web-design"));
+  });
+
   it("declares the capability matrix exactly", () => {
     const expected = {
       ANALYST: {
@@ -129,6 +151,30 @@ describe("role catalog", () => {
         investigate: true,
         proposeDecisions: false,
         modifyCode: true,
+        modifyGlobalState: false,
+        approveCompletion: false,
+      },
+      BACKEND_ENGINEER: {
+        readContext: true,
+        investigate: true,
+        proposeDecisions: false,
+        modifyCode: true,
+        modifyGlobalState: false,
+        approveCompletion: false,
+      },
+      FRONTEND_ENGINEER: {
+        readContext: true,
+        investigate: true,
+        proposeDecisions: false,
+        modifyCode: true,
+        modifyGlobalState: false,
+        approveCompletion: false,
+      },
+      UX_DESIGNER: {
+        readContext: true,
+        investigate: true,
+        proposeDecisions: true,
+        modifyCode: false,
         modifyGlobalState: false,
         approveCompletion: false,
       },

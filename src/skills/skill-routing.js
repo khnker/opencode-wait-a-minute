@@ -120,6 +120,12 @@ const DEFAULT_CONSTRAINTS = {
     conflicts: [],
     reason: "General coding foundations apply to every layer",
   },
+  "craftsman": {
+    allowedLayers: ["backend", "frontend", "shared", "infrastructure"],
+    dependsOn: [],
+    conflicts: [],
+    reason: "Polyglot engineering protocol applies to every layer",
+  },
 };
 
 /**

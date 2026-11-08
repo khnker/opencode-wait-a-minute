@@ -94,26 +94,54 @@ describe("nextActionFrom: truncación de títulos", () => {
 // --- delegationLines capping ---
 
 describe("delegationLines: consolidación de excedentes", () => {
-  it("max 8 reqs visibles en delegación con 54 reqs", async () => {
-    // Import delegationLines indirectly through plugin behavior
-    // We test the constant MAX_VISIBLE_REQS = 8
-    const MAX_VISIBLE = 8;
-    const manyReqs = Array.from({ length: 54 }, (_, i) => ({
-      id: `req-${i + 1}`,
-      title: `Feature ${i + 1}: implementar algo muy largo `.repeat(3),
-      status: "pending",
-      evidence: [],
-    }));
-    const state = {
-      phase: "IMPLEMENTING",
-      requirements: manyReqs,
-      contract: { status: "APPROVED" },
-    };
-
-    // delegationLines is internal, but we can test via the plugin
-    // For now, verify the constant exists in the source
+  it("todos los renderers usan el cap compartido y configurable", async () => {
     const src = fs.readFileSync(path.join(process.cwd(), "index.js"), "utf-8");
-    assert.ok(src.includes("MAX_VISIBLE_REQS = 8"), "MAX_VISIBLE_REQS constant should be 8");
+    const handler = fs.readFileSync(path.join(process.cwd(), "src/integration/message-handler.js"), "utf-8");
+    const assembly = fs.readFileSync(path.join(process.cwd(), "src/context/assembly.js"), "utf-8");
+
+    for (const [name, source] of [["index.js", src], ["message-handler.js", handler], ["assembly.js", assembly]]) {
+      assert.ok(!/MAX_VISIBLE_REQS\s*=\s*\d+/.test(source), `${name} no debe declarar un cap local`);
+      assert.ok(source.includes("splitVisibleRequirements"), `${name} debe usar el cap compartido`);
+    }
+
+    const { DEFAULT_MAX_VISIBLE_REQS, splitVisibleRequirements, maxVisibleReqs } = await import(
+      "../src/context/requirement-visibility.js"
+    );
+    assert.ok(DEFAULT_MAX_VISIBLE_REQS > 8, "el cap por defecto no debe cortar contratos normales");
+    assert.equal(maxVisibleReqs(), DEFAULT_MAX_VISIBLE_REQS);
+
+    const reqs = Array.from({ length: 40 }, (_, i) => ({
+      id: `req-${i + 1}`,
+      title: `Feature ${i + 1}`,
+      status: i === 0 ? "done" : "pending",
+    }));
+    const { visible, overflow, total } = splitVisibleRequirements(reqs);
+    assert.equal(overflow, 0, "40 reqs caben con el cap por defecto");
+    assert.equal(total, 40);
+    assert.equal(visible[0].id, "req-2", "las pendientes se listan antes que las terminadas");
+    assert.equal(visible.at(-1).id, "req-1", "la terminada queda al final");
+  });
+
+  it("el cap respeta WAM_MAX_VISIBLE_REQS y prioriza pendientes", async () => {
+    const prev = process.env.WAM_MAX_VISIBLE_REQS;
+    process.env.WAM_MAX_VISIBLE_REQS = "2";
+    try {
+      const { maxVisibleReqs, splitVisibleRequirements } = await import(
+        "../src/context/requirement-visibility.js"
+      );
+      assert.equal(maxVisibleReqs(), 2);
+      const reqs = [
+        { id: "a", status: "done" },
+        { id: "b", status: "pending" },
+        { id: "c", status: "pending" },
+      ];
+      const { visible, overflow } = splitVisibleRequirements(reqs);
+      assert.deepEqual(visible.map((r) => r.id), ["b", "c"]);
+      assert.equal(overflow, 1, "el excedente se reporta, no se oculta el total");
+    } finally {
+      if (prev === undefined) delete process.env.WAM_MAX_VISIBLE_REQS;
+      else process.env.WAM_MAX_VISIBLE_REQS = prev;
+    }
   });
 });
 
@@ -180,7 +208,10 @@ describe("assembly N2: nextAction truncation", () => {
         taskState,
       });
 
-      assert.ok(pack.budget_used < 100, `budget_used: ${pack.budget_used} (should be well under 4000)`);
+      // Con 54 reqs el pack debe seguir acotado por el budget, no consolidarse
+      // a una sola línea (eso era el bug: las indicaciones desaparecían).
+      assert.ok(pack.budget_used <= 4000, `budget_used: ${pack.budget_used} (must stay within budget)`);
+      assert.ok(pack.lines.some((l) => l.includes("req-1")), "las indicaciones no deben desaparecer");
       assert.ok(!pack.budget_violation, "should not violate budget");
     } finally {
       cleanup(d);

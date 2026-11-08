@@ -998,8 +998,14 @@ function _runIntent(intentText, opts = {}) {
   const GENERIC = /^(buscar|find|dónde|donde|está|esta|is|the|file|archivo|carpeta|código|codigo|funcion|función|qué|que|como|cómo|hace|se|usa|usar|usos|referencias|definiciones|symbol|concept)$/i;
   const fallbackName = () => {
     const sw = new Set(['de', 'el', 'la', 'lo', 'los', 'las', 'del', 'un', 'una', 'que', 'y', 'a', 'en', 'se', 'con', 'para']);
-    const toks = src.split(/\s+/).filter((t) => !sw.has(t.toLowerCase()) && !GENERIC.test(t));
-    return toks[toks.length - 1] || src.slice(0, 60);
+    const cleaned = src
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/\bhttps?:\/\/\S+/gi, ' ')
+      .replace(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/gi, ' ');
+    const toks = cleaned.split(/\s+/)
+      .map((t) => t.replace(/^[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+|[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+$/g, ''))
+      .filter((t) => t && !sw.has(t.toLowerCase()) && !GENERIC.test(t) && !/^\d+([._-]\d+)*$/.test(t) && !/^[0-9a-f]{8,}$/i.test(t));
+    return toks[toks.length - 1] || cleaned.slice(0, 60);
   };
   const name = interp.name ?? (q ? q[1] : fallbackName());
   const logicalPlan = {

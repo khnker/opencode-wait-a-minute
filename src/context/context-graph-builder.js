@@ -35,7 +35,14 @@ export function buildContextGraph(taskState, runState, evidenceLineage) {
       id: req.id,
       type: "requirement",
       content: req.title || req.description || "",
-      metadata: { provenance: "user_decided" },
+      verified:
+        req.status === "done" ||
+        req.status === "verified" ||
+        req.verified === true,
+      metadata: {
+        provenance: "user_decided",
+        status: req.status || "pending",
+      },
     });
     // Task requires requirement (only if task node exists)
     if (taskId) {
@@ -47,15 +54,115 @@ export function buildContextGraph(taskState, runState, evidenceLineage) {
     }
   }
 
-  // 3. Evidence Lineage (mapped to canonical edges)
+  // 3. Run State (actions, observations, decisions)
+  const runId = runState?.id || runState?.runId || "run";
+  const runText = (item, fallbackKey) => {
+    if (typeof item === "string") return item;
+    return (
+      item?.description ||
+      item?.summary ||
+      item?.text ||
+      item?.content ||
+      item?.[fallbackKey] ||
+      ""
+    );
+  };
+
+  for (let i = 0; i < (runState?.actions || []).length; i += 1) {
+    const action = runState.actions[i];
+    if (action == null) continue;
+    const id = action?.id || `${runId}-action-${i}`;
+    g.addNode({
+      id,
+      type: "action",
+      content: runText(action, "action"),
+      createdAt: action?.createdAt || action?.timestamp || null,
+      metadata: {
+        provenance: "run_execution",
+        createdAt: action?.createdAt || action?.timestamp || null,
+      },
+    });
+    if (taskId) {
+      g.addEdge({ from: id, to: taskId, type: "related_to" });
+    }
+  }
+
+  for (let i = 0; i < (runState?.observations || []).length; i += 1) {
+    const observation = runState.observations[i];
+    if (observation == null) continue;
+    const id = observation?.id || `${runId}-observation-${i}`;
+    g.addNode({
+      id,
+      type: "observation",
+      content: runText(observation, "observation"),
+      createdAt:
+        observation?.createdAt ||
+        observation?.observedAt ||
+        observation?.timestamp ||
+        null,
+      metadata: {
+        provenance: "run_execution",
+        createdAt:
+          observation?.createdAt ||
+          observation?.observedAt ||
+          observation?.timestamp ||
+          null,
+      },
+    });
+    const target =
+      observation?.requirementId && g.hasNode(observation.requirementId)
+        ? observation.requirementId
+        : taskId;
+    if (target) {
+      g.addEdge({ from: id, to: target, type: "related_to" });
+    }
+  }
+
+  for (let i = 0; i < (runState?.decisions || []).length; i += 1) {
+    const decision = runState.decisions[i];
+    if (decision == null) continue;
+    const id = decision?.id || `${runId}-decision-${i}`;
+    g.addNode({
+      id,
+      type: "decision",
+      content: runText(decision, "decision"),
+      createdAt:
+        decision?.madeAt ||
+        decision?.createdAt ||
+        decision?.timestamp ||
+        null,
+      metadata: {
+        provenance: "run_execution",
+        createdAt:
+          decision?.madeAt ||
+          decision?.createdAt ||
+          decision?.timestamp ||
+          null,
+      },
+    });
+    const target =
+      decision?.requirementId && g.hasNode(decision.requirementId)
+        ? decision.requirementId
+        : taskId;
+    if (target) {
+      g.addEdge({ from: id, to: target, type: "supports" });
+    }
+  }
+
+  // 4. Evidence Lineage (mapped to canonical edges)
   for (const ev of evidenceLineage || []) {
     if (!ev?.id) continue;
     g.addNode({
       id: ev.id,
       type: "evidence",
-      content: ev.content || "",
-      verified: ev.status === "valid",
-      metadata: { provenance: "run_execution" },
+      content: String(ev.content || "").slice(0, 500),
+      verified: ev.status === "valid" || ev.verified === true,
+      createdAt: ev.createdAt || ev.timestamp || null,
+      metadata: {
+        provenance: "run_execution",
+        status: ev.status || null,
+        createdAt: ev.createdAt || ev.timestamp || null,
+      },
     });
     // Evidence supports requirement (only if requirement node exists)
     if (ev.requirementId && g.hasNode(ev.requirementId)) {

@@ -30,7 +30,7 @@ Selection is deterministic and lexical (no embeddings):
   ```
 
 - `routeSkillsV2` (`src/skills/engine.js:715`) filters by approval status, always
-  includes base skills (`writing_for_agents`, `codebase_design`) that bypass
+  includes base skills (`writing_for_agents`, `codebase_design`, `craftsman`) that bypass
   scoring, keeps candidates with `score > 0`, sorts by score, and applies a
   top-N limit: `MINIMAL → 0`, `STANDARD → 3`, `RIGOROUS → 5`.
 

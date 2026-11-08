@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { ContextGraph } from "../../src/context/context-graph.js";
 import { buildRuntimeContextGraph } from "../../src/context/runtime-context-graph.js";
+import { buildContextGraph } from "../../src/context/context-graph-builder.js";
 
 // Fixture covering every runtime layer the builder claims to consume.
 function buildFixture() {
@@ -101,4 +102,69 @@ test("Runtime context graph test — returns an empty ContextGraph for no input"
   const empty = buildRuntimeContextGraph();
   assert.ok(empty instanceof ContextGraph);
   assert.deepEqual(empty.getNodes(), []);
+});
+
+test("buildContextGraph maps runState actions, observations, and decisions", () => {
+  const graph = buildContextGraph(
+    {
+      taskId: "task-1",
+      contract: { objective: "Wire runtime layers" },
+      requirements: [
+        { id: "req-1", title: "Persist evidence", status: "done" },
+        { id: "req-2", title: "Remain pending" },
+        { id: "req-3", title: "Verified by the loop", status: "verified" },
+      ],
+    },
+    {
+      id: "run-1",
+      actions: [
+        { id: "act-1", description: "Run the test suite" },
+        "Free-form action string",
+      ],
+      observations: [
+        { id: "obs-1", summary: "All tests passed", requirementId: "req-1" },
+      ],
+      decisions: [
+        { id: "dec-1", text: "Keep the router canonical", requirementId: "req-2" },
+      ],
+    },
+    [
+      {
+        id: "ev-1",
+        requirementId: "req-1",
+        content: "y".repeat(700),
+        status: "valid",
+        createdAt: "2026-11-03T12:00:00.000Z",
+      },
+    ],
+  );
+
+  assert.equal(graph.getNode("act-1").type, "action");
+  assert.equal(graph.getNode("act-1").content, "Run the test suite");
+  assert.equal(graph.getNode("run-1-action-1").content, "Free-form action string");
+  assert.ok(
+    graph.getEdgesFrom("act-1").some((edge) => edge.to === "task-1" && edge.type === "related_to"),
+  );
+
+  assert.equal(graph.getNode("obs-1").type, "observation");
+  assert.ok(
+    graph.getEdgesFrom("obs-1").some((edge) => edge.to === "req-1" && edge.type === "related_to"),
+  );
+
+  assert.equal(graph.getNode("dec-1").type, "decision");
+  assert.ok(
+    graph.getEdgesFrom("dec-1").some((edge) => edge.to === "req-2" && edge.type === "supports"),
+  );
+
+  const done = graph.getNode("req-1");
+  assert.equal(done.verified, true);
+  assert.equal(done.metadata.status, "done");
+  assert.equal(done.metadata.provenance, "user_decided");
+  assert.equal(graph.getNode("req-2").verified, false);
+  assert.equal(graph.getNode("req-2").metadata.status, "pending");
+  assert.equal(graph.getNode("req-3").verified, true);
+  assert.equal(graph.getNode("req-3").metadata.status, "verified");
+
+  assert.equal(graph.getNode("ev-1").content.length, 500);
+  assert.equal(graph.getNode("ev-1").metadata.createdAt, "2026-11-03T12:00:00.000Z");
 });

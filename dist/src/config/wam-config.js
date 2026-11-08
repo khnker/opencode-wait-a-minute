@@ -23,6 +23,8 @@
  *   - autoLoop:    auto-continue after a rejected post-DONE review       (default true)
  *   - permissionPreflight: request access permissions before delegating  (default true)
  *   - permissionEnforce: hard-enforce permission decisions              (default false)
+ *   - contractApproval: "required" pauses writes until /wam contract approve;
+ *                       "advisory" proceeds after a recommendation       (default advisory)
  *   - taskLoop:    drive the execution loop after session.idle           (default enabled)
  *   - qualityContracts: enforce task-specific evidence requirements      (default disabled)
  *
@@ -34,6 +36,7 @@
  *   - autoLoop:    WAM_AUTO_LOOP=<bool> | WAM_DISABLE_AUTO_LOOP=1
  *   - permissionPreflight: WAM_PERMISSION_PREFLIGHT=<bool> | WAM_DISABLE_PERMISSION_PREFLIGHT=1
  *   - permissionEnforce: WAM_PERMISSION_ENFORCE=<bool>
+ *   - contractApproval: WAM_CONTRACT_APPROVAL=required|advisory
  *   - task loop agents: WAM_TASK_LOOP_AGENTS=1, WAM_AGENT_MAX_REVISIONS=<int>,
  *     WAM_AGENT_MAX_REPLANS=<int>, WAM_AGENT_MAX_HISTORY=<int>,
  *     WAM_AGENT_TOOL_TIMEOUT_MS=<positive-int>, WAM_AGENT_EARLY_PASS=<bool>
@@ -56,6 +59,7 @@ export const DEFAULT_WAM_CONFIG = Object.freeze({
   autoLoop: true,
   permissionPreflight: true,
   permissionEnforce: false,
+  contractApproval: "advisory",
   contextProjection: "active",
   taskLoop: Object.freeze({
     enabled: true,
@@ -66,6 +70,7 @@ export const DEFAULT_WAM_CONFIG = Object.freeze({
       maxRevisionCycles: 2,
       maxReplanCycles: 1,
       maxAttempts: 2,
+      maxConsecutiveFailures: 3,
       maxHistory: 5,
       toolTimeoutMs: 120000,
     }),
@@ -88,6 +93,14 @@ export function parseBoolean(value) {
 
 function firstDefined(...values) {
   for (const v of values) if (v !== undefined) return v;
+  return undefined;
+}
+
+function parseContractApproval(value) {
+  if (value === undefined || value === null || value === "") return undefined;
+  const v = String(value).trim().toLowerCase();
+  if (["required", "require", "strict", "approve", "approval"].includes(v)) return "required";
+  if (["advisory", "auto", "off", "none"].includes(v)) return "advisory";
   return undefined;
 }
 
@@ -193,7 +206,7 @@ function readMergedConfigFile(baseDir) {
 /**
  * Resolve the effective WAM config for a project root.
  * @param {string} [baseDir]
- * @returns {{skills: boolean, logging: boolean, enforcement: boolean, debug: boolean, autoLoop: boolean, permissionPreflight: boolean, contextProjection: string}}
+ * @returns {{skills: boolean, logging: boolean, enforcement: boolean, debug: boolean, autoLoop: boolean, permissionPreflight: boolean, contractApproval: "advisory"|"required", contextProjection: string}}
  */
 export function loadWamConfig(baseDir = process.cwd()) {
   const file = readMergedConfigFile(baseDir);
@@ -248,6 +261,12 @@ export function loadWamConfig(baseDir = process.cwd()) {
     DEFAULT_WAM_CONFIG.permissionEnforce,
   );
 
+  const contractApproval = firstDefined(
+    parseContractApproval(process.env.WAM_CONTRACT_APPROVAL),
+    parseContractApproval(file.contractApproval),
+    DEFAULT_WAM_CONFIG.contractApproval,
+  );
+
   const fileTaskLoop = file.taskLoop && typeof file.taskLoop === "object" ? file.taskLoop : {};
   const fileTaskLoopAgents =
     fileTaskLoop.agents && typeof fileTaskLoop.agents === "object" ? fileTaskLoop.agents : {};
@@ -262,6 +281,7 @@ export function loadWamConfig(baseDir = process.cwd()) {
     autoLoop,
     permissionPreflight,
     permissionEnforce,
+    contractApproval,
     contextProjection: firstDefined(
       process.env.WAM_CONTEXT_PROJECTION,
       typeof file.contextProjection === "string" ? file.contextProjection : undefined,
@@ -303,6 +323,11 @@ export function loadWamConfig(baseDir = process.cwd()) {
           parsePositiveInt(process.env.WAM_AGENT_MAX_ATTEMPTS),
           parsePositiveInt(fileTaskLoopAgents.maxAttempts),
           DEFAULT_WAM_CONFIG.taskLoop.agents.maxAttempts,
+        ),
+        maxConsecutiveFailures: firstDefined(
+          parsePositiveInt(process.env.WAM_AGENT_MAX_CONSECUTIVE_FAILURES),
+          parsePositiveInt(fileTaskLoopAgents.maxConsecutiveFailures),
+          DEFAULT_WAM_CONFIG.taskLoop.agents.maxConsecutiveFailures,
         ),
         maxHistory: firstDefined(
           parseNonNegativeInt(process.env.WAM_AGENT_MAX_HISTORY),

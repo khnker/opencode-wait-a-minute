@@ -90,8 +90,8 @@ function fakeClient({ created, prompted, createError, promptError } = {}) {
   };
 }
 
-test("derives read-only tool policy for Analyst, Architect and Reviewer", () => {
-  for (const role of ["ANALYST", "ARCHITECT", "REVIEWER"]) {
+test("derives read-only tool policy for Analyst, Architect, UX and Reviewer", () => {
+  for (const role of ["ANALYST", "ARCHITECT", "UX_DESIGNER", "REVIEWER"]) {
     const tools = toolPolicyForRole(role);
     assert.equal(tools.read, true);
     assert.equal(tools.grep, true);
@@ -102,10 +102,45 @@ test("derives read-only tool policy for Analyst, Architect and Reviewer", () => 
     assert.equal(tools.patch, false);
     assert.equal(tools.task, false);
     assert.equal(tools.todowrite, false);
+    assert.equal(tools.question, false);
   }
 });
 
-test("derives mutating tool policy only for Builder", () => {
+test("derives mutating tool policy for Builder and layer engineers", () => {
+  for (const role of ["BUILDER", "BACKEND_ENGINEER", "FRONTEND_ENGINEER"]) {
+    const tools = toolPolicyForRole(role);
+    assert.equal(tools.read, true);
+    assert.equal(tools.bash, true);
+    assert.equal(tools.edit, true);
+    assert.equal(tools.write, true);
+    assert.equal(tools.patch, true);
+    assert.equal(tools.task, false);
+    assert.equal(tools.todowrite, false);
+    assert.equal(tools.question, false);
+  }
+});
+
+test("builder specialization prompt names its layer and focus", () => {
+  const prompt = buildAgentPrompt(requestFor("FRONTEND_ENGINEER"));
+  assert.match(prompt.system, /You are the WAM FRONTEND_ENGINEER role/);
+  assert.match(prompt.system, /Layer: frontend/);
+  assert.match(prompt.system, /Focus: components/);
+  assert.match(prompt.system, /Preferred skills: angular-developer/);
+});
+
+test("role prompt names its loop stage and injects loaded skills", () => {
+  const prompt = buildAgentPrompt(requestFor("ANALYST"), {
+    roleSkills: {
+      skills: ["diagnosing-bugs"],
+      text: "Loaded WAM role skills (apply them as operating guidance):\n\n### diagnosing-bugs\nReproduce before patching.",
+    },
+  });
+  assert.match(prompt.system, /Loop stage: 1\/4 — analysis/);
+  assert.match(prompt.system, /Loaded WAM role skills/);
+  assert.match(prompt.system, /Reproduce before patching/);
+});
+
+test("builder tool policy shape", () => {
   const tools = toolPolicyForRole("BUILDER");
   assert.equal(tools.read, true);
   assert.equal(tools.bash, true);
@@ -114,6 +149,7 @@ test("derives mutating tool policy only for Builder", () => {
   assert.equal(tools.patch, true);
   assert.equal(tools.task, false);
   assert.equal(tools.todowrite, false);
+  assert.equal(tools.question, false);
 });
 
 test("rejects unknown roles when deriving tool policy", () => {
@@ -126,6 +162,7 @@ test("builds a role prompt with objective, criteria and output shape", () => {
 
   assert.match(prompt.system, /You are the WAM BUILDER role/);
   assert.match(prompt.system, /Do not invoke another role/);
+  assert.match(prompt.system, /Do not ask the user questions/);
   assert.match(prompt.system, /Do not include a `review` field/);
   assert.match(prompt.system, /"role": "BUILDER"/);
   assert.doesNotMatch(prompt.system, /"review":/);
@@ -148,6 +185,28 @@ test("reviewer prompt requires a review result", () => {
   assert.match(prompt.system, /"correctiveAction"/);
 });
 
+test("reviewer prompt renders review artifacts", () => {
+  const request = requestFor("REVIEWER");
+  request.input.reviewArtifacts = [
+    { ref: "review/hidden.log", content: "fail 1 - expected alpha, got beta" },
+  ];
+  const prompt = buildAgentPrompt(request);
+  assert.match(prompt.text, /Review artifacts:/);
+  assert.match(prompt.text, /review\/hidden\.log/);
+  assert.match(prompt.text, /fail 1 - expected alpha, got beta/);
+});
+
+test("reviewer prompt renders an empty review artifact section", () => {
+  const prompt = buildAgentPrompt(requestFor("REVIEWER"));
+  assert.match(prompt.text, /Review artifacts:\n- \(none\)/);
+});
+
+test("reviewer prompt requires revision on a failing artifact", () => {
+  const prompt = buildAgentPrompt(requestFor("REVIEWER"));
+  assert.match(prompt.system, /return REVISION_REQUIRED with a finding that cites the artifact ref/);
+  assert.match(prompt.system, /treat an artifact as stale only when newer evidence/);
+});
+
 test("parses a plain JSON result", () => {
   const request = requestFor();
   const parsed = parseAgentResultText(JSON.stringify(resultFor(request)));
@@ -162,19 +221,37 @@ test("parses one fenced JSON result", () => {
   assert.equal(parsed.invocationId, "inv-analyst");
 });
 
-test("rejects prose, multiple objects and invalid JSON", () => {
-  for (const text of [
-    "",
-    "Here is the result: {}",
-    '{"a":1}\n{"b":2}',
-    "```json\n{}\n```\n```json\n{}\n```",
-  ]) {
+test("rejects empty and invalid JSON text", () => {
+  for (const text of ["", "   ", "not json at all", "```json\n{invalid}\n```"]) {
     assert.throws(
       () => parseAgentResultText(text),
       (error) => error instanceof AgentInvocationError &&
         error.code === AGENT_INVOCATION_ERROR_CODES.INVALID_RESULT,
     );
   }
+});
+
+test("parses a fenced result containing raw control characters in a string", () => {
+  const parsed = parseAgentResultText(
+    "```json\n{\"taskId\":\"task-1\",\"summary\":\"line one\nline two\tend\"}\n```",
+  );
+  assert.equal(parsed.summary, "line one\nline two\tend");
+});
+
+test("parses a JSON object surrounded by prose", () => {
+  const parsed = parseAgentResultText(
+    'Here is the result:\n{"taskId":"task-1","summary":"ok"}\nThanks.',
+  );
+  assert.equal(parsed.taskId, "task-1");
+});
+
+test("rejects prose without a JSON object", () => {
+  assert.throws(
+    () => parseAgentResultText("Here is the result, but no object."),
+    (error) => error instanceof AgentInvocationError &&
+      error.code === AGENT_INVOCATION_ERROR_CODES.INVALID_RESULT &&
+      error.message === "agent response is not valid JSON",
+  );
 });
 
 test("creates a child session and sends one role prompt", async () => {
@@ -293,7 +370,7 @@ test("wraps session creation error responses", async () => {
 });
 
 test("wraps prompt failures and includes the session id", async () => {
-  const client = fakeClient({ promptError: new Error("timeout") });
+  const client = fakeClient({ promptError: new Error("boom") });
   const adapter = createOpenCodeV1AgentAdapter({ client });
 
   await assert.rejects(
@@ -301,7 +378,7 @@ test("wraps prompt failures and includes the session id", async () => {
     (error) => error instanceof AgentInvocationError &&
       error.code === AGENT_INVOCATION_ERROR_CODES.PROMPT_FAILED &&
       error.sessionID === "ses-child" &&
-      error.cause?.message === "timeout",
+      error.cause?.message === "boom",
   );
 });
 
@@ -317,6 +394,25 @@ test("classifies an aborted prompt as a timeout", async () => {
       error.sessionID === "ses-child" &&
       error.cause === abort &&
       error.message === "agent prompt timeout after 1000ms",
+  );
+});
+
+test("surfaces a session error instead of an empty response", async () => {
+  const providerError = {
+    name: "APIError",
+    data: { message: "provider down", statusCode: 503 },
+  };
+  const client = fakeClient({
+    prompted: { info: { error: providerError }, parts: [] },
+  });
+  const adapter = createOpenCodeV1AgentAdapter({ client });
+
+  await assert.rejects(
+    () => adapter.invoke(requestFor()),
+    (error) => error instanceof AgentInvocationError &&
+      error.code === AGENT_INVOCATION_ERROR_CODES.PROMPT_FAILED &&
+      error.sessionID === "ses-child" &&
+      error.message === "agent session error: provider down (503)",
   );
 });
 

@@ -3,9 +3,9 @@
  *
  * Returns a decision object; an unapproved contract yields an advisory
  * recommendation, never a block. Invariants:
- *   - Only CONTRACT_GATED_TOOLS are ever blocked; `bash`/`task` (investigation
- *     and delegation surfaces) stay usable so tests can run and workers can be
- *     dispatched.
+ *   - CONTRACT_GATED_TOOLS are blocked; mutating bash commands are treated as
+ *     gated too, while read-only bash (tests, git status) and `task` delegation
+ *     stay usable.
  *   - A session with no tracked task/contract fails OPEN: there is nothing to
  *     approve, and default-deny here deadlocked every write/edit.
  *   - Delegated workers (sessions with a resolved parentID) are exempt. An
@@ -20,6 +20,7 @@
  */
 
 import { logger } from "../integration/logger.js";
+import { isMutatingToolCall } from "../execution/execution-gate.js";
 
 /** Tools gated by contract approval. Deliberately narrower than the risk
  *  engine's MUTATING_TOOLS (which also covers bash/task). */
@@ -181,7 +182,8 @@ function logDecision(event) {
  * @throws {WamPolicyBlock}
  */
 export function enforceGovernance(tool, state, ctx = {}) {
-  if (!CONTRACT_GATED_TOOLS.has(tool)) return { allowed: true, reason: "tool-not-gated" };
+  const gated = CONTRACT_GATED_TOOLS.has(tool) || isMutatingToolCall(tool, ctx.args || {});
+  if (!gated) return { allowed: true, reason: "tool-not-gated" };
 
   // Hard config switch (cfg.enforcement === false): governance is fully off.
   if (ctx.enforcementEnabled === false) {
@@ -221,6 +223,26 @@ export function enforceGovernance(tool, state, ctx = {}) {
   const pending = (state.requirements || state.contract?.requirements || [])
     .filter((r) => r.status !== "done" && r.status !== "verified").length;
   const unknowns = state?.contract?.unknowns || state?.unknowns || [];
+
+  // Strict contract approval: required mode pauses mutating tools until the
+  // user explicitly approves with /wam contract approve. The directive carries
+  // the visible plan so the agent can restate it before waiting.
+  if (ctx.requireApproval && pending > 0) {
+    const raw = state.requirements || state.contract?.requirements || [];
+    const plan = raw
+      .filter((r) => typeof r === "string" || (r.status !== "done" && r.status !== "verified"))
+      .map((r, i) => `${i + 1}. ${typeof r === "string" ? r : (r.title || r.id || "")}`)
+      .filter((line) => line.trim() !== "");
+    const objective = state.contract?.objective || state.nextAction || "";
+    const directive = [
+      `[wait-a-minute] CONTRATO PENDIENTE DE APROBACIÓN (${contractStatus || "?"}).`,
+      objective ? `Objetivo: ${objective}` : "",
+      plan.length ? `Plan:\n${plan.join("\n")}` : "",
+      "Mostrá este plan al usuario y esperá /wam contract approve. No ejecutes write/edit/apply_patch hasta la aprobación.",
+    ].filter(Boolean).join("\n");
+    logDecision({ decision: "block", reason: "contract-not-approved", tool, phase });
+    return { allowed: false, reason: "contract-not-approved", directive };
+  }
 
   if (pending === 0 && unknowns.length === 0) {
     logDecision({ decision: "allow", reason: "empty-contract", tool, phase });

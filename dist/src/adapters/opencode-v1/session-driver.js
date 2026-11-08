@@ -1,6 +1,7 @@
 /** Host adapter — drives the pure task loop and persists before prompting. */
 import { decideNextAction, buildTaskLoopPrompt, TASK_LOOP_DECISIONS } from "../../execution/task-loop.js";
 import { isTerminalAgentSignal } from "../../execution/agent-run-state.js";
+import { describeTaskStage } from "../../execution/task-stage.js";
 import { migrateLegacyPhase } from "../../execution/execution-state.js";
 import { evaluateCompletionGate } from "../../integration/orchestration.js";
 import { getTaskState, persistTaskState } from "../../skills/engine.js";
@@ -37,6 +38,7 @@ export function driveTaskLoop({
   config = DEFAULT_TASK_LOOP_CONFIG,
   qualityConfig = null,
   enforce = false,
+  contractApproval = "required",
   agent = null,
   now = Date.now(),
   deps = {},
@@ -62,13 +64,23 @@ export function driveTaskLoop({
       if (!task) return { prompted: false, decision: null, reason: "no-task" };
 
       const loaded = loadLoop(taskId, projectRoot);
-      const loop = loaded?.state || createLoopState({
+      const previous = loaded?.state;
+      // A mismatched snapshot belongs to a prior task/session; resuming it
+      // would carry another attempt's stop state into this one.
+      const sameAttempt = previous
+        && previous.taskId === taskId
+        && previous.sessionId === sid;
+      const freshLoop = () => createLoopState({
         taskId,
         sessionId: sid,
         maxIterations: config.maxIterations,
         maxNoProgress: config.maxNoProgress,
         now,
       });
+      const loop = sameAttempt ? previous : freshLoop();
+      // A STOPPED snapshot still owns its stop decision (so it surfaces once),
+      // but its counters must not leak into the next recorded attempt.
+      const recordBase = sameAttempt && previous.status === "STOPPED" ? freshLoop() : loop;
 
       if (turnId && loop.lastTurnId === turnId) {
         return { prompted: false, decision: null, reason: "duplicate-turn", state: loop };
@@ -106,21 +118,26 @@ export function driveTaskLoop({
         repeatedRejectedHypothesis: deps.repeatedRejectedHypothesis === true,
         fingerprint,
       };
+      const contractRequired = contractApproval === "required";
       const authorization = {
         pendingAuth: task.pendingAuthorization || null,
         denied: task.pendingAuthorization?.status === "denied",
-        contractApproved: task.contract?.status === "APPROVED" ? true : (task.contract?.status ? false : undefined),
+        contractApproved: contractRequired
+          ? (task.contract?.status === "APPROVED" ? true : (task.contract?.status ? false : undefined))
+          : true,
       };
       const budget = {
         exhausted: (loop.iteration || 0) >= (loop.maxIterations ?? config.maxIterations),
       };
 
-      const result = decide({ task, loop, progress, completionGate: gate, authorization, budget, quality: quality || {}, agent });
-      if (!result?.decision || !TASK_LOOP_DECISIONS.includes(result.decision)) {
+      const decided = decide({ task, loop, progress, completionGate: gate, authorization, budget, quality: quality || {}, agent });
+      if (!decided?.decision || !TASK_LOOP_DECISIONS.includes(decided.decision)) {
         throw new Error("session-driver: invalid loop decision");
       }
+      const stageSource = decided.decision === "COMPLETE" ? { ...task, phase: "DONE" } : task;
+      const result = { ...decided, stage: describeTaskStage(stageSource) };
 
-      const nextState = applyLoopDecision(loop, result, { turnId: turnId ?? loop.lastTurnId, now });
+      const nextState = applyLoopDecision(recordBase, result, { turnId: turnId ?? recordBase.lastTurnId, now });
       const saved = record(taskId, projectRoot, nextState, result, {
         eventId: `${nextState.runId}:${nextState.sequence + 1}`,
         turnId,
@@ -158,13 +175,11 @@ export function driveTaskLoop({
         : loop.lastDecision === result.decision;
       const needsUserSurface =
         surfaceable &&
-        (surfaceByAgent
-          ? agent.surfaced !== true
-          : result.decision === "WAIT_AUTHORIZATION"
-            ? task.authorizationSurfacedId !== authToken
-            : !repeatedDecision);
+        (result.decision === "WAIT_AUTHORIZATION"
+          ? task.authorizationSurfacedId !== authToken
+          : !repeatedDecision && (surfaceByAgent ? agent.surfaced !== true : true));
       if ((!actionable && !needsUserSurface) || typeof client?.session?.prompt !== "function") {
-        return { prompted: false, decision: result.decision, reason: result.reason, state: saved.state };
+        return { prompted: false, decision: result.decision, reason: result.reason, state: saved.state, stage: result.stage };
       }
 
       if (needsUserSurface) {
@@ -194,7 +209,7 @@ export function driveTaskLoop({
         inFlight.delete(sid);
         throw err;
       }
-      return { prompted: true, decision: result.decision, reason: result.reason, state: saved.state };
+      return { prompted: true, decision: result.decision, reason: result.reason, state: saved.state, stage: result.stage };
     });
   } catch (error) {
     return { prompted: false, decision: null, reason: "error", error };

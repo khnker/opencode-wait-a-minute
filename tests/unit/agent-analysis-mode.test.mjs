@@ -104,6 +104,8 @@ test("ANALYZE stops exhausted when the reviewer asks for revision", async () => 
     acceptanceCriteria: CRITERIA,
     adapter,
     mode: "ANALYZE",
+    maxRevisionCycles: 0,
+    maxReplanCycles: 0,
   });
 
   assert.deepEqual(
@@ -112,4 +114,98 @@ test("ANALYZE stops exhausted when the reviewer asks for revision", async () => 
   );
   assert.equal(outcome.status, "REVISION_REQUIRED");
   assert.equal(outcome.exhausted, true);
+});
+
+test("ANALYZE iterates on reviewer revision findings", async () => {
+  const finding = {
+    id: "F1",
+    description: "missing evidence",
+    severity: "HIGH",
+    evidence: ["ev-1"],
+    correctiveAction: "add evidence",
+  };
+  let reviews = 0;
+  const adapter = {
+    calls: [],
+    async invoke(request) {
+      this.calls.push(request);
+      const result = makeResult(request.role);
+      result.taskId = request.taskId;
+      result.invocationId = request.invocationId;
+      if (request.role === "REVIEWER") {
+        reviews += 1;
+        const verdict = reviews === 1 ? "REVISION_REQUIRED" : "ACCEPTED";
+        result.review = {
+          verdict,
+          findings: verdict === "ACCEPTED" ? [] : [finding],
+          limitations: [],
+        };
+      }
+      return { result, metadata: { sessionID: `ses-${request.role}` } };
+    },
+  };
+
+  const outcome = await runAgentFeedbackOrchestration({
+    taskId: TASK_ID,
+    objective: "analiza el loop de agentes",
+    acceptanceCriteria: CRITERIA,
+    adapter,
+    mode: "ANALYZE",
+  });
+
+  assert.deepEqual(
+    adapter.calls.map((call) => call.role),
+    ["ANALYST", "ARCHITECT", "REVIEWER", "ANALYST", "ARCHITECT", "REVIEWER"],
+  );
+  assert.equal(
+    adapter.calls[3].input.constraints.some((constraint) => constraint.includes("missing evidence")),
+    true,
+  );
+  assert.equal(outcome.status, "COMPLETED");
+  assert.equal(outcome.verdict, "ACCEPTED");
+});
+
+test("ANALYZE replans with the architect when the reviewer requires replanning", async () => {
+  const finding = {
+    id: "F1",
+    description: "strategy is incomplete",
+    severity: "HIGH",
+    evidence: ["ev-1"],
+    correctiveAction: "rework the strategy",
+  };
+  let reviews = 0;
+  const adapter = {
+    calls: [],
+    async invoke(request) {
+      this.calls.push(request);
+      const result = makeResult(request.role);
+      result.taskId = request.taskId;
+      result.invocationId = request.invocationId;
+      if (request.role === "REVIEWER") {
+        reviews += 1;
+        const verdict = reviews === 1 ? "REPLAN_REQUIRED" : "ACCEPTED";
+        result.review = {
+          verdict,
+          findings: verdict === "ACCEPTED" ? [] : [finding],
+          limitations: [],
+        };
+      }
+      return { result, metadata: { sessionID: `ses-${request.role}` } };
+    },
+  };
+
+  const outcome = await runAgentFeedbackOrchestration({
+    taskId: TASK_ID,
+    objective: "analiza el loop de agentes",
+    acceptanceCriteria: CRITERIA,
+    adapter,
+    mode: "ANALYZE",
+  });
+
+  assert.deepEqual(
+    adapter.calls.map((call) => call.role),
+    ["ANALYST", "ARCHITECT", "REVIEWER", "ARCHITECT", "REVIEWER"],
+  );
+  assert.equal(outcome.status, "COMPLETED");
+  assert.equal(outcome.verdict, "ACCEPTED");
 });

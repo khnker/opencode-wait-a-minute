@@ -16,6 +16,22 @@ Sessions MUST NOT leak task state across different session IDs.
 - **WHEN** session B sends a prompt while session A is bound to task A
 - **THEN** session B MUST NOT automatically inherit task A without explicit session binding or a resume command
 
+### Requirement: Loop snapshots are scoped to the attempt
+A persisted loop snapshot MUST only be resumed for the same task and session. A
+snapshot from another attempt MUST be discarded. A `STOPPED` snapshot MUST
+surface its stop decision once, then its counters MUST NOT leak into the next
+recorded attempt.
+
+#### Scenario: Foreign snapshot discarded
+- **WHEN** a loop snapshot belongs to a different task or session
+- **THEN** the driver starts a fresh loop state
+- **AND** the prior stop state is not inherited
+
+#### Scenario: Stop surfaces once
+- **WHEN** a `STOPPED` snapshot is resumed for the same attempt
+- **THEN** the stop decision surfaces once
+- **AND** the next recorded attempt starts with fresh counters
+
 ### Requirement: Decoupled duplicate detection
 Duplicate detection MUST propose candidates rather than forcing identity takeover.
 

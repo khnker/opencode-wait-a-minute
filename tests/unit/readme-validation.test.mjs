@@ -10,6 +10,9 @@ import path from "node:path";
 import pluginDefault from "../../index.js";
 import { routeSkillsV2, getTaskState } from "../../src/skills/engine.js";
 
+// Esta suite valida el modo de aprobación obligatoria.
+process.env.WAM_CONTRACT_APPROVAL = "required";
+
 // Aislamiento: los tests NO deben escribir .wam en el repo del plugin
 process.chdir(fs.mkdtempSync(path.join(os.tmpdir(), "wam-rv-iso-")));
 const CWD = process.cwd();
@@ -34,21 +37,21 @@ test("Pre-flight cognitivo: analiza intención, contexto de proyecto y riesgo", 
   assert.ok(a.complexity, "evalúa complejidad");
 });
 
-test("Completion Contract: propone requisitos, verificación y restricciones (nace APPROVED, sin espera de aprobación)", async () => {
+test("Completion Contract: propone requisitos, verificación y restricciones (nace PROPOSED, espera aprobación)", async () => {
   const taskId = `rv-ct-${Date.now()}`;
   await runHook("implementar auth con refresh token y migración", taskId);
   const st = getTaskState(taskId);
   cleanup(taskId);
   assert.ok(st, "estado persistido");
-  // Root nuevo → bootstrap: contrato APPROVED y fase IMPLEMENTING desde el inicio
-  assert.equal(st.phase, "IMPLEMENTING");
-  assert.equal(st.contract?.status, "APPROVED");
+  // Root nuevo → contrato PROPOSED y fase PROPOSED: requiere /wam contract approve
+  assert.equal(st.phase, "PROPOSED");
+  assert.equal(st.contract?.status, "PROPOSED");
   assert.ok(st.contract?.requirements?.length >= 1, "propone requisitos");
   assert.ok(Array.isArray(st.contract?.verification), "define verificación");
   assert.ok(Array.isArray(st.contract?.constraints), "define restricciones");
 });
 
-test("Workflow de contrato: nace APPROVED, rejectContract ya no deja WAITING, editContract reabre PROPOSED", async () => {
+test("Workflow de contrato: nace PROPOSED, rejectContract deja REJECTED/WAITING, editContract reabre PROPOSED", async () => {
   const taskId = `rv-ap-${Date.now()}`;
   await runHook("migrar a postgres", taskId);
   const app = pluginDefault.approveContract(taskId);
@@ -59,9 +62,9 @@ test("Workflow de contrato: nace APPROVED, rejectContract ya no deja WAITING, ed
   const taskId2 = `rv-rej-${Date.now()}`;
   await runHook("hacer X", taskId2);
   const rej = pluginDefault.rejectContract(taskId2);
-  assert.equal(rej.status, "APPROVED", "no hay espera de aprobación: el contrato sigue APPROVED");
-  assert.notEqual(rej.phase, "WAITING");
-  assert.equal(getTaskState(taskId2).contract.status, "APPROVED");
+  assert.equal(rej.status, "REJECTED", "rechazar no aprueba: el contrato queda REJECTED");
+  assert.equal(rej.phase, "WAITING");
+  assert.equal(getTaskState(taskId2).contract.status, "REJECTED");
 
   const taskId3 = `rv-ed-${Date.now()}`;
   await runHook("hacer Y", taskId3);
@@ -109,7 +112,7 @@ test("Persistent Policies: scope, verify y simplify ACTIVE por defecto", async (
 });
 
 test("Skill Registry autocontenido: >=300 skills aprobadas con contenido real embebido", () => {
-  const reg = pluginDefault.getRegistry();
+  const reg = pluginDefault.loadBundledRegistry();
   const ids = Object.keys(reg);
   assert.ok(ids.length >= 300, `registry con ${ids.length} skills`);
   const sample = ids.slice(0, 25);

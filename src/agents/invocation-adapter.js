@@ -4,9 +4,11 @@ import {
   assertAgentResult,
   getRoleCapabilities,
   getRoleDefinition,
+  getRoleStage,
 } from "./role-contracts.js";
 import { AGENT_RESOURCE_LIMITS } from "./resource-policy.js";
 import { assertResultIdentity, normalizeAgentResult } from "./result-boundary.js";
+import { resolveRoleSkills } from "./role-skills.js";
 
 export const AGENT_INVOCATION_ERROR_CODES = Object.freeze({
   SESSION_CREATE_FAILED: "SESSION_CREATE_FAILED",
@@ -30,6 +32,7 @@ const READ_ONLY_TOOLS = Object.freeze({
   task: false,
   todowrite: false,
   skill: false,
+  question: false,
 });
 
 const BUILDER_TOOLS = Object.freeze({
@@ -106,6 +109,10 @@ function renderPriorFindings(findings) {
   });
 }
 
+function renderReviewArtifacts(artifacts) {
+  return renderList(artifacts, (artifact) => `- ${artifact.ref}:\n${artifact.content}`);
+}
+
 function buildResultShape(request) {
   const shape = {
     taskId: request.taskId,
@@ -149,16 +156,22 @@ function buildResultShape(request) {
   return JSON.stringify(shape, null, 2);
 }
 
-export function buildAgentSystemPrompt(request) {
+export function buildAgentSystemPrompt(request, { root = null, roleSkills = null } = {}) {
   const definition = getRoleDefinition(request.role);
+  const stage = getRoleStage(request.role);
+  const loadedSkills = roleSkills || (root ? resolveRoleSkills(request.role, { root }) : null);
   const reviewerRule =
     request.role === AGENT_ROLES.REVIEWER
-      ? "Include `review` unless status is FAILED. Revision and replan verdicts require at least one finding with evidence."
+      ? "Include `review` unless status is FAILED. Revision and replan verdicts require at least one finding with evidence. If a review artifact shows a failing test, a contradiction with the implementation, or a missing required file, return REVISION_REQUIRED with a finding that cites the artifact ref; treat an artifact as stale only when newer evidence in this prompt contradicts it."
       : "Do not include a `review` field.";
 
   return [
     `You are the WAM ${request.role} role.`,
     `Responsibility: ${definition.responsibility}.`,
+    ...(stage ? [`Loop stage: ${stage.index}/${stage.total} — ${stage.label}.`] : []),
+    ...(definition.layer ? [`Layer: ${definition.layer}.`] : []),
+    ...(definition.focus ? [`Focus: ${definition.focus}.`] : []),
+    ...(definition.skills?.length ? [`Preferred skills: ${definition.skills.join(", ")}.`] : []),
     "Limits:",
     renderList(definition.limits, (limit) => `- ${limit}`),
     "",
@@ -166,9 +179,11 @@ export function buildAgentSystemPrompt(request) {
     "Do not invoke another role. Do not claim task completion or approval.",
     reviewerRule,
     "Return exactly one JSON object and no prose or multiple objects. A single Markdown code fence is allowed.",
+    "Do not ask the user questions; put unknowns in openQuestions.",
     "Use the supplied taskId, invocationId and role unchanged.",
     "The object MUST match this shape:",
     buildResultShape(request),
+    ...(loadedSkills?.text ? ["", loadedSkills.text] : []),
   ].join("\n");
 }
 
@@ -185,6 +200,9 @@ export function buildAgentUserPrompt(request) {
     "Evidence:",
     renderList(request.input.evidence, (item) => `- ${item}`),
     "",
+    "Review artifacts:",
+    renderReviewArtifacts(request.input.reviewArtifacts || []),
+    "",
     "Constraints:",
     renderList(request.input.constraints, (item) => `- ${item}`),
     "",
@@ -196,9 +214,9 @@ export function buildAgentUserPrompt(request) {
   ].join("\n");
 }
 
-export function buildAgentPrompt(request) {
+export function buildAgentPrompt(request, options = {}) {
   return {
-    system: buildAgentSystemPrompt(request),
+    system: buildAgentSystemPrompt(request, options),
     text: buildAgentUserPrompt(request),
   };
 }
@@ -211,20 +229,103 @@ function stripSingleCodeFence(text) {
   return lines.slice(1, -1).join("\n").trim();
 }
 
+function escapeControlCharsInJsonStrings(text) {
+  let escapedText = "";
+  let inString = false;
+  let escaped = false;
+  for (const char of text) {
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        escapedText += char;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        escapedText += char;
+        continue;
+      }
+      if (char === '"') {
+        inString = false;
+        escapedText += char;
+        continue;
+      }
+      const code = char.codePointAt(0);
+      if (char === "\n") escapedText += "\\n";
+      else if (char === "\r") escapedText += "\\r";
+      else if (char === "\t") escapedText += "\\t";
+      else if (code < 0x20) escapedText += `\\u${code.toString(16).padStart(4, "0")}`;
+      else escapedText += char;
+      continue;
+    }
+    if (char === '"') inString = true;
+    escapedText += char;
+  }
+  return escapedText;
+}
+
+function extractBalancedJsonObjects(text) {
+  const objects = [];
+  let inString = false;
+  let escaped = false;
+  let depth = 0;
+  let start = -1;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === "{") {
+      if (depth === 0) start = index;
+      depth += 1;
+      continue;
+    }
+    if (char === "}" && depth > 0) {
+      depth -= 1;
+      if (depth === 0) {
+        objects.push(text.slice(start, index + 1));
+        start = -1;
+      }
+    }
+  }
+  return objects;
+}
+
 export function parseAgentResultText(text) {
   if (typeof text !== "string" || text.trim() === "") {
     throw new AgentInvocationError("agent response is empty", {
       code: AGENT_INVOCATION_ERROR_CODES.INVALID_RESULT,
     });
   }
-  try {
-    return JSON.parse(stripSingleCodeFence(text));
-  } catch (cause) {
-    throw new AgentInvocationError("agent response is not valid JSON", {
-      code: AGENT_INVOCATION_ERROR_CODES.INVALID_RESULT,
-      cause,
-    });
+  const stripped = stripSingleCodeFence(text);
+  const candidates = [stripped, ...extractBalancedJsonObjects(stripped)];
+  let cause;
+  for (const candidate of candidates) {
+    for (const attempt of [candidate, escapeControlCharsInJsonStrings(candidate)]) {
+      try {
+        return JSON.parse(attempt);
+      } catch (error) {
+        if (!cause) cause = error;
+      }
+    }
   }
+  throw new AgentInvocationError("agent response is not valid JSON", {
+    code: AGENT_INVOCATION_ERROR_CODES.INVALID_RESULT,
+    cause,
+  });
 }
 
 function sessionErrorMessage(data) {
@@ -244,8 +345,8 @@ function responseText(parts) {
     .trim();
 }
 
-function promptBody(request, agent) {
-  const prompt = buildAgentPrompt(request);
+function promptBody(request, agent, root) {
+  const prompt = buildAgentPrompt(request, { root });
   return {
     ...(agent ? { agent } : {}),
     system: prompt.system,
@@ -322,7 +423,7 @@ export function createOpenCodeV1AgentAdapter({
             path: { id: session.id },
             ...query,
             ...(signal ? { signal } : {}),
-            body: promptBody(request, invocationAgent),
+            body: promptBody(request, invocationAgent, root),
           }),
           timeoutMs,
           () => new AgentInvocationError(

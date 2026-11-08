@@ -46,6 +46,7 @@ test("emits the final completion message once when the contract is verified", as
 
   const text = out.parts.map((p) => p.text || "").join("\n");
   assert.match(text, /Tarea completada/);
+  assert.match(text, /Objetivo: (?!—)/);
   assert.match(text, /Requisitos verificados:/);
   assert.match(text, /Evidencia:/);
 

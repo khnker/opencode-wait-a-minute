@@ -41,5 +41,5 @@ Exit codes: `0` all required gates pass, `2` required pass but an optional gate 
 ## Pre-flight
 
 - `npm ci` from a clean checkout.
-- Node `>=20`, npm `>=10`, OpenCode `>=1.18.0`.
+- Node `>=22.6`, npm `>=10`, OpenCode `>=1.18.0`.
 - Full runbook: `docs/RC1_VALIDATION.md`.

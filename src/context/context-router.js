@@ -381,6 +381,77 @@ export function resolveContext(graph, options) {
     required.add(id);
   }
 
+  // Phase 2.6: Causal support for required requirements (never prompt-gated).
+  const CAUSAL_SUPPORT_CAP = 3;
+  const nodeTimestamp = (node) => {
+    const value =
+      node?.metadata?.createdAt ??
+      node?.metadata?.madeAt ??
+      node?.metadata?.observedAt ??
+      node?.metadata?.capturedAt ??
+      node?.createdAt;
+    if (typeof value === "number") return value;
+    const parsed = Date.parse(value || "");
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+  const collectCausalSupport = (targetId) => {
+    if (!targetId) return;
+    const target = graph.getNode(targetId);
+    if (!target) return;
+    const byType = new Map();
+    const collect = (node) => {
+      if (!node) return;
+      const bucket = byType.get(node.type) || [];
+      if (!bucket.some((existing) => existing.id === node.id)) {
+        bucket.push(node);
+      }
+      byType.set(node.type, bucket);
+    };
+    for (const edgeType of ["supports", "related_to"]) {
+      for (const edge of graph.getEdgesToByType(targetId, edgeType)) {
+        const source = graph.getNode(edge.from);
+        if (
+          source &&
+          (source.type === "evidence" || source.type === "decision")
+        ) {
+          collect(source);
+        }
+      }
+    }
+    for (const [type, nodes] of byType) {
+      let ordered;
+      if (type === "evidence") {
+        const valid = nodes.filter(
+          (node) => node.verified || node.metadata?.status === "valid",
+        );
+        ordered = (valid.length > 0 ? valid : nodes)
+          .slice()
+          .sort(
+            (a, b) =>
+              (b.verified ? 1 : 0) - (a.verified ? 1 : 0) ||
+              nodeTimestamp(b) - nodeTimestamp(a) ||
+              a.id.localeCompare(b.id),
+          );
+      } else {
+        ordered = nodes
+          .slice()
+          .sort(
+            (a, b) =>
+              nodeTimestamp(b) - nodeTimestamp(a) ||
+              a.id.localeCompare(b.id),
+          );
+      }
+      for (const node of ordered.slice(0, CAUSAL_SUPPORT_CAP)) {
+        required.add(node.id);
+      }
+    }
+  };
+  for (const id of [...required]) {
+    if (graph.getNode(id)?.type === "requirement") {
+      collectCausalSupport(id);
+    }
+  }
+
   // Phase 3: Collect supporting evidence for required outputs
   const requiredOutputs = [...required]
     .map((id) => graph.getNode(id))

@@ -21,10 +21,10 @@ function loopInput(agent, overrides = {}) {
 test("FAILED agent outranks a satisfied completion gate", () => {
   const result = decideNextAction(loopInput({ status: "FAILED" }));
 
-  assert.equal(result.decision, "BLOCK");
+  assert.equal(result.decision, "WAIT_USER");
   assert.equal(result.reason, "agent-failed");
-  assert.deepEqual(result.nextAction, { type: "block", reason: "agent-failed" });
-  assert.equal(result.checkpoint.status, "BLOCKED");
+  assert.deepEqual(result.nextAction, { type: "wait_user", reason: "agent-failed", pending: [], findings: [] });
+  assert.equal(result.checkpoint.status, "WAITING_USER");
 });
 
 test("BLOCKED agent outranks a satisfied completion gate", () => {
@@ -68,7 +68,7 @@ test("exhausted replan cycle outranks a satisfied completion gate", () => {
 test("hard agent stop outranks exhausted budget", () => {
   const result = decideNextAction(loopInput({ status: "FAILED" }, { budget: { exhausted: true } }));
 
-  assert.equal(result.decision, "BLOCK");
+  assert.equal(result.decision, "WAIT_USER");
   assert.equal(result.reason, "agent-failed");
 });
 
@@ -89,7 +89,7 @@ test("hard agent stop outranks quality findings", () => {
     ),
   );
 
-  assert.equal(result.decision, "BLOCK");
+  assert.equal(result.decision, "WAIT_USER");
   assert.equal(result.reason, "agent-failed");
 });
 

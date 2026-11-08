@@ -2,6 +2,9 @@ export const AGENT_ROLES = Object.freeze({
   ANALYST: "ANALYST",
   ARCHITECT: "ARCHITECT",
   BUILDER: "BUILDER",
+  BACKEND_ENGINEER: "BACKEND_ENGINEER",
+  FRONTEND_ENGINEER: "FRONTEND_ENGINEER",
+  UX_DESIGNER: "UX_DESIGNER",
   REVIEWER: "REVIEWER",
 });
 
@@ -37,23 +40,33 @@ const READONLY_CAPABILITIES = Object.freeze({
   approveCompletion: false,
 });
 
+const MUTATING_CAPABILITIES = Object.freeze({
+  readContext: true,
+  investigate: true,
+  proposeDecisions: false,
+  modifyCode: true,
+  modifyGlobalState: false,
+  approveCompletion: false,
+});
+
 export const ROLE_CAPABILITIES = Object.freeze({
   ANALYST: READONLY_CAPABILITIES,
   ARCHITECT: READONLY_CAPABILITIES,
-  BUILDER: Object.freeze({
-    readContext: true,
-    investigate: true,
-    proposeDecisions: false,
-    modifyCode: true,
-    modifyGlobalState: false,
-    approveCompletion: false,
-  }),
+  BUILDER: MUTATING_CAPABILITIES,
+  BACKEND_ENGINEER: MUTATING_CAPABILITIES,
+  FRONTEND_ENGINEER: MUTATING_CAPABILITIES,
+  UX_DESIGNER: READONLY_CAPABILITIES,
   REVIEWER: READONLY_CAPABILITIES,
 });
 
 export const ROLE_DEFINITIONS = Object.freeze({
   ANALYST: Object.freeze({
     responsibility: "Investigate, identify unknowns and produce findings",
+    skills: Object.freeze([
+      "github-awesome-copilot-acquire-codebase-knowledge",
+      "github-awesome-copilot-context-map",
+      "diagnosing-bugs",
+    ]),
     limits: Object.freeze([
       "Does not decide architecture",
       "Does not modify code",
@@ -62,6 +75,11 @@ export const ROLE_DEFINITIONS = Object.freeze({
   }),
   ARCHITECT: Object.freeze({
     responsibility: "Define strategy, technical decisions and scope",
+    skills: Object.freeze([
+      "codebase-design",
+      "design-contract",
+      "github-awesome-copilot-create-implementation-plan",
+    ]),
     limits: Object.freeze([
       "Does not modify code",
       "Cannot approve its own strategy as external approval",
@@ -70,14 +88,55 @@ export const ROLE_DEFINITIONS = Object.freeze({
   }),
   BUILDER: Object.freeze({
     responsibility: "Implement the approved strategy",
+    skills: Object.freeze(["craftsman", "tdd", "verify"]),
     limits: Object.freeze([
       "Does not propose decisions",
       "Does not modify global task state",
       "Does not approve completion",
     ]),
   }),
+  BACKEND_ENGINEER: Object.freeze({
+    responsibility: "Implement the approved backend strategy",
+    layer: "backend",
+    focus: "APIs, data integrity, migrations and server-side behavior",
+    skills: Object.freeze(["nestjs-best-practices", "backend-integrity", "tdd", "craftsman", "verify"]),
+    limits: Object.freeze([
+      "Does not modify frontend or UX layers",
+      "Does not propose decisions",
+      "Does not modify global task state",
+      "Does not approve completion",
+    ]),
+  }),
+  FRONTEND_ENGINEER: Object.freeze({
+    responsibility: "Implement the approved frontend strategy",
+    layer: "frontend",
+    focus: "components, state, accessibility and frontend performance",
+    skills: Object.freeze(["angular-developer", "frontend-boundary-protection", "unslop", "web-design", "tdd", "craftsman"]),
+    limits: Object.freeze([
+      "Does not modify backend or infrastructure layers",
+      "Does not propose decisions",
+      "Does not modify global task state",
+      "Does not approve completion",
+    ]),
+  }),
+  UX_DESIGNER: Object.freeze({
+    responsibility: "Evaluate UX, accessibility and design-system consistency",
+    layer: "frontend",
+    focus: "interaction design, usability, visual hierarchy and accessibility",
+    skills: Object.freeze(["design-system", "design-critique", "visual-review", "unslop", "no-slop-ui", "web-design"]),
+    limits: Object.freeze([
+      "Does not modify code",
+      "Does not override an ARCHITECT decision without evidence",
+      "Does not approve completion",
+    ]),
+  }),
   REVIEWER: Object.freeze({
     responsibility: "Independently evaluate changes and evidence",
+    skills: Object.freeze([
+      "senior-refactor-reviewer",
+      "github-awesome-copilot-code-review",
+      "verify",
+    ]),
     limits: Object.freeze([
       "Does not modify code",
       "Does not execute tests in this iteration",
@@ -85,6 +144,39 @@ export const ROLE_DEFINITIONS = Object.freeze({
     ]),
   }),
 });
+
+/** Canonical user-visible stage for each role in the agent loop. */
+export const ROLE_STAGES = Object.freeze({
+  ANALYST: Object.freeze({ index: 1, total: 4, label: "analysis" }),
+  ARCHITECT: Object.freeze({ index: 2, total: 4, label: "strategy" }),
+  BUILDER: Object.freeze({ index: 3, total: 4, label: "implementation" }),
+  BACKEND_ENGINEER: Object.freeze({ index: 3, total: 4, label: "backend implementation" }),
+  FRONTEND_ENGINEER: Object.freeze({ index: 3, total: 4, label: "frontend implementation" }),
+  UX_DESIGNER: Object.freeze({ index: 2, total: 4, label: "design strategy" }),
+  REVIEWER: Object.freeze({ index: 4, total: 4, label: "review" }),
+});
+
+export function getRoleStage(role) {
+  return ROLE_STAGES[role] || null;
+}
+
+/** Roles allowed to mutate code during implementation. */
+export const BUILDER_ROLES = Object.freeze([
+  AGENT_ROLES.BUILDER,
+  AGENT_ROLES.BACKEND_ENGINEER,
+  AGENT_ROLES.FRONTEND_ENGINEER,
+]);
+
+export function isBuilderRole(role) {
+  return BUILDER_ROLES.includes(role);
+}
+
+/** Pick the implementation role for a declared layer. */
+export function builderRoleForLayer(layer) {
+  if (layer === "backend") return AGENT_ROLES.BACKEND_ENGINEER;
+  if (layer === "frontend") return AGENT_ROLES.FRONTEND_ENGINEER;
+  return AGENT_ROLES.BUILDER;
+}
 
 export const REVIEW_ARTIFACT_LIMITS = Object.freeze({
   maxEntries: 8,

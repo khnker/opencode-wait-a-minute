@@ -93,12 +93,15 @@ export function buildRuntimeContextGraph(input = {}) {
     g.addNode({
       id: ev.id,
       type: "evidence",
-      content: ev.content || ev.summary || "",
+      content: String(ev.content || ev.summary || "").slice(0, 500),
       verified: ev.status === "valid" || ev.verified === true,
+      createdAt: ev.createdAt || ev.timestamp || null,
       metadata: {
         provenance: "run_execution",
         source: ev.source || null,
+        status: ev.status || null,
         capturedAt: ev.capturedAt || null,
+        createdAt: ev.createdAt || ev.timestamp || null,
       },
     });
     if (ev.requirementId && requirementIds.has(ev.requirementId)) {
@@ -118,6 +121,7 @@ export function buildRuntimeContextGraph(input = {}) {
       metadata: {
         provenance: dec.provenance || "user_decided",
         madeAt: dec.madeAt || null,
+        createdAt: dec.createdAt || dec.madeAt || null,
         status: dec.status || "accepted",
       },
     });
@@ -178,9 +182,11 @@ export function buildRuntimeContextGraph(input = {}) {
       id: o.id,
       type: "observation",
       content: o.content || o.summary || "",
+      createdAt: o.createdAt || o.observedAt || o.timestamp || null,
       metadata: {
         provenance: o.provenance || "run_execution",
         observedAt: o.observedAt || null,
+        createdAt: o.createdAt || o.observedAt || o.timestamp || null,
       },
     });
     const target = o.requirementId || o.taskId || taskId;

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   REVIEW_ARTIFACT_LIMITS,
   assertReviewArtifacts,
+  detectReviewArtifactFailure,
   normalizeReviewArtifacts,
 } from "../../src/agents/review-artifacts.js";
 import {
@@ -183,5 +184,31 @@ test("request validation rejects malformed or oversized review artifacts", () =>
         }),
       ),
     RoleContractError,
+  );
+});
+
+test("detects failing tests in review artifacts", () => {
+  assert.equal(detectReviewArtifactFailure([]), null);
+  assert.equal(
+    detectReviewArtifactFailure([{ ref: "test.log", content: "tests 4 pass 4 fail 0" }]),
+    null,
+  );
+  assert.deepEqual(
+    detectReviewArtifactFailure([
+      { ref: "test.log", content: "✖ particle\nℹ fail 1" },
+    ]),
+    { ref: "test.log", content: "✖ particle\nℹ fail 1" },
+  );
+  assert.equal(
+    detectReviewArtifactFailure([
+      { ref: "test.log", content: "not ok 1 - particle" },
+    ]).ref,
+    "test.log",
+  );
+  assert.equal(
+    detectReviewArtifactFailure([
+      { ref: "test.log", content: "AssertionError: expected de la Cruz" },
+    ]).ref,
+    "test.log",
   );
 });

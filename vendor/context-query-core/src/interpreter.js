@@ -117,18 +117,34 @@ const FAMILIES = [
 
 const STOP_WORDS = new Set(['de', 'el', 'la', 'lo', 'los', 'las', 'del', 'un', 'una', 'que', 'y', 'a', 'en', 'se', 'con', 'para']);
 
+function stripArtifacts(text) {
+  return String(text ?? '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/\bhttps?:\/\/\S+/gi, ' ')
+    .replace(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/gi, ' ');
+}
+
+function isNumericOrHash(token) {
+  return /^\d+([._-]\d+)*$/.test(token) || /^[0-9a-f]{8,}$/i.test(token);
+}
+
 // Extraer nombre de símbolo/concepto: string entre comillas → camelCase/PascalCase → snake/kebab/dotted (archivos) → tras "de/el/la".
+// Emails, URLs y valores numéricos (RUT, IDs) se descartan: no son símbolos del repo.
 function extractName(text) {
-  const q = /"([^"]+)"/.exec(text);
+  const cleaned = stripArtifacts(text);
+  const q = /"([^"]+)"/.exec(cleaned);
   if (q) return q[1];
-  const cc = /\b([a-z]+[A-Z][A-Za-z0-9]*)\b|\b([A-Z][a-z]+[A-Z][A-Za-z0-9]*)\b/.exec(text);
+  const cc = /\b([a-z]+[A-Z][A-Za-z0-9]*)\b|\b([A-Z][a-z]+[A-Z][A-Za-z0-9]*)\b/.exec(cleaned);
   if (cc) return cc[1] || cc[2];
-  const ident = /\b([a-zA-Z0-9]+[._-][a-zA-Z0-9._-]+)\b/.exec(text);
-  if (ident) return ident[1];
-  const after = /\b(?:de|el|la|lo|en|para)\s+([a-zA-ZáéíóúñÁÉÍÓÚÑ0-9]+(?:\s+[a-zA-ZáéíóúñÁÉÍÓÚÑ0-9]+){0,2})/.exec(text);
+  const identRe = /\b([a-zA-Z0-9]+[._-][a-zA-Z0-9._-]+)\b/g;
+  let ident;
+  while ((ident = identRe.exec(cleaned))) {
+    if (!isNumericOrHash(ident[1])) return ident[1];
+  }
+  const after = /\b(?:de|el|la|lo|en|para)\s+([a-zA-ZáéíóúñÁÉÍÓÚÑ0-9]+(?:\s+[a-zA-ZáéíóúñÁÉÍÓÚÑ0-9]+){0,2})/.exec(cleaned);
   if (after) {
     const words = after[1].split(/\s+/)
-      .filter((w) => !STOP_WORDS.has(w.toLowerCase()) && !/^(carpeta|archivo|archivos|código|codigo|función|funcion|clase|file|files|folder|dir|directorio|ruta|path)$/i.test(w));
+      .filter((w) => !STOP_WORDS.has(w.toLowerCase()) && !isNumericOrHash(w) && !/^(carpeta|archivo|archivos|código|codigo|función|funcion|clase|file|files|folder|dir|directorio|ruta|path)$/i.test(w));
     if (words.length) return words.join(' ');
   }
   return null;

@@ -11,6 +11,8 @@
 
 - [x] Add `tests/unit/verify-web-e2e.test.mjs` covering args, config, task
   selection, checks, redaction and markdown.
+- [x] Cover the Node `>=22.6` runtime guard boundaries (`22.5` rejected,
+  `22.6`/newer accepted).
 - [x] Run `node --test --test-force-exit tests/unit/verify-web-e2e.test.mjs`.
 
 ## 3. Real verification

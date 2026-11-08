@@ -47,7 +47,7 @@ export function classifyBash(command) {
   const parts = splitPipeline(clean);
   const primary = parts[0].trim().split(/\s+/)[0];
 
-  const allowedDiscoveryTools = new Set(["grep", "rg", "find", "cat", "head", "tail", "ls", "tree", "wc"]);
+  const allowedDiscoveryTools = new Set(["grep", "rg", "find", "cat", "head", "tail", "ls", "tree", "wc", "sed", "echo"]);
 
   // Variantes mutantes de herramientas read-only: escriben o ejecutan → justified.
   for (const stage of parts) {

@@ -16,7 +16,7 @@ Create frontend UI whose composition, content, and interaction fit the actual su
 5. Build from tokens and reusable component rules.
 6. When browser tooling is available, render the real page at the viewport matrix below and inspect the result visually.
 7. Apply every hard gate in `references/review-gates.md`; rebuild when a gate fails.
-8. Verify interaction, focus, errors, loading, reduced motion, and realistic content. When browser tooling is unavailable, inspect the implementation and give the user a concise manual visual-check list instead of claiming rendered verification.
+8. Verify interaction, focus, errors, loading, reduced motion, and realistic content.
 
 For reviews or diagnosis requests, stop after evidence-backed findings unless the user also asks for changes.
 
@@ -30,7 +30,7 @@ Keep this short. It is a decision artifact, not a design essay.
 4. `Composition`: one mobile and one wide ASCII wireframe with named region roles.
 5. `System`: palette roles, type roles, spacing rhythm, radius, border/elevation, icon family.
 6. `Signature`: one subject-specific memorable device and why it belongs.
-7. `Cliche budget`: generic visual motifs used; one may be used without special justification, while additional motifs need distinct subject-specific jobs.
+7. `Cliche budget`: generic visual motifs used.
 8. `Failure risks`: the two most likely structural failures and how browser evidence will detect them.
 
 If the task is open-ended and a materially different composition could better serve the user, compare two directions. They must differ in protagonist, region roles, evidence, and interaction attitude. Do not generate directions that differ only in palette or decoration. Ask the user to choose only when the alternatives change the product relationship or brand position; otherwise select using brief evidence and proceed.

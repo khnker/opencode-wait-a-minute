@@ -1,0 +1,504 @@
+{
+  "contract": {
+    "status": "APPROVED",
+    "rigor": "NORMAL",
+    "requirements": [
+      "Analiza el archivo package.json del proyecto y entrega un diagnóstico"
+    ],
+    "verification": [
+      "Evidencia de satisfacción del contrato"
+    ],
+    "constraints": [
+      "Requisito: la versión del proyecto debe ser exactamente 999.0.0"
+    ],
+    "unknowns": [],
+    "assumptions": [],
+    "approvedBy": "bootstrap"
+  },
+  "questions": [],
+  "requirements": [
+    {
+      "id": "req-1",
+      "title": "Analiza el archivo package.json del proyecto y entrega un diagnóstico",
+      "status": "pending",
+      "evidence": []
+    }
+  ],
+  "persistentPolicies": [
+    "scope",
+    "verify",
+    "simplify"
+  ],
+  "activeGates": [
+    "scope-creep",
+    "surface-change",
+    "completion-gate",
+    "evidence-required",
+    "speculative-abstraction",
+    "unnecessary-deps",
+    "protected-restriction"
+  ],
+  "phase": "IMPLEMENTING",
+  "nextAction": "Implementar — contrato bootstrap aprobado",
+  "lastAction": "Analiza el archivo package.json del proyecto y entrega un diagnóstico. No implementes nada ni modifiques archivos. Si encontrás un problema, indicá cómo resolverlo. Requisito: la versión del proyecto debe ser exactamente 999.0.0.",
+  "projectPath": "/tmp/wam-web-e2e-fixture-WLt1Q2",
+  "outcomeContract": {
+    "taskId": "task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE",
+    "objective": "Analiza el archivo package.json del proyecto y entrega un diagnóstico",
+    "acceptanceCriteria": [
+      {
+        "id": "outcome-evaluation",
+        "description": "Task outcome verified by evidence",
+        "mandatory": true
+      }
+    ]
+  },
+  "executionIntent": "ANALYZE",
+  "dialogue": {
+    "version": 1,
+    "stage": "CONTRACTING",
+    "pendingQuestion": null,
+    "contributions": [
+      {
+        "kind": "acceptance_criterion",
+        "text": "Si encontrás un problema, indicá cómo resolverlo.",
+        "confidence": 0.7
+      },
+      {
+        "kind": "requirement",
+        "text": "Requisito: la versión del proyecto debe ser exactamente 999.0.0.",
+        "confidence": 0.7
+      }
+    ],
+    "lastIntent": "ADD_ACCEPTANCE_CRITERION",
+    "updatedAt": 1793839218689
+  },
+  "cqeCalls": 1,
+  "cqeStats": {
+    "calls": 1,
+    "ok": 1,
+    "empty": 0,
+    "error": 0,
+    "timeout": 0,
+    "busy": 0,
+    "warming": 0
+  },
+  "permissionPreflight": {
+    "required": [
+      {
+        "type": "edit",
+        "reason": "La implementación aprobada requiere editar archivos"
+      }
+    ],
+    "status": "pending",
+    "granted": [],
+    "approvedAt": null
+  },
+  "permissionPreflightNotified": true,
+  "executionGate": {
+    "active": false,
+    "reason": "analysis-loop",
+    "startedAt": "2026-11-05T00:40:27.022Z",
+    "completedAt": "2026-11-05T00:41:22.287Z"
+  },
+  "agentRun": {
+    "status": "COMPLETED",
+    "verdict": "ACCEPTED",
+    "stoppedAt": null,
+    "exhausted": false,
+    "cycles": {
+      "revisions": 0,
+      "replans": 0
+    },
+    "results": [
+      {
+        "role": "ANALYST",
+        "invocationId": "task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE:ANALYST:1",
+        "status": "COMPLETED",
+        "summary": "El package.json del proyecto consta únicamente de 6 líneas: define \"type\": \"module\" y un único script de test que ejecuta `node --test add.test.mjs`. No existe campo \"version\", por lo que la restricción de que la versión sea exactamente 999.0.0 no se cumple. Tampoco hay nombre, dependencias ni metadatos. Además, el archivo de test referenciado (add.test.mjs) no existe en el repositorio según búsqueda de patrones *.mjs, por lo que `npm test` fallaría.",
+        "findings": [
+          {
+            "id": "F1",
+            "description": "El package.json no contiene el campo \"version\". La restricción exige que la versión del proyecto sea exactamente 999.0.0; al estar ausente, la restricción no se satisface actualmente.",
+            "severity": "HIGH",
+            "evidence": [
+              "package.json:2-5 — objeto raíz solo incluye \"type\" y \"scripts\"; no hay clave \"version\"",
+              "package.json:6 — archivo finaliza tras el bloque scripts (6 líneas en total)"
+            ]
+          },
+          {
+            "id": "F2",
+            "description": "El script \"test\" apunta a `add.test.mjs`, pero no existe ningún archivo *.mjs en el proyecto, por lo que la ejecución de tests fallaría por archivo inexistente.",
+            "severity": "MEDIUM",
+            "evidence": [
+              "package.json:4 — \"test\": \"node --test add.test.mjs\"",
+              "glob \"*.mjs\" — No files found"
+            ]
+          },
+          {
+            "id": "F3",
+            "description": "El package.json carece de metadatos mínimos habituales (name, description, main/exports, author, license, engines, dependencies/devDependencies). Solo declara el tipo de módulo y un script.",
+            "severity": "LOW",
+            "evidence": [
+              "package.json:1-6 — claves presentes: type, scripts"
+            ]
+          },
+          {
+            "id": "F4",
+            "description": "El proyecto declara \"type\": \"module\" pero no hay código fuente ni tests en el repositorio; solo artefactos de orquestación WAM (.wam/) y el propio package.json.",
+            "severity": "LOW",
+            "evidence": [
+              "package.json:2 — \"type\": \"module\"",
+              "glob \"*\" — solo package.json y archivos bajo .wam/; glob \"*.mjs\" sin resultados"
+            ]
+          }
+        ],
+        "decisions": [
+          {
+            "id": "D1",
+            "description": "Clasificar la ausencia del campo version como HIGH en lugar de CRITICAL.",
+            "rationale": "Incumple directamente un requisito explícito de la tarea, pero no implica pérdida de datos ni fallo de seguridad; es subsanable con una edición trivial y verificable."
+          },
+          {
+            "id": "D2",
+            "description": "No realizar modificaciones sobre package.json ni sobre el estado WAM.",
+            "rationale": "El rol ANALYST tiene prohibido modificar código y el estado de la tarea; el alcance es investigar y reportar."
+          }
+        ],
+        "artifacts": [],
+        "evidence": [
+          "Lectura completa de package.json (6 líneas, contenido JSON válido)",
+          "glob \"*\" sobre la raíz del proyecto",
+          "glob \"*.mjs\" sin coincidencias",
+          "Lectura de .wam/context/project.md (contexto observado del proyecto)"
+        ],
+        "review": null,
+        "metadata": {
+          "sessionID": "ses_e56d99f68ffeGi0Uh1KwTedRoP"
+        }
+      },
+      {
+        "role": "ARCHITECT",
+        "invocationId": "task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE:ARCHITECT:1",
+        "status": "COMPLETED",
+        "summary": "El alcance correcto es un diagnóstico de solo lectura sobre package.json, sin remediación. El archivo es JSON válido de 6 líneas y declara únicamente \"type\": \"module\" y un script \"test\". No existe el campo \"version\", por lo que no se satisface el requisito de versión exacta 999.0.0; además el script apunta a add.test.mjs sin que exista ningún archivo .mjs en el proyecto. La estrategia debe reportar estos hallazgos con evidencia verificable, mantener D1 (HIGH) y D2 (no modificar), y dejar la corrección como recomendación sujeta a decisión del usuario.",
+        "findings": [
+          {
+            "id": "F1",
+            "description": "El package.json no contiene el campo \"version\", por lo que la restricción de versión exacta 999.0.0 no se cumple. Debe reportarse como incumplimiento directo y verificable, no como ausencia de metadatos genérica.",
+            "severity": "HIGH",
+            "evidence": [
+              "package.json:1-6 — objeto raíz con claves únicamente \"type\" y \"scripts\"",
+              "package.json:2-5 — no existe ninguna clave \"version\" en el documento",
+              "Requisito de tarea: la versión del proyecto debe ser exactamente 999.0.0"
+            ],
+            "criterionId": "outcome-evaluation"
+          },
+          {
+            "id": "F2",
+            "description": "El script \"test\" referencia add.test.mjs, pero no existe ningún archivo *.mjs en el proyecto; ejecutar `npm test` fallaría por archivo inexistente. Es un riesgo de verificabilidad, no un fallo del JSON.",
+            "severity": "MEDIUM",
+            "evidence": [
+              "package.json:4 — \"test\": \"node --test add.test.mjs\"",
+              "glob \"*.mjs\" — sin coincidencias",
+              "glob \"**/*\" — solo package.json, README.md y artefactos bajo .wam/"
+            ],
+            "criterionId": "outcome-evaluation"
+          },
+          {
+            "id": "F3",
+            "description": "El package.json carece de metadatos mínimos habituales (name, description, main/exports, author, license, engines, dependencies/devDependencies). No bloquea el diagnóstico pero limita publicación, empaquetado y reproducibilidad.",
+            "severity": "LOW",
+            "evidence": [
+              "package.json:1-6 — claves presentes: \"type\" y \"scripts\" únicamente"
+            ]
+          },
+          {
+            "id": "F4",
+            "description": "El proyecto declara \"type\": \"module\" pero no hay código fuente ni tests; solo README mínimo y artefactos de orquestación WAM. Cualquier recomendación de ejecución de tests es teórica hasta que exista el módulo.",
+            "severity": "LOW",
+            "evidence": [
+              "package.json:2 — \"type\": \"module\"",
+              "README.md:1 — \"# WAM web E2E fixture\"",
+              "glob \"**/*\" — sin archivos .js/.mjs/.ts fuera de .wam/"
+            ]
+          }
+        ],
+        "decisions": [
+          {
+            "id": "D1",
+            "description": "Clasificar la ausencia del campo \"version\" como HIGH en lugar de CRITICAL.",
+            "rationale": "Incumple directamente un requisito explícito y es detectable de forma determinista, pero no implica pérdida de datos, fallo de seguridad ni corrupción; es subsanable con una edición trivial y verificable."
+          },
+          {
+            "id": "D2",
+            "description": "No modificar package.json ni el estado WAM durante esta tarea.",
+            "rationale": "El alcance es diagnóstico y el rol no debe alterar código ni estado de la tarea; la corrección requiere autorización explícita del usuario."
+          },
+          {
+            "id": "A1",
+            "description": "Tratar F2 como riesgo de verificabilidad independiente de F1, no como evidencia del incumplimiento de versión.",
+            "rationale": "Son defectos distintos con causas y remediaciones distintas; mezclarlos degradaría la trazabilidad del diagnóstico y la evaluación del outcome."
+          },
+          {
+            "id": "A2",
+            "description": "Emitir el diagnóstico con hallazgos priorizados y una propuesta de remediación mínima, sin ejecutarla.",
+            "rationale": "Satisface la evaluación del outcome con evidencia verificable y preserva la separación entre análisis, decisión del usuario e implementación posterior."
+          }
+        ],
+        "artifacts": [],
+        "evidence": [
+          "Lectura directa de package.json: 6 líneas, JSON sintácticamente válido, claves \"type\" y \"scripts\"",
+          "glob \"**/*\" sobre la raíz: package.json, README.md y árbol .wam/",
+          "glob \"*.mjs\" — sin coincidencias",
+          "Lectura de .wam/context/project.md — contexto observado, confidence 0.90, stack sin detalles adicionales",
+          "Lectura de README.md — contenido mínimo de fixture"
+        ],
+        "review": null,
+        "metadata": {
+          "sessionID": "ses_e56d9630fffeVI7nacEpnX4Bib"
+        }
+      },
+      {
+        "role": "REVIEWER",
+        "invocationId": "task-analiza-el-archivo-package-json-del-proyecto-y-sess-b5BhQbhE:REVIEWER:1",
+        "status": "COMPLETED",
+        "summary": "El diagnóstico entregado es correcto y está respaldado por la evidencia: package.json consta de 6 líneas, es JSON válido y solo declara 'type' y 'scripts', sin campo 'version', por lo que no satisface la restricción de versión exacta 999.0.0. También se confirma que el script 'test' referencia add.test.mjs y que no existe ningún archivo *.mjs. El alcance era diagnóstico, por lo que la ausencia de corrección no invalida el resultado.",
+        "findings": [
+          {
+            "id": "R-F1",
+            "description": "Confirmado: package.json no contiene el campo 'version', por lo que no cumple el requisito de versión exactamente 999.0.0. Coincide con el hallazgo F1 del analista y su clasificación HIGH es razonable.",
+            "severity": "HIGH",
+            "evidence": [
+              "package.json:1-6 — objeto raíz con solo 'type' y 'scripts'; no existe clave 'version'",
+              "package.json:6 — el archivo termina tras el bloque 'scripts'"
+            ],
+            "criterionId": "version-999.0.0"
+          },
+          {
+            "id": "R-F2",
+            "description": "Confirmado: el script 'test' apunta a add.test.mjs y no existe ningún archivo *.mjs en el proyecto, por lo que la ejecución de tests fallaría por archivo inexistente.",
+            "severity": "MEDIUM",
+            "evidence": [
+              "package.json:4 — \"test\": \"node --test add.test.mjs\"",
+              "glob \"**/*\" — solo package.json, README.md y árbol .wam/; sin archivos *.mjs"
+            ]
+          },
+          {
+            "id": "R-F3",
+            "description": "Confirmado: faltan metadatos mínimos habituales (name, description, main/exports, license, engines, dependencies) además de 'version'. Observación de completitud, no bloqueante para un diagnóstico.",
+            "severity": "LOW",
+            "evidence": [
+              "package.json:1-6 — claves presentes: 'type', 'scripts'"
+            ]
+          }
+        ],
+        "decisions": [
+          {
+            "id": "RD1",
+            "description": "Aceptar el diagnóstico aunque package.json no cumpla la restricción de versión.",
+            "rationale": "El alcance de la tarea es análisis/diagnóstico; la desviación está correctamente identificada y evidenciada como hallazgo HIGH, por lo que el resultado evaluado sí se verifica con evidencia."
+          }
+        ],
+        "artifacts": [
+          "package.json",
+          "README.md",
+          "**/*"
+        ],
+        "evidence": [
+          "Lectura directa de /tmp/wam-web-e2e-fixture-WLt1Q2/package.json: 6 líneas, JSON válido, claves 'type' y 'scripts'",
+          "package.json:2 — \"type\": \"module\"",
+          "package.json:4 — \"test\": \"node --test add.test.mjs\"",
+          "glob \"**/*\" — package.json, README.md y árbol .wam/; sin archivos *.mjs",
+          "README.md:1 — \"# WAM web E2E fixture\""
+        ],
+        "review": {
+          "verdict": "ACCEPTED",
+          "findings": [
+            {
+              "criterionId": "version-999.0.0",
+              "severity": "HIGH",
+              "description": "Confirmado: package.json no declara 'version', incumpliendo la restricción de versión exactamente 999.0.0. El analista lo reportó correctamente como HIGH.",
+              "evidence": [
+                "package.json:1-6 — sin clave 'version'; solo 'type' y 'scripts'"
+              ],
+              "correctiveAction": "Añadir \"version\": \"999.0.0\" al objeto raíz de package.json cuando se autorice la corrección."
+            },
+            {
+              "criterionId": "test-script-integrity",
+              "severity": "MEDIUM",
+              "description": "Confirmado: el script 'test' referencia add.test.mjs, inexistente en el proyecto.",
+              "evidence": [
+                "package.json:4 — \"test\": \"node --test add.test.mjs\"",
+                "glob \"**/*\" — sin archivos *.mjs"
+              ],
+              "correctiveAction": "Crear add.test.mjs o corregir el script 'test' para apuntar a un archivo existente."
+            }
+          ],
+          "limitations": [
+            "Sin ejecución de tests; verificación estática únicamente.",
+            "Sin review artifacts formales; evaluación basada en lecturas directas de archivos."
+          ]
+        },
+        "metadata": {
+          "sessionID": "ses_e56d91c8dffedfz6nKxnm2ZKz1"
+        }
+      }
+    ],
+    "handoffs": [
+      {
+        "kind": "pipeline",
+        "from": "ANALYST",
+        "to": "ARCHITECT",
+        "findings": [
+          {
+            "id": "F1",
+            "description": "El package.json no contiene el campo \"version\". La restricción exige que la versión del proyecto sea exactamente 999.0.0; al estar ausente, la restricción no se satisface actualmente.",
+            "severity": "HIGH",
+            "evidence": [
+              "package.json:2-5 — objeto raíz solo incluye \"type\" y \"scripts\"; no hay clave \"version\"",
+              "package.json:6 — archivo finaliza tras el bloque scripts (6 líneas en total)"
+            ]
+          },
+          {
+            "id": "F2",
+            "description": "El script \"test\" apunta a `add.test.mjs`, pero no existe ningún archivo *.mjs en el proyecto, por lo que la ejecución de tests fallaría por archivo inexistente.",
+            "severity": "MEDIUM",
+            "evidence": [
+              "package.json:4 — \"test\": \"node --test add.test.mjs\"",
+              "glob \"*.mjs\" — No files found"
+            ]
+          },
+          {
+            "id": "F3",
+            "description": "El package.json carece de metadatos mínimos habituales (name, description, main/exports, author, license, engines, dependencies/devDependencies). Solo declara el tipo de módulo y un script.",
+            "severity": "LOW",
+            "evidence": [
+              "package.json:1-6 — claves presentes: type, scripts"
+            ]
+          },
+          {
+            "id": "F4",
+            "description": "El proyecto declara \"type\": \"module\" pero no hay código fuente ni tests en el repositorio; solo artefactos de orquestación WAM (.wam/) y el propio package.json.",
+            "severity": "LOW",
+            "evidence": [
+              "package.json:2 — \"type\": \"module\"",
+              "glob \"*\" — solo package.json y archivos bajo .wam/; glob \"*.mjs\" sin resultados"
+            ]
+          }
+        ],
+        "decisions": [
+          {
+            "id": "D1",
+            "description": "Clasificar la ausencia del campo version como HIGH en lugar de CRITICAL.",
+            "rationale": "Incumple directamente un requisito explícito de la tarea, pero no implica pérdida de datos ni fallo de seguridad; es subsanable con una edición trivial y verificable."
+          },
+          {
+            "id": "D2",
+            "description": "No realizar modificaciones sobre package.json ni sobre el estado WAM.",
+            "rationale": "El rol ANALYST tiene prohibido modificar código y el estado de la tarea; el alcance es investigar y reportar."
+          }
+        ],
+        "artifacts": [],
+        "evidence": [
+          "Lectura completa de package.json (6 líneas, contenido JSON válido)",
+          "glob \"*\" sobre la raíz del proyecto",
+          "glob \"*.mjs\" sin coincidencias",
+          "Lectura de .wam/context/project.md (contexto observado del proyecto)"
+        ]
+      },
+      {
+        "kind": "pipeline",
+        "from": "ARCHITECT",
+        "to": "REVIEWER",
+        "findings": [
+          {
+            "id": "F1",
+            "description": "El package.json no contiene el campo \"version\", por lo que la restricción de versión exacta 999.0.0 no se cumple. Debe reportarse como incumplimiento directo y verificable, no como ausencia de metadatos genérica.",
+            "severity": "HIGH",
+            "evidence": [
+              "package.json:1-6 — objeto raíz con claves únicamente \"type\" y \"scripts\"",
+              "package.json:2-5 — no existe ninguna clave \"version\" en el documento",
+              "Requisito de tarea: la versión del proyecto debe ser exactamente 999.0.0"
+            ],
+            "criterionId": "outcome-evaluation"
+          },
+          {
+            "id": "F2",
+            "description": "El script \"test\" referencia add.test.mjs, pero no existe ningún archivo *.mjs en el proyecto; ejecutar `npm test` fallaría por archivo inexistente. Es un riesgo de verificabilidad, no un fallo del JSON.",
+            "severity": "MEDIUM",
+            "evidence": [
+              "package.json:4 — \"test\": \"node --test add.test.mjs\"",
+              "glob \"*.mjs\" — sin coincidencias",
+              "glob \"**/*\" — solo package.json, README.md y artefactos bajo .wam/"
+            ],
+            "criterionId": "outcome-evaluation"
+          },
+          {
+            "id": "F3",
+            "description": "El package.json carece de metadatos mínimos habituales (name, description, main/exports, author, license, engines, dependencies/devDependencies). No bloquea el diagnóstico pero limita publicación, empaquetado y reproducibilidad.",
+            "severity": "LOW",
+            "evidence": [
+              "package.json:1-6 — claves presentes: \"type\" y \"scripts\" únicamente"
+            ]
+          },
+          {
+            "id": "F4",
+            "description": "El proyecto declara \"type\": \"module\" pero no hay código fuente ni tests; solo README mínimo y artefactos de orquestación WAM. Cualquier recomendación de ejecución de tests es teórica hasta que exista el módulo.",
+            "severity": "LOW",
+            "evidence": [
+              "package.json:2 — \"type\": \"module\"",
+              "README.md:1 — \"# WAM web E2E fixture\"",
+              "glob \"**/*\" — sin archivos .js/.mjs/.ts fuera de .wam/"
+            ]
+          }
+        ],
+        "decisions": [
+          {
+            "id": "D1",
+            "description": "Clasificar la ausencia del campo \"version\" como HIGH en lugar de CRITICAL.",
+            "rationale": "Incumple directamente un requisito explícito y es detectable de forma determinista, pero no implica pérdida de datos, fallo de seguridad ni corrupción; es subsanable con una edición trivial y verificable."
+          },
+          {
+            "id": "D2",
+            "description": "No modificar package.json ni el estado WAM durante esta tarea.",
+            "rationale": "El alcance es diagnóstico y el rol no debe alterar código ni estado de la tarea; la corrección requiere autorización explícita del usuario."
+          },
+          {
+            "id": "A1",
+            "description": "Tratar F2 como riesgo de verificabilidad independiente de F1, no como evidencia del incumplimiento de versión.",
+            "rationale": "Son defectos distintos con causas y remediaciones distintas; mezclarlos degradaría la trazabilidad del diagnóstico y la evaluación del outcome."
+          },
+          {
+            "id": "A2",
+            "description": "Emitir el diagnóstico con hallazgos priorizados y una propuesta de remediación mínima, sin ejecutarla.",
+            "rationale": "Satisface la evaluación del outcome con evidencia verificable y preserva la separación entre análisis, decisión del usuario e implementación posterior."
+          }
+        ],
+        "artifacts": [],
+        "evidence": [
+          "Lectura directa de package.json: 6 líneas, JSON sintácticamente válido, claves \"type\" y \"scripts\"",
+          "glob \"**/*\" sobre la raíz: package.json, README.md y árbol .wam/",
+          "glob \"*.mjs\" — sin coincidencias",
+          "Lectura de .wam/context/project.md — contexto observado, confidence 0.90, stack sin detalles adicionales",
+          "Lectura de README.md — contenido mínimo de fixture"
+        ]
+      }
+    ],
+    "updatedAt": 1793839227023
+  },
+  "agentHistory": [
+    {
+      "status": "COMPLETED",
+      "verdict": "ACCEPTED",
+      "stoppedAt": null,
+      "exhausted": false,
+      "cycles": {
+        "revisions": 0,
+        "replans": 0
+      },
+      "resultCount": 3,
+      "updatedAt": 1793839227023
+    }
+  ]
+}

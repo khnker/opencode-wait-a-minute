@@ -670,6 +670,27 @@ export function retrieveContext(query, { limit = 5, root } = {}) {
   return { ok: true, capsules: hits, message: `${hits.length} cápsula(s) encontrada(s)` };
 }
 
+export async function retrieveContextWithCqe(query, { root, maxResults = 5 } = {}) {
+  const capsule = retrieveContext(query, { root, limit: maxResults });
+  if (capsule.ok) return { ...capsule, source: "capsule" };
+  let cqeRes;
+  try {
+    cqeRes = await retrieveWithCqe(query, { repoRoot: root || process.cwd(), maxResults });
+  } catch (err) {
+    return { ...capsule, cqeMeta: null, cqeError: err?.message || "exception" };
+  }
+  const cqeMeta = {
+    elapsedMs: cqeRes?.elapsedMs ?? null,
+    source: cqeRes?.source || null,
+    failureCode: cqeRes?.metadata?.failureCode ?? null,
+    fallbackUsed: cqeRes?.fallbackUsed ?? false,
+  };
+  if (cqeRes?.items?.length) {
+    return { ok: true, source: cqeRes.source || "cqe", items: cqeRes.items, cqeMeta };
+  }
+  return { ...capsule, cqeMeta, cqeError: cqeRes?.cqeError || cqeRes?.metadata?.cqeError || null };
+}
+
 // -- Change 3: session continuity -------------------------------------------------
 
 /**
@@ -799,8 +820,10 @@ export function resolveWamRoot(prompt = "", sessionRoot = process.cwd()) {
     }
   }
   // sessionRoot con memoria propia nunca adopta la de un repo vecino: su .wam
-  // es la señal que su autor eligió, no un artefacto de mtime.
-  if (best === sessionRoot && fileExists(path.join(sessionRoot, ".wam"))) return sessionRoot;
+  // es la señal que su autor eligió, no un artefacto de mtime. Los paths
+  // explícitos del prompt ya se resolvieron arriba y tienen prioridad; el
+  // term-match de abajo solo aplica cuando sessionRoot no tiene .wam propio.
+  if (fileExists(path.join(sessionRoot, ".wam"))) return sessionRoot;
 
   // Contenedor ancestro sin .wam → continuidad: repo hijo con memoria .wam
   // más reciente (el usuario sigue donde dejó el trabajo, no donde nació el

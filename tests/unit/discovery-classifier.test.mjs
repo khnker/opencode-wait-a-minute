@@ -38,6 +38,16 @@ test("classifyBash: find is read-only", () => {
   assert.equal(classifyBash('find . -name "*.js"').kind, "read-only");
 });
 
+test("classifyBash: sed and echo filters are read-only", () => {
+  assert.equal(classifyBash("sed -n '1,5p' package.json").kind, "read-only");
+  assert.equal(classifyBash("echo done").kind, "read-only");
+});
+
+test("classifyBash: sed -i and echo redirection stay justified", () => {
+  assert.equal(classifyBash("sed -i 's/a/b/' file.txt").kind, "justified");
+  assert.equal(classifyBash("echo x > out.txt").kind, "justified");
+});
+
 test("classifyBash: cd + build script is justified", () => {
   assert.equal(classifyBash("cd src && npm run build").kind, "justified");
 });

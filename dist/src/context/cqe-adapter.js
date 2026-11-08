@@ -49,6 +49,89 @@ export const CQE_FAILURE_HINTS = {
   error: 'error de ejecución de CQE; revisa WAM_LOGGING para el detalle',
 };
 
+// CQE's intent planner resolves a natural-language prompt to a single target
+// term. Long prompts (tickets, customer data) resolve to an email/RUT/proper
+// noun that does not exist in the index and return zero hits, even though the
+// prompt contains plenty of searchable domain terms. These stopwords keep the
+// retry terms focused on code/domain vocabulary.
+const CQE_TERM_STOPWORDS = new Set([
+  'a', 'al', 'algo', 'algun', 'algún', 'alguna', 'alguno', 'ante', 'antes', 'aqui',
+  'aquí', 'asi', 'así', 'aun', 'aún', 'aunque', 'bien', 'cada', 'como', 'cómo',
+  'con', 'contra', 'cual', 'cuál', 'cuando', 'cuándo', 'de', 'del', 'debe',
+  'deben', 'desde', 'donde', 'dónde', 'dos', 'el', 'él', 'ella', 'ellas', 'ello',
+  'ellos', 'en', 'entonces', 'es', 'esa', 'ese', 'eso', 'esos', 'esta', 'está',
+  'este', 'esto', 'estos', 'estas', 'fue', 'han', 'hace', 'hacer', 'hacia',
+  'hasta', 'hay', 'la', 'las', 'le', 'les', 'lo', 'los', 'mas', 'más', 'me',
+  'mi', 'mientras', 'mismo', 'mucho', 'muy', 'nada', 'ni', 'no', 'nos',
+  'nosotros', 'o', 'otra', 'otro', 'para', 'pero', 'poco', 'por', 'porque',
+  'puede', 'pueden', 'puedo', 'que', 'qué', 'quiere', 'se', 'según', 'segun',
+  'ser', 'si', 'sí', 'sin', 'sobre', 'solo', 'sólo', 'son', 'su', 'sus',
+  'también', 'tambien', 'te', 'tiene', 'tienen', 'todo', 'todos', 'tras', 'tu',
+  'tus', 'un', 'una', 'uno', 'unos', 'unas', 'usa', 'usar', 'usted', 'ustedes',
+  'ver', 'vez', 'visto', 'y', 'ya', 'yo',
+  'ahora', 'analiza', 'analizar', 'reporta', 'revisa', 'revisar',
+  'the', 'and', 'for', 'with', 'that', 'this', 'from', 'have', 'has', 'not',
+  'are', 'was', 'were', 'you', 'your', 'can', 'cannot', 'but', 'about', 'into',
+  'over', 'under', 'when', 'where', 'which', 'what', 'how', 'why', 'all', 'any',
+  'use', 'using', 'need', 'needs', 'make', 'made', 'get', 'got', 'see', 'look',
+  'find', 'fix', 'bug', 'issue', 'error', 'problema', 'fallo', 'falla', 'caso',
+]);
+
+const CQE_CQP_RE = /^(FIND|SEARCH|SELECT|LIST)\b/i;
+
+function stripArtifacts(text) {
+  return String(text ?? '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/\bhttps?:\/\/\S+/gi, ' ')
+    .replace(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/gi, ' ');
+}
+
+function isNumericOrHash(token) {
+  return /^\d+([._-]\d+)*$/.test(token) || /^[0-9a-f]{8,}$/i.test(token);
+}
+
+/**
+ * Extract compact, single-term CQE queries from a natural-language prompt.
+ * Multi-word phrases are avoided because the vendored engine treats them as
+ * AND (one missing term zeroes the result). Terms with uppercase initials are
+ * skipped: in Spanish tickets they are usually names/addresses, not code.
+ */
+export function extractCqeTerms(text, maxTerms = 8) {
+  const seen = new Set();
+  const out = [];
+  for (const raw of stripArtifacts(text).split(/[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ_]+/)) {
+    if (raw.length < 3) continue;
+    if (/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+$/.test(raw)) continue;
+    if (isNumericOrHash(raw)) continue;
+    const term = raw.toLowerCase();
+    if (CQE_TERM_STOPWORDS.has(term) || seen.has(term)) continue;
+    seen.add(term);
+    out.push(term);
+    if (out.length >= maxTerms) break;
+  }
+  return out;
+}
+
+function isEmptyResult(result) {
+  return !result || !Array.isArray(result.results) || result.results.length === 0;
+}
+
+function mergeRawResults(runs, limit) {
+  const seen = new Set();
+  const merged = [];
+  for (const run of runs) {
+    const rows = Array.isArray(run?.result?.results) ? run.result.results : [];
+    for (const row of rows) {
+      const key = row.evidence_id || `${row.path || row.file || '?'}:${row.line_start ?? row.line ?? row.startLine ?? ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(row);
+    }
+  }
+  merged.sort((a, b) => (Number(b?.score) || 0) - (Number(a?.score) || 0));
+  return merged.slice(0, limit);
+}
+
 /**
  * Map a CQE failure to a stable, testable code.
  * Precedence is deterministic so the injected prompt and counters agree.
@@ -342,6 +425,52 @@ function withTimeout(promise, timeoutMs) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+async function executeCqeQuery(queryText, repoRoot, constraints, timeoutMs) {
+  if (!fs.existsSync(repoRoot)) throw new Error(`CQE_ROOT_NOT_FOUND: ${repoRoot}`);
+  const workerHandle = resolveUseWorker(constraints) ? getWorkerHandle(repoRoot) : null;
+  if (workerHandle) {
+    if (workerHandle.busy) return { skipped: 'busy' };
+    if (workerHandle.warmingTimedOut && !workerHandle.ready) return { skipped: 'warming' };
+    workerHandle.busy = true;
+    try {
+      if (!workerHandle.ready) {
+        let timer;
+        try {
+          await Promise.race([
+            workerHandle.readyPromise,
+            new Promise((_, reject) => {
+              timer = setTimeout(() => reject(timeoutError(timeoutMs)), timeoutMs);
+            }),
+          ]);
+        } catch (err) {
+          // Still building: let it finish off-thread, just stop waiting on it.
+          if (err && /CQE_TIMEOUT/.test(err.message)) workerHandle.warmingTimedOut = true;
+          throw err;
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+      return { result: await queryWorker(workerHandle, queryText, constraints, timeoutMs), usedWorker: true };
+    } finally {
+      workerHandle.busy = false;
+    }
+  }
+  const handle = getInlineHandle(repoRoot);
+  const engine = await handle.enginePromise;
+  if (!engine) throw new Error('CQE_ENGINE_UNAVAILABLE');
+  return {
+    result: await withTimeout(
+      engine.query(queryText, {
+        budget: constraints.budget,
+        limit: constraints.maxResults,
+        scope: constraints.scope,
+      }),
+      timeoutMs
+    ),
+    usedWorker: false,
+  };
+}
+
 export function normalizeItem(raw, idx, queryText, elapsedMs) {
   const content = raw.snippet || raw.content || '';
   const startLine = raw.startLine ?? raw.line_start ?? raw.line ?? null;
@@ -431,55 +560,18 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
   let fallbackReason = null;
   let usedWorker = false;
 
+  let cqeFallback = null;
+
   if (mode !== 'disabled' && queryText != null && String(queryText).trim() !== '') {
+    const timeoutMs = resolveTimeout(constraints.timeoutMs);
     try {
-      if (!fs.existsSync(repoRoot)) throw new Error(`CQE_ROOT_NOT_FOUND: ${repoRoot}`);
-      const timeoutMs = resolveTimeout(constraints.timeoutMs);
-      const workerHandle = resolveUseWorker(constraints) ? getWorkerHandle(repoRoot) : null;
-      if (workerHandle) {
-        usedWorker = true;
-        if (workerHandle.busy) {
-          // A concurrent prompt owns the worker: never queue, fall back now.
-          fallbackReason = 'busy';
-        } else if (workerHandle.warmingTimedOut && !workerHandle.ready) {
-          fallbackReason = 'warming';
-        } else {
-          workerHandle.busy = true;
-          try {
-            if (!workerHandle.ready) {
-              let timer;
-              try {
-                await Promise.race([
-                  workerHandle.readyPromise,
-                  new Promise((_, reject) => {
-                    timer = setTimeout(() => reject(timeoutError(timeoutMs)), timeoutMs);
-                  }),
-                ]);
-              } catch (err) {
-                // Still building: let it finish off-thread, just stop waiting on it.
-                if (err && /CQE_TIMEOUT/.test(err.message)) workerHandle.warmingTimedOut = true;
-                throw err;
-              } finally {
-                clearTimeout(timer);
-              }
-            }
-            cqeResult = await queryWorker(workerHandle, queryText, constraints, timeoutMs);
-          } finally {
-            workerHandle.busy = false;
-          }
-        }
+      const run = await executeCqeQuery(queryText, repoRoot, constraints, timeoutMs);
+      if (run.skipped) {
+        // A concurrent prompt owns the worker: never queue, fall back now.
+        fallbackReason = run.skipped;
       } else {
-        const handle = getInlineHandle(repoRoot);
-        const engine = await handle.enginePromise;
-        if (!engine) throw new Error('CQE_ENGINE_UNAVAILABLE');
-        cqeResult = await withTimeout(
-          engine.query(queryText, {
-            budget: constraints.budget,
-            limit: constraints.maxResults,
-            scope: constraints.scope,
-          }),
-          timeoutMs
-        );
+        cqeResult = run.result;
+        usedWorker = Boolean(run.usedWorker);
       }
     } catch (err) {
       cqeError = err;
@@ -498,6 +590,41 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
         code: err && err.code ? err.code : null,
         stack: err && err.stack ? err.stack.split('\n').slice(0, 5).join('\n') : null,
       });
+    }
+
+    // The intent planner collapses a long prompt into a single target term.
+    // When that term is an email/RUT/name the query returns zero hits, even
+    // though the prompt has searchable domain terms. Retry with compact
+    // single-term queries and merge the hits so CGE still contributes context.
+    if (!cqeError && mode === 'enabled' && isEmptyResult(cqeResult) && !CQE_CQP_RE.test(String(queryText))) {
+      const terms = extractCqeTerms(queryText);
+      if (terms.length > 1) {
+        const retryDeadline = Date.now() + Math.min(timeoutMs, 6000);
+        const limit = Number(constraints.maxResults) || 24;
+        const MAX_FALLBACK_QUERIES = 4;
+        const runs = [];
+        const used = [];
+        for (const term of terms) {
+          if (Date.now() >= retryDeadline || used.length >= MAX_FALLBACK_QUERIES) break;
+          try {
+            const remaining = Math.max(1, retryDeadline - Date.now());
+            const run = await executeCqeQuery(term, repoRoot, constraints, Math.min(timeoutMs, remaining));
+            if (run.skipped || isEmptyResult(run.result)) continue;
+            runs.push(run);
+            used.push(term);
+          } catch (err) {
+            cqeDebugWarn('cqe-adapter.retry', 'CQE fallback term failed', {
+              term,
+              error: err && err.message ? err.message : String(err),
+            });
+          }
+        }
+        const merged = mergeRawResults(runs, limit);
+        if (merged.length) {
+          cqeResult = { ...(cqeResult || {}), results: merged };
+          cqeFallback = { terms: used, merged: merged.length };
+        }
+      }
     }
   }
 
@@ -519,6 +646,7 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
     cqeError: cqeError ? cqeError.message : null,
     failureCode: cqeError ? classifyCqeFailure(cqeError, { timedOut }) : null,
     nativeTotalItems: nativeResult.total,
+    queryFallback: cqeFallback,
   };
 
   const rawResults = (cqeResult && Array.isArray(cqeResult.results)) ? cqeResult.results : [];

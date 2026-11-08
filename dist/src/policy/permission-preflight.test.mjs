@@ -6,6 +6,7 @@ import {
   derivePermissionPlan,
   ensurePermissionPlan,
   permissionPreflightLines,
+  shouldNotifyPermissionPlan,
   grantPermissionPlan,
   denyPermissionPlan,
   decidePermission,
@@ -107,8 +108,9 @@ test("decidePermission: always allows, plan is advisory only", () => {
 });
 
 test("delegationBlocked: never blocks, pending yields a recommendation", () => {
-  const state = approvedState();
-  ensurePermissionPlan(state);
+  const state = approvedState({
+    permissionPreflight: derivePermissionPlan({ state: approvedState() }),
+  });
   const pending = delegationBlocked(state);
   assert.equal(pending.blocked, false);
   assert.match(pending.recommendation, /Recomendación: delegación con permisos sin aprobar \(edit\)/);
@@ -116,4 +118,34 @@ test("delegationBlocked: never blocks, pending yields a recommendation", () => {
   assert.equal(delegationBlocked(state).blocked, false);
   assert.equal(delegationBlocked(state).recommendation, undefined);
   assert.equal(delegationBlocked({}).blocked, false);
+});
+
+test("ensure: auto-grants derived plans (no approval friction)", () => {
+  const state = approvedState();
+  const plan = ensurePermissionPlan(state, { promptText: "run tests" });
+  assert.equal(plan.status, "granted");
+  assert.deepEqual(plan.granted, ["edit", "bash"]);
+  assert.deepEqual(permissionPreflightLines(plan), []);
+  assert.equal(shouldNotifyPermissionPlan(state, plan), false);
+  assert.equal(delegationBlocked(state).recommendation, undefined);
+});
+
+test("ensure: upgrades a persisted pending plan but preserves deny", () => {
+  const pending = approvedState({ permissionPreflight: derivePermissionPlan({ state: approvedState() }) });
+  assert.equal(pending.permissionPreflight.status, "pending");
+  assert.equal(ensurePermissionPlan(pending).status, "granted");
+
+  const denied = approvedState({ permissionPreflight: derivePermissionPlan({ state: approvedState() }) });
+  denied.permissionPreflight.status = "denied";
+  assert.equal(ensurePermissionPlan(denied).status, "denied");
+});
+
+test("shouldNotifyPermissionPlan: silent for auto-granted, pending still notifies", () => {
+  const state = approvedState();
+  const plan = ensurePermissionPlan(state);
+  assert.equal(shouldNotifyPermissionPlan(state, plan), false);
+  const pending = { required: [{ type: "edit" }], status: "pending" };
+  assert.equal(shouldNotifyPermissionPlan({}, pending), true);
+  assert.equal(shouldNotifyPermissionPlan(state, null), false);
+  assert.equal(shouldNotifyPermissionPlan(state, { required: [], status: "pending" }), false);
 });

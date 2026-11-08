@@ -618,3 +618,31 @@ test("fails loud on invalid resource limits", async () => {
   );
   assert.equal(adapter.calls.length, 0);
 });
+
+test("overrides a first ACCEPTED verdict when a review artifact fails", async () => {
+  const adapter = createAdapter();
+  const outcome = await runAgentFeedbackOrchestration(
+    baseOptions(adapter, {
+      reviewArtifacts: [
+        { ref: "review/hidden.log", content: "✖ particle\nℹ fail 1" },
+      ],
+      maxRevisionCycles: 1,
+    }),
+  );
+
+  assert.equal(outcome.status, "COMPLETED");
+  assert.equal(outcome.verdict, "ACCEPTED");
+  assert.deepEqual(
+    adapter.calls.map((request) => request.role),
+    ["ANALYST", "ARCHITECT", "BUILDER", "REVIEWER", "BUILDER", "REVIEWER"],
+  );
+  const reviewerResults = outcome.results.filter(
+    (entry) => entry.role === "REVIEWER",
+  );
+  assert.equal(reviewerResults[0].result.review.verdict, "REVISION_REQUIRED");
+  assert.equal(reviewerResults[1].result.review.verdict, "ACCEPTED");
+  assert.match(
+    reviewerResults[0].result.review.findings[0].description,
+    /review\/hidden\.log/,
+  );
+});

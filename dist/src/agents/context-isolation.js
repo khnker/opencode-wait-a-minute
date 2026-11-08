@@ -21,6 +21,18 @@ export const ROLE_CONTEXT_POLICY = Object.freeze({
     limits: Object.freeze({ artifacts: 20, evidence: 8, constraints: 20, priorFindings: 12 }),
     findingSeverities: Object.freeze(["HIGH", "CRITICAL"]),
   }),
+  BACKEND_ENGINEER: Object.freeze({
+    limits: Object.freeze({ artifacts: 20, evidence: 12, constraints: 20, priorFindings: 12 }),
+    findingSeverities: Object.freeze(["HIGH", "CRITICAL"]),
+  }),
+  FRONTEND_ENGINEER: Object.freeze({
+    limits: Object.freeze({ artifacts: 20, evidence: 12, constraints: 20, priorFindings: 12 }),
+    findingSeverities: Object.freeze(["HIGH", "CRITICAL"]),
+  }),
+  UX_DESIGNER: Object.freeze({
+    limits: Object.freeze({ artifacts: 20, evidence: 20, constraints: 20, priorFindings: 20 }),
+    findingSeverities: Object.freeze([...FINDING_SEVERITIES]),
+  }),
   REVIEWER: Object.freeze({
     limits: Object.freeze({ artifacts: 20, evidence: 30, constraints: 10, priorFindings: 30 }),
     findingSeverities: Object.freeze([...FINDING_SEVERITIES]),

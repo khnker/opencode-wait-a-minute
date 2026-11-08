@@ -1,5 +1,8 @@
 import { runAgentFeedbackOrchestration } from "../agents/orchestrator.js";
+import { builderRoleForLayer } from "../agents/role-contracts.js";
 import { normalizeReviewArtifacts } from "../agents/review-artifacts.js";
+import { detectLayer } from "../skills/skill-routing.js";
+import { carriesSurfaced } from "./agent-run-state.js";
 import { decideAgentLoopAction } from "./task-loop.js";
 
 export class AgentTaskIntegrationError extends Error {
@@ -166,6 +169,16 @@ function reviewArtifactValues(task) {
   return values;
 }
 
+function implementationRoleFor(task, artifacts) {
+  const explicit = task?.layer || task?.implementationLayer;
+  if (explicit) return builderRoleForLayer(explicit);
+  for (const artifact of artifacts) {
+    const layer = detectLayer(String(artifact));
+    if (layer) return builderRoleForLayer(layer);
+  }
+  return builderRoleForLayer(null);
+}
+
 export function buildTaskAgentInput(task) {
   if (!isObject(task)) {
     throw new AgentTaskIntegrationError("task snapshot is required");
@@ -178,15 +191,17 @@ export function buildTaskAgentInput(task) {
   if (!objective) {
     throw new AgentTaskIntegrationError("task objective is required");
   }
+  const artifacts = collectArtifacts(task);
   return {
     taskId,
     objective,
     acceptanceCriteria: normalizeCriteria(task, objective),
-    artifacts: collectArtifacts(task),
+    artifacts,
     evidence: collectEvidence(task),
     constraints: collectConstraints(task),
     priorFindings: collectPriorFindings(task),
     reviewArtifacts: normalizeReviewArtifacts(reviewArtifactValues(task)),
+    implementationRole: implementationRoleFor(task, artifacts),
     mode: task.executionIntent === "ANALYZE" ? "ANALYZE" : "IMPLEMENT",
   };
 }
@@ -280,11 +295,18 @@ export function applyAgentRun(task, outcome, { now = Date.now(), maxHistory = 5 
   const requirements = accepted
     ? markAcceptedRequirementsVerified(task.requirements, results, now)
     : task.requirements;
+  const previousRun = isObject(task.agentRun) ? task.agentRun : null;
+  const failed = outcome.status === "FAILED" || outcome.stoppedAt === "agent";
+  const previousStreak = Number.isInteger(previousRun?.failureStreak)
+    ? previousRun.failureStreak
+    : 0;
   const agentRun = {
     status: outcome.status ?? null,
     verdict: outcome.verdict ?? null,
     stoppedAt: outcome.stoppedAt ?? null,
     exhausted: outcome.exhausted === true,
+    surfaced: carriesSurfaced(previousRun, outcome),
+    failureStreak: failed ? previousStreak + 1 : 0,
     cycles: isObject(outcome.cycles) ? { ...outcome.cycles } : { revisions: 0, replans: 0 },
     results,
     handoffs: asArray(outcome.handoffs).map((handoff) =>
@@ -396,6 +418,7 @@ export function applyAgentFailure(
       verdict: null,
       stoppedAt: "agent",
       exhausted: false,
+      ...(failureCode !== undefined ? { failureCode } : {}),
       results: [],
       handoffs: [],
       cycles: task?.agentRun?.cycles,
@@ -408,7 +431,9 @@ export function applyAgentFailure(
   return updated;
 }
 
-export function shouldRunTaskAgentPass(task) {
+export const DEFAULT_MAX_CONSECUTIVE_FAILURES = 3;
+
+export function shouldRunTaskAgentPass(task, { maxConsecutiveFailures } = {}) {
   if (!isObject(task)) return false;
   const agentRun = task.agentRun;
   if (!isObject(agentRun)) return true;
@@ -416,6 +441,11 @@ export function shouldRunTaskAgentPass(task) {
   if (agentRun.status === "COMPLETED" && agentRun.verdict === "ACCEPTED") {
     return false;
   }
+  const budget = Number.isInteger(maxConsecutiveFailures) && maxConsecutiveFailures > 0
+    ? maxConsecutiveFailures
+    : DEFAULT_MAX_CONSECUTIVE_FAILURES;
+  const streak = Number.isInteger(agentRun.failureStreak) ? agentRun.failureStreak : 0;
+  if (streak >= budget) return false;
   return !["BLOCKED", "NEEDS_INPUT"].includes(agentRun.status);
 }
 
@@ -430,7 +460,9 @@ export async function runConfiguredTaskAgentStep({
 } = {}) {
   const agentConfig = isObject(config) ? config : {};
   if (agentConfig.enabled !== true) return null;
-  if (!shouldRunTaskAgentPass(task)) return null;
+  if (!shouldRunTaskAgentPass(task, { maxConsecutiveFailures: agentConfig.maxConsecutiveFailures })) {
+    return null;
+  }
   return runTaskAgentStep({
     task,
     taskId,

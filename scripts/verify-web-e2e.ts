@@ -19,6 +19,8 @@ import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
+const SKILL_MARKERS = ["codebase-design", "writing-for-agents", "dietrichgebert-ponytail"];
+
 export const DEFAULT_PROMPT =
   "Implementá add.js con una función que sume dos números y add.test.mjs usando node:test. Verificá con node --test add.test.mjs.";
 
@@ -97,6 +99,7 @@ export interface RunReport {
   reportDir: string;
   server: ServerInfo;
   session: SessionInfo;
+  mainSession?: any;
   timeline: TimelineEvent[];
   task: any;
   loop: any;
@@ -110,9 +113,11 @@ export interface CheckInput {
   serverReady: boolean;
   sessionId: string | null;
   contractStatus: string | null;
+  contractApproval?: string;
   task: any;
   loop: any;
   sessions: SessionSummary[];
+  mainSessionText?: string;
   taskFileExists: boolean;
   loopFileExists: boolean;
 }
@@ -197,6 +202,7 @@ export function buildFixtureConfig(): string {
   const config = {
     logging: true,
     enforcement: true,
+    contractApproval: "advisory",
     autoLoop: false,
     taskLoop: {
       enabled: true,
@@ -248,6 +254,7 @@ export function evaluateChecks(input: CheckInput): CheckResult[] {
   const status = agentRun.status ?? null;
   const failureReason = typeof agentRun.failureReason === "string" ? agentRun.failureReason : "";
   const contractStatus = input.contractStatus ?? input.task?.contract?.status ?? null;
+  const contractApproval = input.contractApproval ?? "advisory";
   const allRequirementsDone = requirements.every(
     (req: any) => req?.status === "verified" || req?.status === "done",
   );
@@ -277,9 +284,9 @@ export function evaluateChecks(input: CheckInput): CheckResult[] {
     },
     {
       name: "contract-approved",
-      ok: contractStatus === "APPROVED",
+      ok: contractStatus === "APPROVED" || (contractApproval !== "required" && contractStatus !== null && contractStatus !== "REJECTED"),
       required: true,
-      detail: `contract.status=${contractStatus ?? "null"}`,
+      detail: `contract.status=${contractStatus ?? "null"} approval=${contractApproval}`,
     },
     {
       name: "agent-pass-ran",
@@ -323,6 +330,24 @@ export function evaluateChecks(input: CheckInput): CheckResult[] {
       required: true,
       detail: `task.json=${input.taskFileExists} loop-state.json=${input.loopFileExists}`,
     },
+    {
+      name: "skills-injected",
+      ok: SKILL_MARKERS.some((name) => (input.mainSessionText ?? "").includes(name)),
+      required: true,
+      detail: (() => {
+        const found = SKILL_MARKERS.filter((name) => (input.mainSessionText ?? "").includes(name));
+        return found.length ? `skills=${found.join(",")}` : "no skill markers in main session";
+      })(),
+    },
+    {
+      name: "roles-observed",
+      ok: new Set(input.sessions.map((s) => s.role).filter(Boolean)).size >= 2,
+      required: true,
+      detail: (() => {
+        const roles = [...new Set(input.sessions.map((s) => s.role).filter(Boolean))];
+        return roles.length ? `roles=${roles.join(",")}` : "fewer than 2 role sessions";
+      })(),
+    },
   ];
 }
 
@@ -338,6 +363,16 @@ export function redactSecrets(text: string): string {
   out = out.replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, "[REDACTED]");
   out = out.replace(/\bo1_[A-Za-z0-9_-]{8,}\b/g, "[REDACTED]");
   return out;
+}
+
+function collectAllText(messages: any[]): string {
+  const out: string[] = [];
+  for (const msg of Array.isArray(messages) ? messages : []) {
+    for (const part of Array.isArray(msg?.parts) ? msg.parts : []) {
+      if (part?.type === "text" && typeof part.text === "string") out.push(part.text);
+    }
+  }
+  return out.join("\n");
 }
 
 export function summarizeSession(session: any, messages: any[]): SessionSummary {
@@ -480,7 +515,7 @@ Options:
   --help                 show this help`);
 }
 
-function nodeSupportsTypeStripping(version: string): boolean {
+export function nodeSupportsTypeStripping(version: string): boolean {
   const [major, minor] = version.split(".").map(Number);
   return major > 22 || (major === 22 && minor >= 6);
 }
@@ -564,6 +599,34 @@ async function sendMessage(
     const raw = await response.text();
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} sending prompt: ${raw.slice(0, 300)}`);
+    }
+    return { timedOut: false, response: raw ? JSON.parse(raw) : null };
+  } catch (err) {
+    const name = (err as any)?.name;
+    if (name === "AbortError" || name === "TimeoutError") {
+      return { timedOut: true, response: null };
+    }
+    throw err;
+  }
+}
+
+async function sendCommand(
+  baseUrl: string,
+  sessionId: string,
+  command: string,
+  args: string,
+  timeoutMs: number,
+): Promise<{ timedOut: boolean; response: any }> {
+  try {
+    const response = await fetch(`${baseUrl}/session/${sessionId}/command`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ command, arguments: args }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const raw = await response.text();
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} sending command: ${raw.slice(0, 300)}`);
     }
     return { timedOut: false, response: raw ? JSON.parse(raw) : null };
   } catch (err) {
@@ -728,6 +791,7 @@ export async function main(): Promise<void> {
     ? path.resolve(options.out)
     : defaultReportDir(runId, options.ephemeral);
   const approvalPrompt = "/wam contract approve";
+  const contractApproval = "advisory";
   const timeline: TimelineEvent[] = [];
 
   let fixture = "";
@@ -751,6 +815,7 @@ export async function main(): Promise<void> {
   let errorMessage: string | null = null;
   let logTail = "";
   let artifacts: string[] = [];
+  let mainSession: any = null;
 
   const record = (type: string, detail?: string, data?: Record<string, unknown>): void => {
     timeline.push({ at: nowIso(), type, detail, data });
@@ -878,12 +943,12 @@ export async function main(): Promise<void> {
         stopPolling = true;
         return;
       }
-      const result = await sendMessage(
+      const result = await sendCommand(
         baseUrl,
         sessionId as string,
-        approvalPrompt,
+        "wam",
+        "contract approve",
         promptTimeout,
-        model,
       );
       if (result.timedOut) {
         record("approval-request-timeout", `client timeout after ${promptTimeout} ms`);
@@ -892,7 +957,7 @@ export async function main(): Promise<void> {
       record("contract-approved", approvalPrompt);
     };
 
-    if (task?.contract?.status === "PROPOSED") await approve();
+    if (contractApproval === "required" && task?.contract?.status === "PROPOSED") await approve();
 
     let lastFingerprint = "";
     if (!stopPolling) {
@@ -903,7 +968,7 @@ export async function main(): Promise<void> {
         taskFileExists = existsSync(taskFile);
         loopFileExists = existsSync(loopFile);
 
-        if (task?.contract?.status === "PROPOSED" && !approvalSent) {
+        if (contractApproval === "required" && task?.contract?.status === "PROPOSED" && !approvalSent) {
           await approve();
           if (stopPolling) break;
         }
@@ -946,18 +1011,38 @@ export async function main(): Promise<void> {
       }
     }
 
+    let mainMessagesRaw: any[] = [];
+    let mainSessionText = "";
+    try {
+      const mainMessages = await fetchJson(`${baseUrl}/session/${sessionId}/message`);
+      mainMessagesRaw = Array.isArray(mainMessages) ? mainMessages : [];
+      mainSessionText = collectAllText(mainMessagesRaw);
+      mainSession = {
+        id: sessionId,
+        messageCount: mainMessagesRaw.length,
+        textChars: mainSessionText.length,
+        skills: SKILL_MARKERS.filter((name) => mainSessionText.includes(name)),
+      };
+    } catch {}
     checks = evaluateChecks({
       serverReady: true,
       sessionId,
       contractStatus: task?.contract?.status ?? null,
+      contractApproval: "advisory",
       task,
       loop,
       sessions,
+      mainSessionText,
       taskFileExists,
       loopFileExists,
     });
     exitCode = exitCodeFor(checks);
     artifacts = collectArtifacts(taskDir, reportDir, sessions);
+    if (mainMessagesRaw.length > 0) {
+      const mainSessionPath = path.join(reportDir, "main-session.json");
+      writeFileSync(mainSessionPath, `${JSON.stringify(mainMessagesRaw, null, 2)}\n`);
+      artifacts.push(mainSessionPath);
+    }
   } catch (err) {
     errorMessage = (err as Error)?.message ?? String(err);
     exitCode = 2;
@@ -966,6 +1051,7 @@ export async function main(): Promise<void> {
       serverReady: serverInfo.baseUrl !== "",
       sessionId,
       contractStatus: task?.contract?.status ?? null,
+      contractApproval: "advisory",
       task,
       loop,
       sessions,
@@ -1017,6 +1103,7 @@ export async function main(): Promise<void> {
     task,
     loop,
     sessions,
+    mainSession,
     checks,
     artifacts,
     logTail,

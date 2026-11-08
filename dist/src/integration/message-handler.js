@@ -17,7 +17,7 @@ import path from "node:path";
 
 import { hasWamMarkerFor, injectWamParts, isWamSynthetic } from "./part-provenance.js";
 import { reopenTerminalAgentRun, resetAuthorizationSurface } from "../execution/agent-run-state.js";
-import { ensurePermissionPlan, permissionPreflightLines } from "../policy/permission-preflight.js";
+import { ensurePermissionPlan, permissionPreflightLines, shouldNotifyPermissionPlan } from "../policy/permission-preflight.js";
 import { buildTaskInferenceDirective } from "../cognition/task-inference-engine.js";
 import { buildRoleDirective } from "../cognition/task-role-engine.js";
 import { detectCouplingIntent, traceCouplingForTask } from "../context/selection.js";
@@ -85,6 +85,10 @@ const fallbackProcessedMessages = new Map();
 // Evita emitir el notice en cada continuación de la misma sesión; solo se
 // dispara una vez cuando la primera inferencia cayó en namespace genérico.
 const greetedSessions = new Set();
+
+// Evita avisos de completado duplicados cuando el hook procesa el mensaje del
+// usuario y la respuesta del asistente en paralelo (misma tarea y proyecto).
+const completionNoticeKeys = new Set();
 
 function markProcessed(key, store = fallbackProcessedMessages) {
   store.set(key, true);
@@ -263,7 +267,7 @@ export async function handleMessage(input, output, deps) {
 
     // No-task-assumption: resume intent without active task → ask, don't assume
     if (!input.taskId && RESUME_RE.test(promptText)) {
-      const active = sessionTasks.get(input.sessionID) || readActiveTaskIdFresh(wamRoot);
+      const active = sessionTasks.get(input.sessionID) || readActiveTaskIdFresh(wamRoot, { sessionId: input.sessionID, projectRoot: wamRoot });
       const st = active ? getTaskState(active, wamRoot) : null;
       if (st && st.phase !== "DONE") {
         emitTextPart(output, loadPrompt("notice.pending_task", { active, phase: st.phase }), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
@@ -481,7 +485,9 @@ export async function handleMessage(input, output, deps) {
       activeMode: cfg.activeMode,
     });
 
-    const state = waitAMinute.buildPersistedState(taskId, analysis, wamRoot);
+    const state = waitAMinute.buildPersistedState(taskId, analysis, wamRoot, {
+      requireApproval: cfg.contractApproval === "required",
+    });
     state.lastAction = promptText;
     const trivialPrompt = typeof waitAMinute.isTrivial === "function"
       ? waitAMinute.isTrivial(promptText)
@@ -576,29 +582,6 @@ export async function handleMessage(input, output, deps) {
       return;
     }
 
-    // Approval gate
-    const earlyNotices = [];
-    const intentConf = Number(analysis.intent?.confidence ?? analysis.intent?.conf ?? 100);
-    const openUnknowns = (state.contract?.unknowns || []).filter((u) => u.status !== "answered" && u.status !== "blocking");
-    const highUncertainty =
-      (analysis.ambiguity || "low") === "high" ||
-      intentConf < 60 ||
-      openUnknowns.length > 0;
-    const trimmed = promptText.trim();
-
-    // 0 fricción: un contrato propuesto nunca pide confirmación — se emite una
-    // recomendación y se procede. Solo /wam contract edit modifica el contrato.
-    if (
-      state.contract?.status === "PROPOSED" &&
-      state.phase === "PROPOSED" &&
-      !state.contractPrompted
-    ) {
-      const reqCount = (state.contract?.requirements || []).length;
-      earlyNotices.push(`Recomendación: contrato propuesto (${reqCount} requisitos) — procedo; /wam contract edit si algo no coincide.`);
-      state.contractPrompted = true;
-      try { persistTaskState(taskId, state, wamRoot); } catch {}
-    }
-
     const isCompletionClaim = waitAMinute.isCompletionIntent(promptText);
     const dialogueIntent = dialogueTurn?.observation?.intent;
     const isTrivialAnalysis =
@@ -631,6 +614,7 @@ export async function handleMessage(input, output, deps) {
       gate.allDone &&
       updatedState.phase === "DONE" &&
       !updatedState.completionNotified &&
+      !completionNoticeKeys.has(`${wamRoot}::${taskId}`) &&
       waitAMinute.isCompletionIntent(promptText)
     ) {
       const verified = (updatedState.requirements || []).filter((r) => r.status === "verified");
@@ -639,11 +623,17 @@ export async function handleMessage(input, output, deps) {
         .filter(Boolean)
         .slice(0, 5);
       const notice = loadPrompt("notice.task_complete", {
-        objective: updatedState.contract?.objective || state.contract?.objective || "—",
+        objective:
+          updatedState.contract?.objective ||
+          updatedState.outcomeContract?.objective ||
+          state.contract?.objective ||
+          state.outcomeContract?.objective ||
+          "—",
         count: verified.length,
         evidence: evidence.join("; ") || "—",
         artifacts: `.wam/tasks/${taskId}/summary.md, recent-changes.md`,
       });
+      completionNoticeKeys.add(`${wamRoot}::${taskId}`);
       emitTextPart(output, notice, {
         sessionID: input.sessionID,
         messageID: output.message?.id || input.messageID,
@@ -660,7 +650,7 @@ export async function handleMessage(input, output, deps) {
     try { persistLiveContext(taskId, updatedState, wamRoot); } catch {}
 
     // ---- Context Assembly ----
-    const inject = [...earlyNotices];
+    const inject = [];
     const contextInject = [];
     const auxInject = [];
 
@@ -690,7 +680,30 @@ export async function handleMessage(input, output, deps) {
     const pend = reqs.filter((r) => r.status !== "done" && r.status !== "verified");
     const objective = updatedState.contract?.objective || analysis.intent?.goal || null;
     if (intentLane.lane !== INTENT_LANES.CONVERSATION) {
-      if (updatedState.phase === "PROPOSED" && !updatedState.contractDisplayed) {
+      const requireApproval = cfg.contractApproval === "required";
+      if (requireApproval && updatedState.contract?.status !== "APPROVED" && reqs.length > 0) {
+        const { visible, overflow } = splitVisibleRequirements(reqs);
+        const verification = (updatedState.contract?.verification || []).filter(
+          (v) => typeof v === "string" && v.trim(),
+        );
+        const skillNames = (analysis.skills?.selected || [])
+          .map((s) => (typeof s === "string" ? s : s?.name || s?.id))
+          .filter(Boolean);
+        inject.push(
+          "⛔ [wait-a-minute] CONTRATO PENDIENTE — mostrá al usuario este plan y esperá /wam contract approve antes de ejecutar.",
+          `Objetivo: ${objective || "pending"}`,
+          `Plan (${pend.length}/${reqs.length} pendientes):`,
+          ...visible.map((r) => `  - ${truncate(r.title, 120)}`),
+          ...(overflow > 0 ? [`  ... y ${overflow} más`] : []),
+          ...(verification.length ? [`Verificación: ${verification.join("; ")}`] : []),
+          `Skills cargadas: ${skillNames.length ? skillNames.join(", ") : "ninguna"}`,
+          "En tu mensaje visible incluí: objetivo, plan, sección \"Skills cargadas\" con esos nombres, verificación y pedido de /wam contract approve.",
+          "No ejecutes write/edit/apply_patch hasta que el usuario apruebe. El comando es /wam contract approve.",
+        );
+        updatedState.contractDisplayed = true;
+        updatedState.nextAction = "Mostrar plan y esperar /wam contract approve";
+        persistTaskState(taskId, updatedState, wamRoot);
+      } else if (updatedState.phase === "PROPOSED" && !updatedState.contractDisplayed) {
         const { visible, overflow } = splitVisibleRequirements(reqs);
         inject.push(
           `Objective: ${objective || "pending"}`,
@@ -729,6 +742,7 @@ export async function handleMessage(input, output, deps) {
         selectedSkills: analysis.skills?.selected || [],
         injectedSkills,
         previousRequestTokens: requestUsage,
+        contractApproval: cfg.contractApproval,
       });
       if (pack.lines.length) {
         contextInject.push(pack.lines.join("\n") + "\n");
@@ -914,12 +928,9 @@ const { lines } = buildTaskInferenceDirective({
       try { recordDelegationEvidence({ taskId, lines: delegation, root: wamRoot }); } catch {}
       const preflight = ensurePermissionPlan(updatedState, { promptText });
       if (preflight) {
-        const lines = permissionPreflightLines(preflight);
-        if (lines.length > 0) {
-          inject.push(...lines);
-          if (!updatedState.permissionPreflightNotified) {
-            updatedState.permissionPreflightNotified = true;
-          }
+        if (shouldNotifyPermissionPlan(updatedState, preflight)) {
+          inject.push(...permissionPreflightLines(preflight));
+          updatedState.permissionPreflightNotified = true;
         }
         try { persistTaskState(taskId, updatedState, wamRoot); } catch {}
       }

@@ -1,5 +1,6 @@
 /** Task loop — pure, deterministic controller for execution-loop decisions. */
 import { migrateLegacyPhase } from "./execution-state.js";
+import { WAM_META } from "../integration/part-provenance.js";
 import { isRetryableAgentError } from "./task-agent-run.js";
 
 export const TASK_LOOP_DECISIONS = Object.freeze([
@@ -13,6 +14,16 @@ export const TASK_LOOP_DECISIONS = Object.freeze([
   "STOP_BUDGET",
   "STOP_STAGNATION",
 ]);
+
+/**
+ * Required contract approval pauses the autonomous loop until the user
+ * approves. Fail open when no contract exists: there is nothing to approve.
+ */
+export function shouldPauseForContractApproval({ contractApproval, state } = {}) {
+  if (contractApproval !== "required") return false;
+  if (!state || !state.contract) return false;
+  return state.contract.status !== "APPROVED";
+}
 
 const ACTIONABLE = new Set(["CONTINUE", "REPLAN", "VERIFY"]);
 
@@ -243,6 +254,7 @@ export function decideNextAction({
 export function buildTaskLoopPrompt(result = {}) {
   const decision = result.decision || "CONTINUE";
   const lines = [`WAM task loop: ${decision} (${result.reason || "work-remaining"})`];
+  if (result.stage?.text) lines.push(`WAM ${result.stage.text}`);
   const next = result.nextAction || {};
   if (next.type === "wait_user") {
     if (Array.isArray(next.findings) && next.findings.length > 0) {
@@ -272,5 +284,14 @@ export function buildTaskLoopPrompt(result = {}) {
     lines.push(`Next: ${next.type}`);
   }
   if (result.stopReason) lines.push(`Stop: ${result.stopReason}`);
-  return { parts: [{ type: "text", text: lines.join("\n"), synthetic: true }] };
+  return {
+    parts: [
+      {
+        type: "text",
+        text: lines.join("\n"),
+        synthetic: true,
+        metadata: { [WAM_META]: true },
+      },
+    ],
+  };
 }

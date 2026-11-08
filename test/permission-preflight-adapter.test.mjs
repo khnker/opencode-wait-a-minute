@@ -50,7 +50,7 @@ function writePlan(tmp, taskId, plan) {
   fs.writeFileSync(file, JSON.stringify(state));
 }
 
-test("pending preflight is advisory and delegation proceeds", async (t) => {
+test("derived preflight is auto-granted and delegation proceeds", async (t) => {
   const { tmp, taskId } = setupTmp();
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
@@ -58,7 +58,7 @@ test("pending preflight is advisory and delegation proceeds", async (t) => {
 
   assert.equal(typeof hooks["permission.ask"], "function");
 
-  // Zero friction: a pending preflight never blocks task delegation.
+  // Zero friction: derived plans are auto-granted and never block delegation.
   await hooks["tool.execute.before"](
     { tool: "task", sessionID: "sess-1" },
     { args: { description: "delegate" } },
@@ -67,13 +67,13 @@ test("pending preflight is advisory and delegation proceeds", async (t) => {
   const state = JSON.parse(
     fs.readFileSync(path.join(tmp, ".wam", "tasks", taskId, "task.json"), "utf8"),
   );
+  assert.equal(state.permissionPreflight.status, "granted");
   const verdict = delegationBlocked(state);
   assert.equal(verdict.blocked, false);
-  assert.match(verdict.recommendation, /continúo/);
+  assert.equal(verdict.recommendation, undefined);
 
   const notice = permissionPreflightLines(state.permissionPreflight);
-  assert.match(notice[0], /PERMISOS SUGERIDOS \(informativo, no bloquea\)/);
-  assert.doesNotMatch(notice.join("\n"), /Aprobar:/);
+  assert.deepEqual(notice, []);
 
   // permission.ask always allows; the granted plan only informs the notice.
   assert.equal(decidePermission({ type: "edit" }), "allow");

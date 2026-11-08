@@ -36,7 +36,10 @@ const GATES = [
   { name: "Isolation E2E", cmd: "node tests/isolation/run.mjs", required: true },
   ...(IS_GITHUB_ACTIONS
     ? []
-    : [{ name: "OpenCode Smoke E2E", cmd: "node tests/e2e/opencode/smoke.mjs", required: true, timeout: 300000 }]),
+    : [
+        { name: "OpenCode Smoke E2E", cmd: "node tests/e2e/opencode/smoke.mjs", required: true, timeout: 300000 },
+        { name: "Release Web E2E (installed + Playwright)", cmd: "node scripts/verify-release-e2e.mjs", required: true, timeout: 600000 },
+      ]),
   { name: "Package E2E", cmd: "npm run test:e2e:package", required: true, timeout: 300000 },
   { name: "Docs Check", cmd: "node scripts/docs-check.mjs", required: true },
   { name: "Prompt Catalog Integrity", cmd: "npm run prompts:check", required: true },
@@ -51,7 +54,7 @@ const GATES = [
     ? []
     : [{ name: "Bench Evidence Validation", cmd: "npm run bench:audit && npm run bench:validate", required: true }]),
   { name: "Performance Sanity", cmd: "node scripts/performance-sanity.mjs", required: false },
-  { name: "Strict DONE Verification (C1)", cmd: "node scripts/verify-done-strict.mjs", required: true },
+  { name: "Strict DONE Verification (C1)", cmd: "node scripts/verify-done-strict.mjs", required: true, timeout: 900000 },
   ...(process.env.WAM_RC1_EVIDENCE === "1"
     ? [{ name: "Real Benchmark (RC1 evidence)", cmd: "npm run benchmark:real", required: true }]
     : []),

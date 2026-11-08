@@ -1,6 +1,43 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decideNextAction, buildTaskLoopPrompt, TASK_LOOP_DECISIONS } from "./task-loop.js";
+import { decideNextAction, buildTaskLoopPrompt, shouldPauseForContractApproval, TASK_LOOP_DECISIONS } from "./task-loop.js";
+import { isWamSynthetic } from "../integration/part-provenance.js";
+import { extractPrompt } from "../integration/message-handler.js";
+
+test("required contract approval pauses the autonomous loop while PROPOSED", () => {
+  assert.equal(
+    shouldPauseForContractApproval({
+      contractApproval: "required",
+      state: { contract: { status: "PROPOSED" } },
+    }),
+    true
+  );
+  assert.equal(
+    shouldPauseForContractApproval({
+      contractApproval: "required",
+      state: { contract: { status: "APPROVED" } },
+    }),
+    false
+  );
+});
+
+test("contract guard fails open without a contract or in advisory mode", () => {
+  assert.equal(
+    shouldPauseForContractApproval({ contractApproval: "required", state: {} }),
+    false
+  );
+  assert.equal(
+    shouldPauseForContractApproval({ contractApproval: "required", state: null }),
+    false
+  );
+  assert.equal(
+    shouldPauseForContractApproval({
+      contractApproval: "advisory",
+      state: { contract: { status: "PROPOSED" } },
+    }),
+    false
+  );
+});
 
 test("CONTINUE with pending gate while executing increments iteration", () => {
   const result = decideNextAction({
@@ -221,11 +258,24 @@ test("buildTaskLoopPrompt returns a synthetic text part", () => {
   assert.equal(payload.parts.length, 1);
   assert.equal(payload.parts[0].type, "text");
   assert.equal(payload.parts[0].synthetic, true);
+  assert.equal(isWamSynthetic(payload.parts[0]), true);
   assert.match(payload.parts[0].text, /VERIFY/);
   assert.match(payload.parts[0].text, /verification-required/);
   assert.match(payload.parts[0].text, /req-1/);
   assert.ok(TASK_LOOP_DECISIONS.includes("CONTINUE"));
   assert.equal(TASK_LOOP_DECISIONS.length, 9);
+});
+
+test("task loop prompts are not re-consumed as user input", () => {
+  const payload = buildTaskLoopPrompt({
+    decision: "WAIT_USER",
+    reason: "agent-failed",
+  });
+  assert.equal(extractPrompt({}, payload), "");
+  assert.equal(
+    extractPrompt({ message: { parts: payload.parts } }, {}),
+    "",
+  );
 });
 
 test("buildTaskLoopPrompt explains authorization and block next steps", () => {

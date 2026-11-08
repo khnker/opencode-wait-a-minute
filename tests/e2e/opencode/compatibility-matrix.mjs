@@ -6,7 +6,7 @@
  * this module; see docs/architecture/compatibility.md for the human matrix.
  *
  * Grounding (do NOT invent values):
- *  - node.supported  : taken verbatim from package.json "engines.node" (">=20").
+ *  - node.supported  : taken verbatim from package.json "engines.node" (">=22.6").
  *  - node.tested     : versions observed in a real validation matrix. The repo
  *                      currently declares no CI version matrix, so this is empty
  *                      (documented as unreported, not assumed).
@@ -44,7 +44,7 @@ export class CompatibilityError extends Error {
  */
 export const COMPATIBILITY_MATRIX = Object.freeze({
   node: Object.freeze({
-    supported: ">=20",
+    supported: ">=22.6",
     tested: Object.freeze([]),
     source: "package.json#engines.node",
   }),

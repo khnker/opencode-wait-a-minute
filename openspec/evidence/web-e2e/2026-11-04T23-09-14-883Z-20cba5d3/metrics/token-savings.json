@@ -1,0 +1,21 @@
+[
+  {
+    "taskId": "task-implementa-add-js-con-una-funcion-que-sume-dos-sess-NbcKlcw7",
+    "timestamp": 1793833758313,
+    "firstAt": 1793833758313,
+    "lastAt": 1793833758313,
+    "occurrences": 1,
+    "actualTokens": 5168,
+    "actualRequestTokens": null,
+    "usageSource": "none",
+    "promptTokens": 32,
+    "baselineTokens": 6000,
+    "baselineSource": "synthetic",
+    "claimable": false,
+    "estimator": "chars/4",
+    "scope": "wam-injected-lines",
+    "savingsPct": null,
+    "savingsTokens": 0,
+    "deltaTokens": 832
+  }
+]

@@ -1061,11 +1061,13 @@ function buildSkillRegistry(availableSkills) {
     "codebase-design": { capabilities: ["architecture", "deep-module"], triggers: ["deep module", "arquitectura de modulo", "seam", "testable", "interface"], risk: "low", loadStrategy: "base" },
     "diagnosing-bugs": { capabilities: ["debug", "diagnosis"], triggers: ["debug", "diagnose", "broken", "throwing", "failing", "slow", "regression"], risk: "high" },
     "tdd": { capabilities: ["test", "tdd"], triggers: ["test", "TDD", "test-first", "red-green-refactor", "integration test"], risk: "low" },
+    "verify": { capabilities: ["verification", "evidence", "completion"], triggers: ["verify", "verification", "verificar", "verificación", "verificá", "verificacion", "validar", "validá", "validate", "comprobar", "comprobá", "evidence", "evidencia", "completion claim", "before done", "antes de done"], risk: "medium" },
     "handoff": { capabilities: ["context", "handoff"], triggers: ["handoff", "hand-off", "continuar despues", "next agent", "pasar la pelota"], risk: "low" },
     "wizard": { capabilities: ["setup", "infra", "credentials"], triggers: ["setup", "configurar", "credenciales", "one-shot", "migracion", "cutover"], risk: "medium" },
     "prototype": { capabilities: ["design", "ui", "state"], triggers: ["prototype", "sanity-check", "state model", "validar disenio"], risk: "medium" },
     "improve-codebase-architecture": { capabilities: ["architecture", "deepening"], triggers: ["deepening", "arquitectura", "scan", "friction", "AI-navigable"], risk: "medium" },
     "agentic-code-foundations": { capabilities: ["code-quality", "maintainability", "refactoring"], triggers: ["agentic code", "code foundations", "maintainability", "refactor", "code review", "review code", "abstraction", "agent-readable"], risk: "low" },
+    "craftsman": { capabilities: ["code-quality", "implementation", "refactoring", "architecture"], triggers: ["craftsman", "implement", "implementar", "refactor", "refactoring", "code design", "software design", "write code", "component", "service", "model"], risk: "low", loadStrategy: "base" },
   };
 
   for (const [name, info] of Object.entries(availableSkills || {})) {

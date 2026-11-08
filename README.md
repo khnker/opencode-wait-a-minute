@@ -154,7 +154,7 @@ The npm package is `opencode-wait-a-minute`; the repository is `opencode-wait-a-
 
 Once installed, WAM intercepts requests before skill resolution and agent execution. Its control and state-management flow applies automatically.
 
-**Requirements:** Node `>=20` · OpenCode `>=1.18.0` — tested on Ubuntu 24.04, Node 24.16.0, OpenCode 1.18.33 ([docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md)).
+**Requirements:** Node `>=22.6` · OpenCode `>=1.18.0` — tested on Ubuntu 24.04, Node 24.16.0, OpenCode 1.18.33 ([docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md)).
 
 ### Runtime controls
 
@@ -163,6 +163,7 @@ Once installed, WAM intercepts requests before skill resolution and agent execut
 - `/wam config get` — show effective config; set `WAM_GOVERNANCE=off` or `.wam/config.json` to disable globally.
 - Automatic post-DONE loop — when a DONE claim is rejected, WAM re-drives the session itself until the gate is clean. Bounded per pending set (3 attempts) and total (10). Disable with `"autoLoop": false` in `.wam/config.json` or `WAM_AUTO_LOOP=0`.
 - Permission preflight — before delegating to a subagent, WAM derives the access permissions the approved task needs and surfaces them as a recommendation; delegation is never blocked (`/wam permissions approve` / `deny` only update the plan, `/wam status` shows it). Disable with `"permissionPreflight": false` in `.wam/config.json` or `WAM_DISABLE_PERMISSION_PREFLIGHT=1`.
+- Contract approval — `"contractApproval": "advisory" | "required"` in `.wam/config.json` (default `advisory`; override with `WAM_CONTRACT_APPROVAL`). In `required` mode, `write`, `edit`, `apply_patch`, `patch` and `todo_write` are blocked until the user sends `/wam contract approve`; the model first restates the visible plan and the hard block repeats it with the objective, pending requirements and verification.
 - Context projection — `"contextProjection": "legacy" | "shadow" | "active"` in `.wam/config.json` (default `active`; override with `WAM_CONTEXT_PROJECTION`). `shadow` measures the projection against the legacy brief without injecting it; `legacy` keeps the previous brief.
 
 ## Debugging and diagnostics
@@ -213,7 +214,7 @@ Expected trace categories (each prefixed `[WAM-DEBUG <ISO-timestamp>] [<category
 
 | Category | What it reports |
 |----------|-----------------|
-| `logic-gate` | which WAM gates are loaded (`skills`, `logging`, `enforcement`, `debug`, `autoLoop`, `permissionPreflight`) and their source |
+| `logic-gate` | which WAM gates are loaded (`skills`, `logging`, `enforcement`, `debug`, `autoLoop`, `permissionPreflight`, `contractApproval`) and their source |
 | `risk-envelope` | `evaluateAction(tool)` outcome and reason |
 | `governance` | `enforceGovernance(tool)` ALLOWED vs BLOCKED, with phase and subagent flag |
 | `skills` | `routeSkillsV2` selection count and chosen skill names |

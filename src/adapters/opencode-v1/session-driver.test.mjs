@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { driveTaskLoop, buildLoopPrompt, DEFAULT_TASK_LOOP_CONFIG } from "./session-driver.js";
 import { agentSignalForLoop, resetAuthorizationSurface } from "../../execution/agent-run-state.js";
+import { applyAgentFailure } from "../../execution/task-agent-run.js";
 import { createLoopState, loadLoopState, readLoopEvents, loopStatePath } from "../../state/loop-state.js";
 
 const CONFIG = { enabled: true, maxIterations: 10, maxNoProgress: 3 };
@@ -443,6 +444,40 @@ test("non-agent WAIT_USER surfaces on the transition only", async (t) => {
   assert.equal(calls.length, 1);
 });
 
+test("advisory contracts keep looping without approval", async (t) => {
+  const root = tmpRoot(t);
+  const sid = "ses-contract-advisory";
+  const calls = [];
+  const task = { state: "PROPOSED", contract: { status: "PROPOSED" } };
+  let loop = createLoopState({ taskId: "task-advisory", sessionId: sid });
+
+  const result = driveTaskLoop({
+    projectRoot: root,
+    taskId: "task-advisory",
+    sessionId: sid,
+    client: fakeClient(calls),
+    config: CONFIG,
+    contractApproval: "advisory",
+    deps: {
+      loadTask: () => task,
+      evaluateGate: () => ({ ok: false, pending: [] }),
+      loadLoop: () => ({ state: loop, corrupt: false }),
+      record: (_taskId, _root, nextState) => {
+        loop = nextState;
+        return { state: nextState, appended: true };
+      },
+    },
+  });
+
+  assert.equal(result.decision, "CONTINUE");
+  assert.equal(result.prompted, true);
+  assert.equal(result.stage.text, "stage: 0/4 contract (advisory)");
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].body.parts[0].text, /stage: 0\/4 contract \(advisory\)/);
+
+  await new Promise((resolve) => setImmediate(resolve));
+});
+
 test("pending authorization surfaces once and persists the marker", async (t) => {
   const root = tmpRoot(t);
   const sid = "ses-auth-transition";
@@ -529,6 +564,60 @@ test("failed agent run surfaces WAIT_USER once and persists the marker", async (
 
   await new Promise((resolve) => setImmediate(resolve));
   const second = run();
+  assert.equal(second.prompted, false);
+  assert.equal(calls.length, 1);
+});
+
+test("repeated failed agent passes do not re-surface WAIT_USER", async (t) => {
+  const root = tmpRoot(t);
+  const sid = "ses-failed-repeat";
+  const calls = [];
+  let task = { state: "EXECUTING", requirements: [] };
+  let loop = createLoopState({ taskId: "task-failed-repeat", sessionId: sid });
+
+  const deps = {
+    loadTask: () => task,
+    evaluateGate: () => ({ ok: false, pending: [] }),
+    loadLoop: () => ({ state: loop, corrupt: false }),
+    record: (_taskId, _root, nextState) => {
+      loop = nextState;
+      return { state: nextState, appended: true };
+    },
+    persistTask: (_taskId, nextTask) => {
+      task = nextTask;
+    },
+  };
+
+  const runPass = () => {
+    const outcome = {
+      status: "FAILED",
+      stoppedAt: "agent",
+      exhausted: false,
+      failureCode: "PROMPT_FAILED",
+    };
+    task = applyAgentFailure(task, "prompt failed", {
+      failureCode: "PROMPT_FAILED",
+      now: Date.now(),
+    });
+    return driveTaskLoop({
+      projectRoot: root,
+      taskId: "task-failed-repeat",
+      sessionId: sid,
+      client: fakeClient(calls),
+      config: CONFIG,
+      agent: agentSignalForLoop(outcome, task),
+      deps,
+    });
+  };
+
+  const first = runPass();
+  assert.equal(first.decision, "WAIT_USER");
+  assert.equal(first.prompted, true);
+  assert.equal(task.agentRun.surfaced, true);
+
+  await new Promise((resolve) => setImmediate(resolve));
+  const second = runPass();
+  assert.equal(second.decision, "WAIT_USER");
   assert.equal(second.prompted, false);
   assert.equal(calls.length, 1);
 });

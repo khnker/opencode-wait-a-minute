@@ -96,6 +96,17 @@ test("resolveWamRoot: el .wam propio gana sobre un repo hermano más reciente", 
   assert.equal(resolveWamRoot("", proj), proj);
 });
 
+test("resolveWamRoot: token genérico no secuestra a un repo vecino si sessionRoot tiene .wam", (t) => {
+  const proj = tmpRoot("wam-hijack-");
+  t.after(() => fs.rmSync(proj, { recursive: true, force: true }));
+
+  fs.mkdirSync(path.join(proj, ".wam", "context"), { recursive: true });
+  makeRepo(path.join(proj, "wam-playwright-dummy"));
+  clearRepoCache();
+
+  assert.equal(resolveWamRoot("hay problemas con wam arreglalo", proj), proj);
+});
+
 test("resolveWamRoot: contenedor sin .wam sigue matcheando el repo nombrado", (t) => {
   const proj = tmpRoot("wam-named-");
   t.after(() => fs.rmSync(proj, { recursive: true, force: true }));

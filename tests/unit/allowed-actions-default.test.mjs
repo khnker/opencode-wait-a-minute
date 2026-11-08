@@ -30,7 +30,9 @@ test("approveContract persists comprehensive allowedActions", async () => {
   const st = getTaskState(taskId, CWD);
   const a = st.approvedStrategy.allowedActions;
   for (const expected of [
-    "write", "edit", "bash", "sh", "task", "todowrite",
+    "read", "glob", "grep", "list", "webfetch",
+    "write", "edit", "patch", "multiedit", "apply_patch", "bash", "sh",
+    "task", "todowrite", "todoread", "skill", "question",
     "openspec", "openspec new change", "openspec instructions",
     "openspec validate", "openspec archive",
     "git commit", "npm test", "pnpm test",

@@ -48,7 +48,7 @@ test("current Node runtime is inside the documented supported range", () => {
 });
 
 test("unsupported Node versions fail fast with a non-zero exit code", () => {
-  for (const bad of ["18.0.0", "19.99.99", "v18.20.4"]) {
+  for (const bad of ["18.0.0", "19.99.99", "v18.20.4", "20.11.0", "22.4.1"]) {
     assert.throws(
       () => assertSupportedNode(bad),
       (error) => {
@@ -63,7 +63,7 @@ test("unsupported Node versions fail fast with a non-zero exit code", () => {
 });
 
 test("supported Node versions are accepted", () => {
-  for (const good of ["20.0.0", "20.11.0", "22.4.1"]) {
+  for (const good of ["22.6.0", "22.11.0", "24.0.0"]) {
     assert.equal(assertSupportedNode(good), true, `expected ${good} to be accepted`);
   }
 });
@@ -90,7 +90,7 @@ test("OpenCode fails fast when a minimum is configured (mechanism is real)", () 
 });
 
 test("checkCompatibility reports both axes and aggregates failures", () => {
-  const good = checkCompatibility({ nodeVersion: "20.1.0" });
+  const good = checkCompatibility({ nodeVersion: "22.6.0" });
   assert.equal(good.ok, true);
   assert.equal(good.node.ok, true);
   assert.equal(good.opencode.enforced, false);
@@ -100,7 +100,7 @@ test("checkCompatibility reports both axes and aggregates failures", () => {
   assert.equal(bad.failures[0].kind, "node");
 
   const opencodeBad = checkCompatibility({
-    nodeVersion: "20.1.0",
+    nodeVersion: "22.6.0",
     opencodeVersion: "0.9.0",
     opencodeMinimum: "1.0.0",
   });

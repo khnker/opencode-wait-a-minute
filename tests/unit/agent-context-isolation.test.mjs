@@ -34,6 +34,9 @@ test("declares a role policy for all four roles", () => {
     "ANALYST",
     "ARCHITECT",
     "BUILDER",
+    "BACKEND_ENGINEER",
+    "FRONTEND_ENGINEER",
+    "UX_DESIGNER",
     "REVIEWER",
   ]);
 });

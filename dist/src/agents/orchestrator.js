@@ -2,10 +2,14 @@ import {
   AGENT_ROLES,
   RoleContractError,
   assertAgentRequest,
+  isBuilderRole,
 } from "./role-contracts.js";
 import { assertInvocationResult } from "./result-boundary.js";
 import { selectRoleContext } from "./context-isolation.js";
-import { assertReviewArtifacts } from "./review-artifacts.js";
+import {
+  assertReviewArtifacts,
+  detectReviewArtifactFailure,
+} from "./review-artifacts.js";
 import { buildApprovedStrategy } from "./approved-strategy.js";
 import { resolveResourceLimits } from "./resource-policy.js";
 
@@ -20,6 +24,8 @@ const ROLE_INSTRUCTIONS = Object.freeze({
   [AGENT_ROLES.ANALYST]: "Analyze the task and report evidence-backed findings",
   [AGENT_ROLES.ARCHITECT]: "Design the implementation strategy for the task",
   [AGENT_ROLES.BUILDER]: "Implement the approved strategy for the task",
+  [AGENT_ROLES.BACKEND_ENGINEER]: "Implement the approved backend strategy for the task",
+  [AGENT_ROLES.FRONTEND_ENGINEER]: "Implement the approved frontend strategy for the task",
   [AGENT_ROLES.REVIEWER]: "Review the implementation and evidence for the task",
 });
 
@@ -27,6 +33,8 @@ const EXPECTED_OUTPUT = Object.freeze({
   [AGENT_ROLES.ANALYST]: ["findings", "openQuestions", "evidence", "limitations"],
   [AGENT_ROLES.ARCHITECT]: ["decisions", "recommendations", "limitations"],
   [AGENT_ROLES.BUILDER]: ["artifacts", "evidence", "limitations"],
+  [AGENT_ROLES.BACKEND_ENGINEER]: ["artifacts", "evidence", "limitations"],
+  [AGENT_ROLES.FRONTEND_ENGINEER]: ["artifacts", "evidence", "limitations"],
   [AGENT_ROLES.REVIEWER]: ["review.verdict", "review.findings", "review.limitations"],
 });
 
@@ -59,6 +67,7 @@ function validateOrchestrationInput({
   maxCharsPerSource,
   maxRevisionCycles,
   maxReplanCycles,
+  implementationRole,
 }) {
   const issues = [];
   if (typeof taskId !== "string" || taskId.trim() === "") {
@@ -98,6 +107,9 @@ function validateOrchestrationInput({
   if (maxChars === 0) issues.push("maxChars must be greater than zero");
   if (maxCharsPerSource === 0) {
     issues.push("maxCharsPerSource must be greater than zero");
+  }
+  if (implementationRole !== undefined && !isBuilderRole(implementationRole)) {
+    issues.push(`implementationRole must be a builder role: ${String(implementationRole)}`);
   }
   if (issues.length) throw new AgentOrchestrationError(issues);
 }
@@ -167,6 +179,7 @@ async function executeOrchestration({
   maxRevisionCycles = 0,
   maxReplanCycles = 0,
   mode = "IMPLEMENT",
+  implementationRole = AGENT_ROLES.BUILDER,
   resourceLimits,
 } = {}) {
   let limits;
@@ -194,6 +207,7 @@ async function executeOrchestration({
     maxCharsPerSource,
     maxRevisionCycles,
     maxReplanCycles,
+    implementationRole,
   });
 
   let normalizedReviewArtifacts;
@@ -215,7 +229,7 @@ async function executeOrchestration({
     findings: [...priorFindings],
   };
   const invocationCounts = Object.fromEntries(
-    AGENT_PIPELINE.map((role) => [role, 0]),
+    [...AGENT_PIPELINE, implementationRole].map((role) => [role, 0]),
   );
   let totalInvocations = 0;
   const cycles = { revisions: 0, replans: 0 };
@@ -239,16 +253,17 @@ async function executeOrchestration({
   };
 
   const invokeRole = async (role, nextRole = null, kind = "pipeline") => {
-    const invocationId = nextInvocationId(role);
+    const actualRole = role === AGENT_ROLES.BUILDER ? implementationRole : role;
+    const invocationId = nextInvocationId(actualRole);
     totalInvocations += 1;
     if (totalInvocations > limits.maxInvocations) {
       throw new AgentOrchestrationError(
-        `invocation limit exceeded (${totalInvocations} > ${limits.maxInvocations}) for role ${role} (${invocationId})`,
+        `invocation limit exceeded (${totalInvocations} > ${limits.maxInvocations}) for role ${actualRole} (${invocationId})`,
       );
     }
-    const roleObjective = `${ROLE_INSTRUCTIONS[role]}: ${objective}`;
+    const roleObjective = `${ROLE_INSTRUCTIONS[actualRole]}: ${objective}`;
     const selection = contextSelector({
-      role,
+      role: actualRole,
       objective: roleObjective,
       artifacts: accumulated.artifacts,
       evidence: accumulated.evidence,
@@ -259,23 +274,23 @@ async function executeOrchestration({
     });
     if (!selection?.input || !selection?.metadata) {
       throw new AgentOrchestrationError(
-        `contextSelector returned an invalid selection for ${role}`,
+        `contextSelector returned an invalid selection for ${actualRole}`,
       );
     }
 
     const request = {
       taskId,
       invocationId,
-      role,
+      role: actualRole,
       objective: roleObjective,
       acceptanceCriteria,
       input: {
         ...selection.input,
-        ...(role === AGENT_ROLES.REVIEWER &&
+        ...(actualRole === AGENT_ROLES.REVIEWER &&
         normalizedReviewArtifacts.length > 0
           ? { reviewArtifacts: normalizedReviewArtifacts }
           : {}),
-        ...(role === AGENT_ROLES.BUILDER
+        ...(isBuilderRole(actualRole)
           ? {
               approvedStrategy: requireApprovedStrategy(
                 approvedStrategy,
@@ -284,19 +299,19 @@ async function executeOrchestration({
             }
           : {}),
       },
-      expectedOutput: EXPECTED_OUTPUT[role],
+      expectedOutput: EXPECTED_OUTPUT[actualRole],
     };
     assertAgentRequest(request);
 
     const invocation = await invokeWithTimeout(
       adapter,
       request,
-      role,
+      actualRole,
       invocationId,
       limits.maxInvocationMs,
     );
     if (!invocation?.result) {
-      throw new AgentOrchestrationError(`adapter returned no result for ${role}`);
+      throw new AgentOrchestrationError(`adapter returned no result for ${actualRole}`);
     }
     let validated;
     try {
@@ -308,7 +323,7 @@ async function executeOrchestration({
     } catch (cause) {
       if (cause instanceof RoleContractError) {
         throw new AgentOrchestrationError(
-          `invalid result for role ${role} (${invocationId}): ${cause.message}`,
+          `invalid result for role ${actualRole} (${invocationId}): ${cause.message}`,
           { cause },
         );
       }
@@ -316,14 +331,14 @@ async function executeOrchestration({
     }
     const { result, metadata } = validated;
 
-    results.push({ role, invocationId, result, metadata });
-    context.push({ role, metadata: selection.metadata });
+    results.push({ role: actualRole, invocationId, result, metadata });
+    context.push({ role: actualRole, metadata: selection.metadata });
 
     if (nextRole && result.status === "COMPLETED") {
       handoffs.push({
         kind,
-        from: role,
-        to: nextRole,
+        from: actualRole,
+        to: nextRole === AGENT_ROLES.BUILDER ? implementationRole : nextRole,
         findings: [...result.findings],
         decisions: [...result.decisions],
         artifacts: [...result.artifacts],
@@ -347,18 +362,42 @@ async function executeOrchestration({
     return result;
   };
 
-  const terminalResult = (result, role) =>
-    STOP_STATUSES.has(result.status) ? finish(result.status, role) : null;
+  const terminalResult = (result) =>
+    STOP_STATUSES.has(result.status) ? finish(result.status, result.role) : null;
 
   const runReviewer = async () => {
     const result = await invokeRole(AGENT_ROLES.REVIEWER);
-    const terminal = terminalResult(result, AGENT_ROLES.REVIEWER);
+    const terminal = terminalResult(result);
     if (terminal) return { terminal, result };
-    const verdict = result.review?.verdict;
+    let verdict = result.review?.verdict;
     if (!verdict) {
       throw new AgentOrchestrationError(
         `reviewer result for ${result.invocationId} has no verdict`,
       );
+    }
+    if (verdict === "ACCEPTED" && cycles.revisions === 0) {
+      const failure = detectReviewArtifactFailure(normalizedReviewArtifacts);
+      if (failure) {
+        result.review = {
+          ...result.review,
+          verdict: "REVISION_REQUIRED",
+          findings: [
+            ...(Array.isArray(result.review.findings)
+              ? result.review.findings
+              : []),
+            {
+              id: `artifact-failure-${result.invocationId}`,
+              severity: "CRITICAL",
+              criterionId: "outcome-evaluation",
+              description: `Review artifact ${failure.ref} reports a failing test; the reviewer accepted despite the failure.`,
+              correctiveAction:
+                "Fix the failing test or provide newer evidence that the artifact is stale.",
+              evidence: [failure.ref],
+            },
+          ],
+        };
+        verdict = "REVISION_REQUIRED";
+      }
     }
     return { result, verdict };
   };
@@ -421,11 +460,11 @@ async function executeOrchestration({
 
   if (mode === "ANALYZE") {
     let result = await invokeRole(AGENT_ROLES.ANALYST, AGENT_ROLES.ARCHITECT);
-    let terminal = terminalResult(result, AGENT_ROLES.ANALYST);
+    let terminal = terminalResult(result);
     if (terminal) return terminal;
 
     result = await invokeRole(AGENT_ROLES.ARCHITECT, AGENT_ROLES.REVIEWER);
-    terminal = terminalResult(result, AGENT_ROLES.ARCHITECT);
+    terminal = terminalResult(result);
     if (terminal) return terminal;
 
     let review = await runReviewer();
@@ -458,7 +497,7 @@ async function executeOrchestration({
           AGENT_ROLES.ARCHITECT,
           "revision",
         );
-        terminal = terminalResult(result, AGENT_ROLES.ANALYST);
+        terminal = terminalResult(result);
         if (terminal) return terminal;
       }
 
@@ -467,7 +506,7 @@ async function executeOrchestration({
         AGENT_ROLES.REVIEWER,
         verdict === "REPLAN_REQUIRED" ? "replan" : "revision",
       );
-      terminal = terminalResult(result, AGENT_ROLES.ARCHITECT);
+      terminal = terminalResult(result);
       if (terminal) return terminal;
 
       review = await runReviewer();
@@ -476,11 +515,11 @@ async function executeOrchestration({
   }
 
   let result = await invokeRole(AGENT_ROLES.ANALYST, AGENT_ROLES.ARCHITECT);
-  let terminal = terminalResult(result, AGENT_ROLES.ANALYST);
+  let terminal = terminalResult(result);
   if (terminal) return terminal;
 
   result = await invokeRole(AGENT_ROLES.ARCHITECT, AGENT_ROLES.BUILDER);
-  terminal = terminalResult(result, AGENT_ROLES.ARCHITECT);
+  terminal = terminalResult(result);
   if (terminal) return terminal;
   approvedStrategy = buildApprovedStrategy({
     decisions: result.decisions,
@@ -488,7 +527,7 @@ async function executeOrchestration({
   });
 
   result = await invokeRole(AGENT_ROLES.BUILDER, AGENT_ROLES.REVIEWER);
-  terminal = terminalResult(result, AGENT_ROLES.BUILDER);
+  terminal = terminalResult(result);
   if (terminal) return terminal;
 
   let review = await runReviewer();
@@ -518,7 +557,7 @@ async function executeOrchestration({
         AGENT_ROLES.BUILDER,
         "replan",
       );
-      terminal = terminalResult(result, AGENT_ROLES.ARCHITECT);
+      terminal = terminalResult(result);
       if (terminal) return terminal;
       approvedStrategy = buildApprovedStrategy({
         decisions: result.decisions,
@@ -531,7 +570,7 @@ async function executeOrchestration({
       AGENT_ROLES.REVIEWER,
       verdict === "REPLAN_REQUIRED" ? "replan" : "revision",
     );
-    terminal = terminalResult(result, AGENT_ROLES.BUILDER);
+    terminal = terminalResult(result);
     if (terminal) return terminal;
 
     review = await runReviewer();

@@ -16,6 +16,7 @@
 import { evaluateRequirement as evaluateRequirementChecks } from "../verification/verification.js";
 import { truncate } from "../execution/formatting.js";
 import { evaluateOutcome, OUTCOME_STATUSES } from "../verification/outcome-evaluator.js";
+import { evaluateCompletionInvariants } from "../verification/completion-invariants.js";
 import { nextActionFrom } from "../state/next-action.js";
 import { isContinuationInstruction } from "../policy/request-classifier.js";
 
@@ -132,19 +133,33 @@ export function canTransitionPhase(from, to) {
  * PURE: toma state + promptText, retorna gate result sin side effects.
  * @param {Object} state - Estado de la tarea
  * @param {string} promptText - Texto del prompt del usuario
- * @param {{ quality?: Object }} [options] - Quality contract evaluation, when enabled
+ * @param {{ quality?: Object, enforce?: boolean }} [options] - Quality contract evaluation and opt-in hard blocking
  * @returns {{ blocked: boolean, allDone?: boolean, verifying?: boolean, pending?: string[], autoApprove?: boolean }}
  */
 export function evaluateCompletionGate(state, promptText, options = {}) {
   const gate = evaluateCompletionGateStrict(state, promptText);
   const quality = options?.quality;
-  if (quality && quality.enabled !== false && quality.sufficient === false) {
+  const qualityInsufficient = Boolean(quality && quality.enabled !== false && quality.sufficient === false);
+  const qualityReasons = Array.isArray(quality?.reasons) ? quality.reasons : [];
+
+  if (options?.enforce === true) {
+    if (!gate.blocked && !qualityInsufficient) return gate;
+    return {
+      ...gate,
+      blocked: true,
+      advisory: false,
+      ok: false,
+      pending: [...new Set([...(gate.pending || []), ...qualityReasons])],
+    };
+  }
+
+  if (qualityInsufficient) {
     return {
       ...gate,
       blocked: false,
       advisory: true,
       ok: false,
-      pending: [...(gate.pending || []), ...(Array.isArray(quality.reasons) ? quality.reasons : [])],
+      pending: [...(gate.pending || []), ...qualityReasons],
     };
   }
   if (!gate.blocked) return gate;
@@ -162,53 +177,17 @@ export function evaluateCompletionGate(state, promptText, options = {}) {
 function evaluateCompletionGateStrict(state, promptText) {
   const completionIntent = isCompletionIntent(promptText);
 
-  // 1. Blocking unknowns
-  const blockingUnknowns = (state?.contract?.unknowns || []).filter(
-    (u) => u.status === "blocking"
-  );
-  if (blockingUnknowns.length > 0) {
+  // 1. State-level invariants: decisions, requirements, evidence, backlog.
+  const invariants = evaluateCompletionInvariants(state);
+  if (!invariants.ok) {
     return {
       blocked: true,
-      pending: blockingUnknowns.map(
-        (u) => `${u.id} — ${u.question} (DECISION_CRITICAL sin responder)`
-      ),
+      ...(invariants.verifying ? { verifying: true } : {}),
+      pending: invariants.pending,
     };
   }
 
-  // 2. Blocking assumptions
-  const blockingAssumptions = (state?.contract?.assumptions || []).filter(
-    (a) =>
-      a.classification === "DECISION_CRITICAL" && a.status !== "resolved"
-  );
-  if (blockingAssumptions.length > 0) {
-    return {
-      blocked: true,
-      pending: blockingAssumptions.map(
-        (a) => `${a.id} — ${a.statement} (DECISION_CRITICAL sin resolver)`
-      ),
-    };
-  }
-
-  // 3. Pending requirements (not done/verified, or done/verified without evidence)
-  const isRequirementSatisfied = (r) =>
-    (r?.status === "done" || r?.status === "verified") &&
-    Array.isArray(r?.evidence) &&
-    r.evidence.length > 0;
-  const requirements = state?.requirements || [];
-  const pending = requirements.filter((r) => !isRequirementSatisfied(r));
-  if (pending.length > 0) {
-    return {
-      blocked: true,
-      pending: pending.map((r) => {
-        const missingEvidence =
-          (r.status === "done" || r.status === "verified") &&
-          !(r.evidence || []).length;
-        return `${r.id} — ${r.title}${missingEvidence ? " (sin evidencia)" : ""}`;
-      }),
-    };
-  }
-
-  // 4. Failing criteria
+  // 2. Failing criteria
   const failingCriteria = (state?.completionContract?.criteria || []).filter(
     (c) => c.status === "FAIL" || c.status === "UNKNOWN"
   );
@@ -221,23 +200,9 @@ function evaluateCompletionGateStrict(state, promptText) {
     };
   }
 
-  // 5. Contract status is advisory: nunca bloquea el progreso (0 fricción).
+  // 3. Contract status is advisory: nunca bloquea el progreso (0 fricción).
 
-  // 6. All requirements must be verified with evidence
-  const unverified = (state?.requirements || []).filter(
-    (r) => r.status !== "verified" || !(r.evidence || []).length
-  );
-  if (unverified.length > 0) {
-    return {
-      blocked: true,
-      verifying: true,
-      pending: unverified.map(
-        (r) => `${r.id} — ${r.title} (verificar: /wam progress ${r.id} verified <evidencia>)`
-      ),
-    };
-  }
-
-  // 7. Contract checks must pass
+  // 4. Contract checks must pass
    const checks = state?.contract?.checks || [];
    if (checks.length > 0) {
      const byReq = new Map();
@@ -256,7 +221,7 @@ function evaluateCompletionGateStrict(state, promptText) {
      }
    }
 
-   // 8. Outcome evaluation check
+   // 5. Outcome evaluation check
    const outcomeContract = state?.outcomeContract;
    if (!outcomeContract) {
      return {
@@ -325,15 +290,20 @@ export function buildCompletionValidation(gate, state = {}) {
     ).split("\n")[0],
     120,
   );
+  const blocked = gate?.blocked === true && gate?.advisory !== true;
   const lines = [
-    "⚠️ [wait-a-minute] Recomendación — la afirmación de completitud no está verificada: el contrato todavía tiene requisitos pendientes.",
+    blocked
+      ? "⛔ [wait-a-minute] Completitud bloqueada — la afirmación de completitud no está verificada: el contrato todavía tiene requisitos pendientes."
+      : "⚠️ [wait-a-minute] Recomendación — la afirmación de completitud no está verificada: el contrato todavía tiene requisitos pendientes.",
   ];
   if (pending.length > 0) {
     lines.push("Requisitos pendientes:");
     for (const item of pending) lines.push(`- ${truncate(item, 150)}`);
   }
   lines.push(
-    `Objetivo del contrato: "${requestedAction}" → cuando puedas, implementa los requisitos pendientes y verificalos. Podés continuar.`,
+    blocked
+      ? `Objetivo del contrato: "${requestedAction}" → completá y verificá los requisitos pendientes. No declares DONE hasta verificarlos.`
+      : `Objetivo del contrato: "${requestedAction}" → cuando puedas, implementa los requisitos pendientes y verificalos. Podés continuar.`,
   );
   lines.push(`Continuar con: ${nextAction}`);
   return {

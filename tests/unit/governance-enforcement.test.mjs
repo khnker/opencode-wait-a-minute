@@ -46,6 +46,34 @@ test("non-gated tools never throw (bash/read/task)", () => {
   assert.doesNotThrow(() => enforceGovernance("task", draft));
 });
 
+test("required mode gates mutating bash but not read-only bash", () => {
+  const blocked = enforceGovernance("bash", draft, {
+    requireApproval: true,
+    args: { command: "rm -rf src" },
+  });
+  assert.equal(blocked.allowed, false);
+  assert.equal(blocked.reason, "contract-not-approved");
+
+  const install = enforceGovernance("bash", draft, {
+    requireApproval: true,
+    args: { command: "npm install left-pad" },
+  });
+  assert.equal(install.allowed, false);
+  assert.equal(install.reason, "contract-not-approved");
+
+  for (const command of ["git status", "git diff", "npm test", "grep -R foo src"]) {
+    assert.doesNotThrow(() =>
+      enforceGovernance("bash", draft, { requireApproval: true, args: { command } })
+    );
+  }
+  assert.doesNotThrow(() =>
+    enforceGovernance("bash", approved, {
+      requireApproval: true,
+      args: { command: "rm -rf src" },
+    })
+  );
+});
+
 test("delegated subagent is exempt", () => {
   assert.doesNotThrow(() => enforceGovernance("write", draft, { isSubagent: true }));
 });

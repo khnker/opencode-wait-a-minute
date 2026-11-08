@@ -1,0 +1,21 @@
+[
+  {
+    "taskId": "task-implementa-add-js-con-una-funcion-que-sume-dos-sess-lG32YA2v",
+    "timestamp": 1793988900210,
+    "firstAt": 1793988900210,
+    "lastAt": 1793988900210,
+    "occurrences": 1,
+    "actualTokens": 7154,
+    "actualRequestTokens": null,
+    "usageSource": "none",
+    "promptTokens": 49,
+    "baselineTokens": 6000,
+    "baselineSource": "synthetic",
+    "claimable": false,
+    "estimator": "chars/4",
+    "scope": "wam-injected-lines",
+    "savingsPct": null,
+    "savingsTokens": 0,
+    "deltaTokens": -1154
+  }
+]

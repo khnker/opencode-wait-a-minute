@@ -11,12 +11,10 @@ Prevent interface degradation (slop) by enforcing strict design standards and qu
 
 ## Anti-Slop Core Rules
 
-1. **No Magic Values**: Never use arbitrary pixel/rem values. Must use established design tokens (Tailwind classes or CSS variables).
+1. **No Magic Values**: Use established design tokens (Tailwind classes or CSS variables); arbitrary pixel/rem values, off-grid tweaks, and one-off styles are slop.
 2. **No Nested Overrides**: Absolute ban on deep CSS nesting (`.a .b .c .d`). All styles should be scoped to the component level or use global utility classes.
-3. **Strict Grid/Spacing**: All spacing must align with the defined grid (4px/8px scale). No exceptions for "visual tweaks" (e.g., `ml-[3.33px]`).
-4. **Contract Fidelity**: Implementation must match the design contract exactly. If the design needs changing, update the contract first, do not "fix it in the CSS".
-5. **State Completeness**: Every component must define states (default, hover, focus, active, disabled, loading, error). If a state is missing, it is "slop".
-6. **No "Just One" Styles**: Any style applied as a "one-off" must be converted to a token or utility class immediately.
+3. **Contract Fidelity**: Implementation must match the design contract exactly. If the design needs changing, update the contract first, do not "fix it in the CSS".
+4. **State Completeness**: Every component must define all applicable states. If a state is missing, it is "slop".
 
 ## Enforcement Workflow
 

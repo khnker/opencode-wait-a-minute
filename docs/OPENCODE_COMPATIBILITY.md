@@ -73,7 +73,7 @@ Where:
   and must not be used to relocate the state directory.
 
 ### Node.js version
-- **engines.node**: `>=20` (from `package.json`).
+- **engines.node**: `>=22.6` (from `package.json`).
 
 ## Validation
 The contract is validated by:
@@ -98,7 +98,7 @@ node scripts/check-compatibility.mjs --min-opencode 1.18.0 --opencode 0.9.0   # 
 node scripts/check-compatibility.mjs --min-opencode 1.18.0 --opencode 1.19.0   # exit 0
 ```
 
-The Node axis is always enforced (`>=20`, sourced from `package.json#engines.node`).
+The Node axis is always enforced (`>=22.6`, sourced from `package.json#engines.node`).
 The `1.18.0` minimum stated above is a policy statement, not a gate — keep both in
 sync if either side changes.
 

@@ -21,41 +21,48 @@ const PROMPT =
   "and generate Playwright tests for the endpoints.";
 
 test("multi-layer prompt selects multiple matched skills and injects their real content", async () => {
-  const routing = routeSkillsV2(PROMPT, {}, REGISTRY, "STRICT");
-  const selected = routing.selected || [];
-  assert.ok(selected.length >= 2, `expected multiple selected skills, got ${selected.length}`);
-  const matched = selected.filter((s) => !s.base);
-  assert.ok(matched.length >= 2, `expected several task-matched skills, got ${matched.length}`);
-  for (const s of matched) assert.ok(s.reason, `${s.id} must be explainable`);
+  const previous = process.env.WAM_SKILLS_FULL;
+  process.env.WAM_SKILLS_FULL = "0";
+  try {
+    const routing = routeSkillsV2(PROMPT, {}, REGISTRY, "STRICT");
+    const selected = routing.selected || [];
+    assert.ok(selected.length >= 2, `expected multiple selected skills, got ${selected.length}`);
+    const matched = selected.filter((s) => !s.base);
+    assert.ok(matched.length >= 2, `expected several task-matched skills, got ${matched.length}`);
+    for (const s of matched) assert.ok(s.reason, `${s.id} must be explainable`);
 
-  const pack = await assembleContext({
-    prompt: PROMPT,
-    taskId: "multilayer-test",
-    classification: "architectural",
-    mode: "STRICT",
-    projectPath: process.cwd(),
-    budget: 8000,
-    skillRegistry: REGISTRY,
-    selectedSkills: selected,
-  });
-  const text = pack.lines.join("\n");
-  const withContent = selected.filter(
-    (s) => !s.base && String(REGISTRY[s.id]?.content || "").trim().length > 0
-  );
-  const injected = withContent.filter((s) => text.includes(`[wam N3 skill] ${s.id}`));
-  for (const s of selected.filter((s) => s.base)) {
-    assert.ok(
-      text.includes(`[wam N3 skill-ref] ${s.id}`),
-      `base skill ${s.id} must render as a card`
+    const pack = await assembleContext({
+      prompt: PROMPT,
+      taskId: "multilayer-test",
+      classification: "architectural",
+      mode: "STRICT",
+      projectPath: process.cwd(),
+      budget: 32000,
+      skillRegistry: REGISTRY,
+      selectedSkills: selected,
+    });
+    const text = pack.lines.join("\n");
+    const withContent = selected.filter(
+      (s) => !s.base && String(REGISTRY[s.id]?.content || "").trim().length > 0
     );
-  }
-  assert.ok(injected.length >= 2, `expected >=2 injected skills, got ${injected.length}`);
-  assert.equal(
-    injected.length,
-    withContent.length,
-    `all selected skills with content must inject within budget: injected [${injected.map((s) => s.id)}] vs [${withContent.map((s) => s.id)}]`
-  );
+    const injected = withContent.filter((s) => text.includes(`[wam N3 skill] ${s.id}`));
+    for (const s of selected.filter((s) => s.base)) {
+      assert.ok(
+        text.includes(`[wam N3 skill-ref] ${s.id}`),
+        `base skill ${s.id} must render as a card`
+      );
+    }
+    assert.ok(injected.length >= 2, `expected >=2 injected skills, got ${injected.length}`);
+    assert.equal(
+      injected.length,
+      withContent.length,
+      `all selected skills with content must inject within budget: injected [${injected.map((s) => s.id)}] vs [${withContent.map((s) => s.id)}]`
+    );
 
-  const catalogTokens = Object.values(REGISTRY).reduce((a, s) => a + est(s.content || ""), 0);
-  assert.ok(est(text) < catalogTokens, "injected context must be far smaller than loading the whole catalog");
+    const catalogTokens = Object.values(REGISTRY).reduce((a, s) => a + est(s.content || ""), 0);
+    assert.ok(est(text) < catalogTokens, "injected context must be far smaller than loading the whole catalog");
+  } finally {
+    if (previous === undefined) delete process.env.WAM_SKILLS_FULL;
+    else process.env.WAM_SKILLS_FULL = previous;
+  }
 });

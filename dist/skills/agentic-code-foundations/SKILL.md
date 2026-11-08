@@ -8,8 +8,6 @@ description: Minimal engineering rules for code that humans and agents can under
 Make the code obvious. Make every abstraction earn its cost. Preserve the context needed to change it safely.
 
 ## Code
-- Prefer clarity over cleverness.
-- Prefer explicit intent over implicit behavior.
 - Keep responsibilities cohesive and dependencies visible.
 - Reuse existing patterns. Preserve established architecture.
 - Abstract only to reduce real complexity or isolate a meaningful boundary.
@@ -17,7 +15,6 @@ Make the code obvious. Make every abstraction earn its cost. Preserve the contex
 - Fewer lines do not always mean simpler code.
 
 ## Architecture
-- Keep each responsibility where it belongs.
 - Separate concerns that change independently.
 - Avoid layers that only forward calls.
 - Do not couple unrelated rules through shared abstractions.
@@ -42,5 +39,3 @@ Document meaningful limitations:
 - Data integrity and meaningful error handling.
 - Accessibility and compatibility.
 - Explicit requirements.
-
-Every line, layer, and comment must justify its existence.

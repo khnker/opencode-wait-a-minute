@@ -11,6 +11,7 @@ import {
   defaultReportDir,
   evaluateChecks,
   exitCodeFor,
+  nodeSupportsTypeStripping,
   parseArgs,
   pickTaskDir,
   redactSecrets,
@@ -60,12 +61,29 @@ function baseInput(overrides = {}) {
       executionGate: { active: false, reason: "complete", startedAt: 1, completedAt: 2 },
     },
     loop: { lastDecision: "COMPLETE" },
-    sessions: [{ id: "child", title: "WAM ANALYST", role: "ANALYST" }],
+    sessions: [
+      { id: "child", title: "WAM ANALYST", role: "ANALYST" },
+      { id: "child2", title: "WAM BUILDER", role: "BUILDER" },
+    ],
+    mainSessionText: "codebase-design",
     taskFileExists: true,
     loopFileExists: true,
     ...overrides,
   };
 }
+
+describe("nodeSupportsTypeStripping", () => {
+  it("rejects runtimes without native type stripping", () => {
+    assert.equal(nodeSupportsTypeStripping("20.19.0"), false);
+    assert.equal(nodeSupportsTypeStripping("22.5.1"), false);
+  });
+
+  it("accepts Node 22.6 and newer", () => {
+    assert.equal(nodeSupportsTypeStripping("22.6.0"), true);
+    assert.equal(nodeSupportsTypeStripping("22.18.0"), true);
+    assert.equal(nodeSupportsTypeStripping("24.16.0"), true);
+  });
+});
 
 describe("parseArgs", () => {
   it("uses documented defaults", () => {
@@ -135,6 +153,7 @@ describe("buildFixtureConfig", () => {
     const config = JSON.parse(buildFixtureConfig());
     assert.equal(config.logging, true);
     assert.equal(config.enforcement, true);
+    assert.equal(config.contractApproval, "advisory");
     assert.equal(config.autoLoop, false);
     assert.equal(config.taskLoop.enabled, true);
     assert.equal(config.taskLoop.agents.enabled, true);
@@ -174,9 +193,27 @@ describe("evaluateChecks", () => {
         "failure-surfaced",
         "no-empty-response",
         "artifacts-present",
+        "skills-injected",
+        "roles-observed",
       ],
     );
     assert.equal(checks.every((check) => check.ok), true);
+  });
+
+  it("accepts a proposed contract in advisory mode", () => {
+    const checks = evaluateChecks(baseInput({
+      contractStatus: "PROPOSED",
+      contractApproval: "advisory",
+    }));
+    assert.equal(checkByName(checks, "contract-approved").ok, true);
+  });
+
+  it("fails a proposed contract when approval is required", () => {
+    const checks = evaluateChecks(baseInput({
+      contractStatus: "PROPOSED",
+      contractApproval: "required",
+    }));
+    assert.equal(checkByName(checks, "contract-approved").ok, false);
   });
 
   it("fails agent-pass-settled when the run is stalled", () => {

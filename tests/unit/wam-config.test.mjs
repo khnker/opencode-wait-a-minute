@@ -99,7 +99,7 @@ test("WAM_GOVERNANCE=off / WAM_BYPASS disable enforcement", () => {
 
 test("config file is honored", () => {
   const cfg = loadWamConfig(tmpProject({ skills: false, logging: false, enforcement: false }));
-  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false, debug: true, autoLoop: true, permissionPreflight: true, permissionEnforce: false, contextProjection: "active", taskLoop: { enabled: true, maxIterations: 10, maxNoProgress: 3, agents: { enabled: false, maxRevisionCycles: 2, maxReplanCycles: 1, maxAttempts: 2, maxHistory: 5, toolTimeoutMs: 120000 } }, qualityContracts: { enabled: false }, completionGate: { enforce: false } });
+  assert.deepEqual(cfg, { skills: false, logging: false, enforcement: false, debug: true, autoLoop: true, permissionPreflight: true, permissionEnforce: false, contractApproval: "advisory", contextProjection: "active", taskLoop: { enabled: true, maxIterations: 10, maxNoProgress: 3, agents: { enabled: false, maxRevisionCycles: 2, maxReplanCycles: 1, maxAttempts: 2, maxConsecutiveFailures: 3, maxHistory: 5, toolTimeoutMs: 120000 } }, qualityContracts: { enabled: false }, completionGate: { enforce: false } });
 });
 
 test("contextProjection defaults to active and honors env/file overrides", () => {
@@ -227,6 +227,7 @@ test("task loop agents are opt-in and honor file/env overrides", () => {
     maxRevisionCycles: 2,
     maxReplanCycles: 1,
     maxAttempts: 2,
+    maxConsecutiveFailures: 3,
     maxHistory: 5,
     toolTimeoutMs: 120000,
   });
@@ -247,6 +248,7 @@ test("task loop agents are opt-in and honor file/env overrides", () => {
   process.env.WAM_AGENT_MAX_REVISIONS = "0";
   process.env.WAM_AGENT_MAX_REPLANS = "3";
   process.env.WAM_AGENT_MAX_ATTEMPTS = "3";
+  process.env.WAM_AGENT_MAX_CONSECUTIVE_FAILURES = "4";
   process.env.WAM_AGENT_MAX_HISTORY = "1";
   const cfg = loadWamConfig(tmpProject({ taskLoop: { agents: { enabled: false } } }));
   assert.deepEqual(cfg.taskLoop.agents, {
@@ -254,6 +256,7 @@ test("task loop agents are opt-in and honor file/env overrides", () => {
     maxRevisionCycles: 0,
     maxReplanCycles: 3,
     maxAttempts: 3,
+    maxConsecutiveFailures: 4,
     maxHistory: 1,
     toolTimeoutMs: 120000,
   });
@@ -261,6 +264,7 @@ test("task loop agents are opt-in and honor file/env overrides", () => {
   delete process.env.WAM_AGENT_MAX_REVISIONS;
   delete process.env.WAM_AGENT_MAX_REPLANS;
   delete process.env.WAM_AGENT_MAX_ATTEMPTS;
+  delete process.env.WAM_AGENT_MAX_CONSECUTIVE_FAILURES;
   delete process.env.WAM_AGENT_MAX_HISTORY;
 });
 

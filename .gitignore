@@ -33,3 +33,7 @@ vendor/context-query-core/src/*.ndjson
 /dist/vendor/context-query-core/src/*.ndjson
 /dist/vendor/context-query-core/src/.cache.json
 /dist/vendor/context-query-core/src/.bm25-index.json
+
+# Generated test/benchmark scratch directories (stale content manifest)
+/tmp/
+/test_tmp/

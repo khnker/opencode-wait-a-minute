@@ -118,7 +118,7 @@ El paquete de npm es `opencode-wait-a-minute`; el repositorio es `opencode-wait-
 
 Una vez instalado, WAM intercepta las peticiones antes de la resolución de habilidades y la ejecución del agente. Su flujo de control y gestión de estado se aplica automáticamente.
 
-**Requisitos:** Node `>=20` · OpenCode `>=1.18.0` — probado en Ubuntu 24.04, Node 24.16.0, OpenCode 1.18.33 ([docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md)).
+**Requisitos:** Node `>=22.6` · OpenCode `>=1.18.0` — probado en Ubuntu 24.04, Node 24.16.0, OpenCode 1.18.33 ([docs/RC1_VALIDATION.md](docs/RC1_VALIDATION.md)).
 
 ## Dónde encaja WAM
 

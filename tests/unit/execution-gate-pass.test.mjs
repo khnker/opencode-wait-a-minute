@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import plugin from "../../index.js";
-import { getTaskState } from "../../src/skills/engine.js";
+import { getTaskState, persistTaskState } from "../../src/skills/engine.js";
 
 function writeConfig(root) {
   const configPath = path.join(root, "wam-config.json");
@@ -51,6 +51,16 @@ function makeClient(root, taskId, { fail = false } = {}) {
   };
 }
 
+async function waitForAgentRun(root, taskId, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const state = getTaskState(taskId, root);
+    if (state?.agentRun) return state;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return getTaskState(taskId, root);
+}
+
 async function waitForGate(root, taskId, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -61,7 +71,7 @@ async function waitForGate(root, taskId, timeoutMs = 5000) {
   return getTaskState(taskId, root);
 }
 
-test("the early agent pass clears the gate after success", async () => {
+test("the idle agent pass clears the gate after success", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "wam-pass-ok-"));
   const taskId = `pass-ok-${Date.now()}`;
   const previousConfig = process.env.WAM_CONFIG;
@@ -79,8 +89,11 @@ test("the early agent pass clears the gate after success", async () => {
       },
       { message: {}, parts: [] },
     );
+    const afterMessage = getTaskState(taskId, root);
+    assert.equal(afterMessage?.executionGate?.active ?? false, false);
+    hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses-pass-ok" } } });
 
-    const state = await waitForGate(root, taskId);
+    const state = await waitForAgentRun(root, taskId);
     assert.equal(state.executionGate?.active ?? false, false);
     assert.equal(state.agentRun?.status, "COMPLETED");
     assert.equal(state.agentRun?.verdict, "ACCEPTED");
@@ -91,7 +104,7 @@ test("the early agent pass clears the gate after success", async () => {
   }
 });
 
-test("the early agent pass clears the gate after failure", async () => {
+test("the idle agent pass clears the gate after failure", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "wam-pass-fail-"));
   const taskId = `pass-fail-${Date.now()}`;
   const previousConfig = process.env.WAM_CONFIG;
@@ -109,6 +122,9 @@ test("the early agent pass clears the gate after failure", async () => {
       },
       { message: {}, parts: [] },
     );
+    const before = getTaskState(taskId, root);
+    persistTaskState(taskId, { ...before, executionGate: { active: true, reason: "agent-loop" } }, root);
+    hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses-pass-fail" } } });
 
     const state = await waitForGate(root, taskId);
     assert.equal(state.executionGate?.active ?? false, false);

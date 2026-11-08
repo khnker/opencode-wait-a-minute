@@ -13,6 +13,9 @@ Every non-trivial change follows this order:
 5. **Test**: add regression tests for new behavior; run affected suites with
    `node --test --test-force-exit <files>`. Every behavioral change also needs a
    fresh-session web verification (see below); unit tests alone are not enough.
+5b. **Craftsman review**: audit the diff against the `craftsman` skill's Diff Audit
+   (KISS, DRY, clean) before validating; fix violations or record accepted
+   exceptions in the change report. This review is part of "done".
 6. **Validate**: `openspec validate --changes --strict`, `npm run build`, and load-check `dist/`.
 7. **Report**: files changed, tests run, residual risks.
 
@@ -26,11 +29,42 @@ node scripts/run-tests.mjs    # full suite with force-exit
 node scripts/prune-wam-artifacts.mjs --apply  # archive one-use test tasks/snapshots
 ```
 
-Prerequisites: Node >= 20 and the sibling `../context-query-core` checkout
+Prerequisites: Node >= 22.6 and the sibling `../context-query-core` checkout
 (`context-query-core` is a `file:` dependency).
 
 Tests live in `tests/` (legacy, e2e, isolation), as `test-*.mjs` at the repo root and as
 `src/**/*.test.js`. Per-file runs use `node --test --test-force-exit <files>`.
+
+## Release base condition (mandatory)
+
+A release is blocked until all of these pass on the exact code being released:
+
+1. `npm run build` (the packed tarball must contain the built output).
+2. `npm run verify:release` — packs the tarball, installs it into an isolated
+   test-user HOME/XDG, starts a **new** `opencode web` instance that loads only the
+   installed package (never this checkout), and drives the real UI with Playwright
+   (prompt → assistant response → rendered text → `.wam` task/contract state).
+   It writes `report.json`/`report.md`.
+3. `npm run gate` (RC1 unified gate; includes `verify:release` as a required gate
+   outside GitHub Actions).
+
+Do not tag, push or publish when any step fails. The release note must record the
+installed version, the report path and the server URL.
+
+If the public free-model quota is exhausted, point the isolated E2Es at a local
+OpenAI-compatible endpoint instead of copying credentials:
+
+```bash
+WAM_RELEASE_MODEL=<provider/model> WAM_RELEASE_BASE_URL=<url> \
+WAM_E2E_MODEL=<provider/model> WAM_E2E_BASE_URL=<url> npm run gate
+```
+
+`WAM_RELEASE_API_KEY` / `WAM_E2E_API_KEY` are optional (default `x`).
+
+Requirements: Node >= 22.6, `opencode` in PATH, Playwright with Chromium
+(`npm i -g playwright && playwright install chromium`), and the sibling
+`../context-query-core` checkout. The isolated test user does not copy real
+credentials or secrets.
 
 ## Fresh-session web verification (mandatory)
 
