@@ -18,6 +18,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { generateContract, evaluateContract, mergeAssumptions } from "./sufficiency-contract.js";
 import { retrieveWithCqe, classifyCqeFailure, CQE_FAILURE_HINTS } from "./cqe-adapter.js";
+import { canonicalRoot } from "./path-validator.js";
 import { loadDesignContext } from "../design/design-context.js";
 
 export { loadDesignContext };
@@ -61,8 +62,16 @@ const ALIASES = {
 
 // --- CHANGE: session identity derived by root + OpenCode sessionID only ---
 
+/**
+ * Canonical repository root used for every session/CQE identity and cache key.
+ * Symlinked aliases, `..` and trailing slashes resolve to the same root.
+ */
+export function resolveRoot(candidate) {
+  return canonicalRoot(candidate || process.cwd());
+}
+
 function capsulesDir(root) {
-  return path.join(root || process.cwd(), ".wam", "capsules");
+  return path.join(resolveRoot(root), ".wam", "capsules");
 }
 
 const DEFAULT_SESSION_KEY = "default";
@@ -75,7 +84,7 @@ function sanitizeSessionKey(sessionID) {
 function sessionStateDir(root) {
   const override = process.env.WAM_SESSION_DIR;
   if (override) return path.resolve(override);
-  return path.join(root || process.cwd(), ".wam");
+  return path.join(resolveRoot(root), ".wam");
 }
 
 function sessionFile(root, sessionID) {
@@ -154,10 +163,10 @@ export function isSessionId(value, root = "") {
  * without a sessionID in scope) resolve the running session.
  */
 export function setActiveSession(root, sessionID) {
-  const base = root || process.cwd();
+  const base = resolveRoot(root);
   const sid = getSessionId(base, sessionID);
   try {
-    fs.mkdirSync(path.join(base, ".wam"), { recursive: true });
+    fs.mkdirSync(sessionStateDir(base), { recursive: true });
     fs.writeFileSync(activeSessionFile(base), JSON.stringify({
       session_id: sid,
       opencode_session_id: isSessionId(sessionID, base) ? sessionID : null,
@@ -168,7 +177,7 @@ export function setActiveSession(root, sessionID) {
 }
 
 export function getSessionId(root, sessionID) {
-  const base = root || process.cwd();
+  const base = resolveRoot(root);
   const key = `${base}:${sessionID || DEFAULT_SESSION_KEY}`;
   if (!getSessionId._cache) getSessionId._cache = new Map();
 
@@ -671,19 +680,23 @@ export function retrieveContext(query, { limit = 5, root } = {}) {
 }
 
 export async function retrieveContextWithCqe(query, { root, maxResults = 5 } = {}) {
-  const capsule = retrieveContext(query, { root, limit: maxResults });
+  const repoRoot = resolveRoot(root);
+  const capsule = retrieveContext(query, { root: repoRoot, limit: maxResults });
   if (capsule.ok) return { ...capsule, source: "capsule" };
   let cqeRes;
   try {
-    cqeRes = await retrieveWithCqe(query, { repoRoot: root || process.cwd(), maxResults });
+    cqeRes = await retrieveWithCqe(query, { repoRoot, maxResults });
   } catch (err) {
     return { ...capsule, cqeMeta: null, cqeError: err?.message || "exception" };
   }
   const cqeMeta = {
+    root: cqeRes?.metadata?.repoRoot || repoRoot,
+    mode: cqeRes?.metadata?.mode ?? null,
     elapsedMs: cqeRes?.elapsedMs ?? null,
     source: cqeRes?.source || null,
     failureCode: cqeRes?.metadata?.failureCode ?? null,
     fallbackUsed: cqeRes?.fallbackUsed ?? false,
+    metrics: cqeRes?.metadata?.metrics ?? null,
   };
   if (cqeRes?.items?.length) {
     return { ok: true, source: cqeRes.source || "cqe", items: cqeRes.items, cqeMeta };

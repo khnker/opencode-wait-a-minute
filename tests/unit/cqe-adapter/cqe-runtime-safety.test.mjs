@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { materializeSnippet, retrieveWithCqe } from '../../../src/context/cqe-adapter.js';
+import { buildCqeLogRecord, materializeSnippet, retrieveWithCqe } from '../../../src/context/cqe-adapter.js';
 import { FIXTURE_SRC, makeFixtureRepo, cleanupRepo } from '../../helpers/cqe/fixture.mjs';
 
 process.env.WAM_LOGGING = 'false';
@@ -100,4 +100,102 @@ test('disabled mode keeps the native result unmarked', async () => {
   assert.strictEqual(r.fallbackUsed, false);
   assert.strictEqual(r.metadata.empty, false);
   assert.strictEqual(r.metadata.fallbackReason, undefined);
+});
+
+test('metrics report real duration, timeout and discarded/returned counts', async () => {
+  const root = makeFixtureRepo();
+  try {
+    const r = await retrieveWithCqe(QUERY, { repoRoot: root, mode: 'enabled' });
+    assert.strictEqual(r.source, 'cqe');
+    const m = r.metadata.metrics;
+    assert.ok(m, 'metadata.metrics should exist');
+    assert.ok(m.realMs >= 0);
+    assert.strictEqual(m.timeoutMs, 10000);
+    assert.strictEqual(m.timedOut, false);
+    assert.strictEqual(m.returned, r.items.length);
+    assert.strictEqual(m.discarded, Math.max(0, r.total - r.items.length));
+  } finally {
+    cleanupRepo(root);
+  }
+});
+
+test('a timed-out query records the real timeout and discards its results', async () => {
+  const root = makeFixtureRepo();
+  try {
+    const r = await retrieveWithCqe(QUERY, { repoRoot: root, mode: 'enabled', timeoutMs: 1 });
+    assert.strictEqual(r.source, 'wam-native');
+    assert.strictEqual(r.metadata.metrics.timedOut, true);
+    assert.strictEqual(r.metadata.metrics.timeoutMs, 1);
+    assert.strictEqual(r.metadata.metrics.returned, r.items.length);
+    assert.ok(r.metadata.metrics.discarded >= 0);
+  } finally {
+    cleanupRepo(root);
+  }
+});
+
+test('shadow mode compares but returns native context', async () => {
+  const root = makeFixtureRepo();
+  try {
+    const native = await retrieveWithCqe(QUERY, { repoRoot: root, mode: 'disabled' });
+    const shadow = await retrieveWithCqe(QUERY, { repoRoot: root, mode: 'shadow' });
+    assert.strictEqual(shadow.source, 'wam-native');
+    assert.strictEqual(shadow.fallbackUsed, false);
+    assert.strictEqual(shadow.metadata.mode, 'shadow');
+    assert.ok(shadow.cqeResult, 'shadow should still run CQE for comparison');
+    assert.strictEqual(shadow.metadata.metrics.returned, native.items.length);
+  } finally {
+    cleanupRepo(root);
+  }
+});
+
+test('enabled mode falls back to native when CQE returns an empty result', async () => {
+  const root = makeFixtureRepo();
+  try {
+    const r = await retrieveWithCqe('FIND definitions OF symbol zzzzNonExistentSymbol123', {
+      repoRoot: root,
+      mode: 'enabled',
+    });
+    assert.strictEqual(r.source, 'wam-native');
+    assert.strictEqual(r.fallbackUsed, true);
+    assert.strictEqual(r.metadata.mode, 'enabled');
+    assert.strictEqual(r.metadata.fallbackReason, 'empty');
+    assert.strictEqual(r.metadata.metrics.timedOut, false);
+  } finally {
+    cleanupRepo(root);
+  }
+});
+
+test('structured log records contain no query content', () => {
+  const record = buildCqeLogRecord({
+    mode: 'enabled',
+    queryText: 'secret-token-abc',
+    durationMs: 12,
+    timeoutMs: 10000,
+    fallbackReason: 'empty',
+    discarded: 3,
+    returned: 2,
+    worker: true,
+  });
+  assert.strictEqual(record.queryLength, 'secret-token-abc'.length);
+  assert.strictEqual(record.durationMs, 12);
+  assert.strictEqual(record.discarded, 3);
+  assert.strictEqual(record.returned, 2);
+  assert.ok(!JSON.stringify(record).includes('secret-token-abc'));
+});
+
+test('structured log records expose timeout failures without content', () => {
+  const record = buildCqeLogRecord({
+    mode: 'enabled',
+    queryText: 'private-query',
+    durationMs: 5,
+    timeoutMs: 1,
+    timedOut: true,
+    discarded: 2,
+    returned: 0,
+    error: new Error('CQE_TIMEOUT'),
+  });
+  assert.strictEqual(record.timedOut, true);
+  assert.strictEqual(record.failureCode, 'timeout');
+  assert.strictEqual(record.queryLength, 'private-query'.length);
+  assert.ok(!JSON.stringify(record).includes('private-query'));
 });

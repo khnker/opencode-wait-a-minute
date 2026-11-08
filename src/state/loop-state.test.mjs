@@ -197,8 +197,25 @@ test("recordLoopDecision persists the quality evaluation when present", (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "wam-loop-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const state = createLoopState({ taskId: "task-q", sessionId: "s" });
-  const quality = { enabled: true, sufficient: false, reasons: ["missing:r1"] };
+  const quality = {
+    enabled: true,
+    kind: "implementation",
+    sufficient: false,
+    missing: [{ id: "r1" }],
+    stale: [],
+    contradictions: [],
+    reasons: ["missing:r1"],
+  };
   recordLoopDecision("task-q", root, state, { decision: "VERIFY" }, { quality });
   const events = readLoopEvents("task-q", root);
+
   assert.deepEqual(events[0].quality, quality);
+  assert.equal(events[1].type, "quality.evaluated");
+  assert.equal(events[1].taskId, "task-q");
+  assert.equal(events[1].kind, "implementation");
+  assert.equal(events[1].sufficient, false);
+  assert.equal(events[1].missingCount, 1);
+  assert.equal(events[1].staleCount, 0);
+  assert.equal(events[1].contradictionCount, 0);
+  assert.deepEqual(events[1].reasons, ["missing:r1"]);
 });

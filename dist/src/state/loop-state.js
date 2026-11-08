@@ -183,21 +183,39 @@ export function recoverLoopState(taskId, root) {
 }
 
 export function recordLoopDecision(taskId, root, state, result, { eventId, turnId, now = Date.now(), quality = null } = {}) {
+  const decisionEventId = eventId || `${state.runId}:${state.sequence + 1}`;
   const appended = appendLoopEvent(taskId, root, {
     type: "decision",
     runId: state.runId,
-    eventId: eventId || `${state.runId}:${state.sequence + 1}`,
+    eventId: decisionEventId,
     at: now,
     decision: result.decision,
     ...(quality ? { quality } : {}),
     state,
   });
+  let qualityAppended = null;
+  if (quality) {
+    qualityAppended = appendLoopEvent(taskId, root, {
+      type: "quality.evaluated",
+      runId: state.runId,
+      eventId: `${decisionEventId}:quality`,
+      at: now,
+      taskId,
+      kind: quality.kind ?? null,
+      sufficient: quality.sufficient === true,
+      missingCount: Array.isArray(quality.missing) ? quality.missing.length : 0,
+      staleCount: Array.isArray(quality.stale) ? quality.stale.length : 0,
+      contradictionCount: Array.isArray(quality.contradictions) ? quality.contradictions.length : 0,
+      reasons: Array.isArray(quality.reasons) ? quality.reasons : [],
+    });
+  }
   const saved = { ...state };
   if (appended.added) saved.sequence = appended.event.seq;
+  if (qualityAppended?.added) saved.sequence = qualityAppended.event.seq;
   if (turnId !== undefined && turnId !== null) saved.lastTurnId = turnId;
   saved.updatedAt = now;
   saveLoopState(taskId, root, saved);
-  return { state: saved, appended: appended.added };
+  return { state: saved, appended: appended.added, qualityAppended: qualityAppended?.added ?? false };
 }
 
 export function withLoopLock(taskId, root, fn) {

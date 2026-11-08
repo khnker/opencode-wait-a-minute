@@ -18,4 +18,4 @@
 - [x] `openspec validate --changes --strict`
 - [x] `npm run build`
 - [x] Load-check `dist/`
-- [ ] Fresh-session web verification (`npm run verify:web`) — attempted twice: the plugin-loaded run reached 7/11 checks; it timed out waiting for the WAM ANALYST pass to finish in this slow model environment (`gate.active=true`, `agentRun.status=null`), not on the stale-gate path.
+- [x] Fresh-session web verification (`npm run verify:web`) — 11/11 checks, runId `2026-11-08T20-11-45-792Z-047c7f13`, report `/tmp/wam-real-user-web/report.md`.

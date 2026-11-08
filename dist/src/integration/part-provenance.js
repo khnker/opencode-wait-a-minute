@@ -133,8 +133,10 @@ export function hasWamMarkerFor(parts, messageID) {
  * @param {Object} target
  * @returns {Array|null}
  */
-export function resolveInjectionSink(target) {
+export function resolveInjectionSink(target, { preferSystem = false } = {}) {
   if (!target) return null;
+  if (preferSystem && Array.isArray(target.system)) return target.system;
+  if (preferSystem && Array.isArray(target.message?.system)) return target.message.system;
   if (Array.isArray(target.parts)) return target.parts;
   if (Array.isArray(target.system)) return target.system;
   if (Array.isArray(target.message?.parts)) return target.message.parts;
@@ -153,8 +155,8 @@ export function resolveInjectionSink(target) {
  * @param {Object} [options]
  * @returns {{inserted: number, dropped: number}}
  */
-export function injectWamParts(target, textsOrParts, { messageID, sessionID, phase, idFactory = defaultPartId, position = "prepend", synthetic } = {}) {
-  const sink = resolveInjectionSink(target);
+export function injectWamParts(target, textsOrParts, { messageID, sessionID, phase, idFactory = defaultPartId, position = "prepend", synthetic, preferSystem = false } = {}) {
+  const sink = resolveInjectionSink(target, { preferSystem });
   if (!sink) return { inserted: 0, dropped: 0 };
 
   const list = Array.isArray(textsOrParts) ? textsOrParts : [textsOrParts];

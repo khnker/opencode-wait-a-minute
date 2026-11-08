@@ -148,6 +148,36 @@ export function classifyCqeFailure(err, { timedOut = false, fallbackReason = nul
 }
 
 /**
+ * Deterministic, content-free CQE observability record. Never includes the
+ * query text or repository content: only mode, timings and counters.
+ */
+export function buildCqeLogRecord({
+  mode,
+  queryText,
+  durationMs,
+  timeoutMs,
+  timedOut = false,
+  fallbackReason = null,
+  discarded = 0,
+  returned = 0,
+  worker = false,
+  error = null,
+} = {}) {
+  return {
+    mode: mode || 'enabled',
+    durationMs: Number.isFinite(durationMs) ? durationMs : null,
+    timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : null,
+    timedOut: Boolean(timedOut),
+    fallbackReason: fallbackReason || null,
+    failureCode: error ? classifyCqeFailure(error, { timedOut }) : null,
+    discarded: Number.isFinite(discarded) ? discarded : 0,
+    returned: Number.isFinite(returned) ? returned : 0,
+    worker: Boolean(worker),
+    queryLength: queryText == null ? 0 : String(queryText).length,
+  };
+}
+
+/**
  * Diagnostic logger for CQE failures. Activated only when debug mode is on
  * (WAM_DEBUG=1, WAM_DEBUG=true, or WAM_LOG_LEVEL=debug). Keeps the plugin
  * silent in normal runs while still surfacing interception problems
@@ -558,12 +588,13 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
   let cqeError = null;
   let timedOut = false;
   let fallbackReason = null;
+  let timeoutMs = null;
   let usedWorker = false;
 
   let cqeFallback = null;
 
   if (mode !== 'disabled' && queryText != null && String(queryText).trim() !== '') {
-    const timeoutMs = resolveTimeout(constraints.timeoutMs);
+    timeoutMs = resolveTimeout(constraints.timeoutMs);
     try {
       const run = await executeCqeQuery(queryText, repoRoot, constraints, timeoutMs);
       if (run.skipped) {
@@ -576,14 +607,8 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
     } catch (err) {
       cqeError = err;
       timedOut = err && /CQE_TIMEOUT/.test(err.message);
-      wamLog('cqe-adapter', 'CQE query failed', {
-        query: queryText,
-        mode,
-        timeout: timedOut,
-        error: err && err.message,
-      });
       cqeDebugWarn('cqe-adapter.retrieve', 'CQE execution failed; falling back to native retrieval', {
-        query: queryText,
+        queryLength: String(queryText).length,
         mode,
         timedOut,
         error: err && err.message ? err.message : String(err),
@@ -614,7 +639,7 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
             used.push(term);
           } catch (err) {
             cqeDebugWarn('cqe-adapter.retry', 'CQE fallback term failed', {
-              term,
+              termLength: String(term).length,
               error: err && err.message ? err.message : String(err),
             });
           }
@@ -622,7 +647,7 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
         const merged = mergeRawResults(runs, limit);
         if (merged.length) {
           cqeResult = { ...(cqeResult || {}), results: merged };
-          cqeFallback = { terms: used, merged: merged.length };
+          cqeFallback = { termCount: used.length, merged: merged.length };
         }
       }
     }
@@ -654,16 +679,33 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
     rawResults.map((r, i) => normalizeItem(r, i, queryText, elapsedMs))
   ).map(it => materializeSnippet(it, repoRoot));
 
-  if (mode === 'shadow') {
-    wamLog('cqe-adapter', 'Shadow comparison', {
-      query: queryText,
-      nativeCount: nativeResult.items.length,
-      cqeCount: normalized.length,
-      cqeError: metadata.cqeError,
-      elapsedMs,
-      timedOut,
-    });
-  }
+  const nativeReturned = nativeResult.items.length;
+  const discarded = mode === 'shadow'
+    ? normalized.length
+    : mode === 'enabled' && (cqeError || normalized.length === 0)
+      ? normalized.length
+      : 0;
+  const metrics = {
+    realMs: elapsedMs,
+    timeoutMs,
+    timedOut,
+    discarded,
+    returned: nativeReturned,
+  };
+  const logFallbackReason = fallbackReason
+    || (cqeError ? (timedOut ? 'timeout' : 'error') : (normalized.length === 0 ? 'empty' : null));
+  wamLog('cqe-adapter', 'CQE evaluation', buildCqeLogRecord({
+    mode,
+    queryText,
+    durationMs: elapsedMs,
+    timeoutMs,
+    timedOut,
+    fallbackReason: logFallbackReason,
+    discarded,
+    returned: nativeReturned,
+    worker: usedWorker,
+    error: cqeError,
+  }));
 
   if (mode === 'enabled') {
     if (cqeError) {
@@ -673,7 +715,12 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
         cqeResult,
         cqeError: metadata.cqeError,
         fallbackUsed: true,
-        metadata: { ...metadata, totalItems: nativeResult.total, fallbackReason: 'error' },
+        metadata: {
+          ...metadata,
+          totalItems: nativeResult.total,
+          fallbackReason: 'error',
+          metrics: { ...metrics, discarded: normalized.length, returned: nativeReturned },
+        },
       };
     }
     if (normalized.length === 0) {
@@ -682,7 +729,14 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
         source: 'wam-native',
         cqeResult,
         fallbackUsed: true,
-        metadata: { ...metadata, totalItems: nativeResult.total, empty: fallbackReason == null, fallbackReason: fallbackReason || 'empty', failureCode: fallbackReason || 'empty' },
+        metadata: {
+          ...metadata,
+          totalItems: nativeResult.total,
+          empty: fallbackReason == null,
+          fallbackReason: fallbackReason || 'empty',
+          failureCode: fallbackReason || 'empty',
+          metrics: { ...metrics, discarded: normalized.length, returned: nativeReturned },
+        },
       };
     }
     const limited = constraints.maxResults > 0 ? normalized.slice(0, constraints.maxResults) : normalized;
@@ -694,7 +748,12 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
       source: 'cqe',
       cqeResult,
       fallbackUsed: false,
-      metadata: { ...metadata, totalItems: normalized.length, failureCode: null },
+      metadata: {
+        ...metadata,
+        totalItems: normalized.length,
+        failureCode: null,
+        metrics: { ...metrics, discarded: normalized.length - limited.length, returned: limited.length },
+      },
     };
   }
 
@@ -712,6 +771,7 @@ export async function retrieveWithCqe(queryText, constraints = {}) {
       totalItems: nativeResult.total,
       ...(shadowFailed ? { fallbackReason: 'error', failureCode: metadata.failureCode || 'error' } : {}),
       ...(shadowEmpty ? { fallbackReason: 'empty', empty: true, failureCode: 'empty' } : {}),
+      metrics,
     },
   };
 }

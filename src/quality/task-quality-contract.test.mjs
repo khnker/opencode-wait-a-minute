@@ -12,6 +12,7 @@ import {
   detectContradictions,
 } from "./task-quality-contract.js";
 import { TASK_EVIDENCE_TYPES, TASK_EVIDENCE_STRENGTH } from "../verification/outcome-evaluator.js";
+import { QUALITY_KIND_FIXTURES } from "../../tests/helpers/quality-kind-fixtures.mjs";
 
 const direct = (criterionId, overrides = {}) => ({
   criterionId,
@@ -173,4 +174,81 @@ test("collectTaskEvidence flattens requirement evidence without inventing streng
 
 test("evaluateEvidenceSufficiency rejects an unresolved contract", () => {
   assert.throws(() => evaluateEvidenceSufficiency({}, []), TypeError);
+});
+
+test("each task kind resolves a kind profile with well-evidenced fixtures", () => {
+  for (const { kind, task } of QUALITY_KIND_FIXTURES) {
+    const { contract, evaluation } = evaluateTaskQuality(task);
+    assert.equal(contract.kind, kind, `${kind} should resolve its own kind`);
+    assert.ok(contract.criteria.length > 0, `${kind} should have criteria`);
+    assert.ok(
+      contract.criteria.every((criterion) => criterion.source === "kind"),
+      `${kind} should use the kind profile`,
+    );
+    assert.equal(
+      evaluation.sufficient,
+      true,
+      `${kind} fixture should be sufficient: ${evaluation.reasons.join(", ")}`,
+    );
+  }
+});
+
+test("weak evidence is insufficient and names the missing criterion", () => {
+  const task = { id: "weak", kind: "implementation", requirements: [{ id: "r1" }] };
+  const { evaluation } = evaluateTaskQuality(task, [direct("r1")]);
+  assert.equal(evaluation.sufficient, false);
+  assert.ok(evaluation.missing.length > 0);
+  assert.ok(evaluation.reasons.some((reason) => reason.startsWith("missing:r1:")));
+});
+
+test("stale evidence is reported instead of satisfying the contract", () => {
+  const now = Date.parse("2026-02-01T00:00:00.000Z");
+  const task = {
+    id: "stale",
+    kind: "implementation",
+    quality: { maxAgeMs: 1000 },
+    requirements: [{
+      id: "r1",
+      evidence: [
+        testResult("r1", { timestamp: "2026-01-01T00:00:00.000Z" }),
+        direct("r1", { timestamp: "2026-01-01T00:00:00.000Z" }),
+      ],
+    }],
+  };
+  const { evaluation } = evaluateTaskQuality(task, undefined, { now });
+  assert.equal(evaluation.sufficient, false);
+  assert.ok(evaluation.stale.length > 0);
+  assert.ok(evaluation.reasons.some((reason) => reason.startsWith("stale:r1:")));
+});
+
+test("contradictory evidence is reported instead of satisfying the contract", () => {
+  const task = { id: "contradiction", kind: "implementation", requirements: [{ id: "r1" }] };
+  const { evaluation } = evaluateTaskQuality(task, [
+    testResult("r1", { status: "failed" }),
+    direct("r1"),
+  ]);
+  assert.equal(evaluation.sufficient, false);
+  assert.ok(evaluation.contradictions.length > 0);
+  assert.ok(evaluation.reasons.some((reason) => reason.startsWith("contradiction:r1:")));
+});
+
+test("well-evidenced tasks per kind are not blocked by the quality gate", () => {
+  for (const { kind, task } of QUALITY_KIND_FIXTURES) {
+    const { evaluation } = evaluateTaskQuality(task);
+    assert.notEqual(evaluation.sufficient, false, `${kind} should not be blocked`);
+  }
+});
+
+test("malformed evidence never throws and the evaluator is pure", () => {
+  const task = { id: "malformed", kind: "research", requirements: [{ id: "r1" }] };
+  const malformed = [null, 1, "x", {}, { type: "UNKNOWN" }, [null, { nope: true }]];
+  for (const evidence of malformed) {
+    assert.doesNotThrow(() => evaluateTaskQuality(task, evidence));
+  }
+
+  const snapshot = JSON.stringify(task);
+  const first = evaluateTaskQuality(task);
+  const second = evaluateTaskQuality(task);
+  assert.deepEqual(first, second);
+  assert.equal(JSON.stringify(task), snapshot);
 });

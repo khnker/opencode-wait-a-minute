@@ -206,13 +206,15 @@ function emitTextPart(output, text, meta = {}) {
     ...(meta.sessionID ? { sessionID: meta.sessionID } : {}),
     ...(meta.messageID ? { messageID: meta.messageID } : {}),
   };
+  const synthetic = meta.synthetic !== false;
   injectWamParts(output, [part], {
     messageID: meta.messageID,
     sessionID: meta.sessionID,
     phase: "emit",
     idFactory: genPartId,
     position: "prepend",
-    synthetic: meta.synthetic !== false,
+    synthetic,
+    preferSystem: synthetic,
   });
   return { status: "inserted" };
 }
@@ -3104,5 +3106,7 @@ WaitAMinutePlugin.effectiveTaskId = effectiveTaskId;
 WaitAMinutePlugin.isContinuationPrompt = isContinuationPrompt;
 WaitAMinutePlugin.writeActiveTaskId = writeActiveTaskId;
 WaitAMinutePlugin.readActiveTaskIdFresh = readActiveTaskIdFresh;
+WaitAMinutePlugin.emitTextPart = emitTextPart;
 
+export { emitTextPart };
 export default WaitAMinutePlugin;

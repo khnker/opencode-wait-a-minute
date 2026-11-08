@@ -12,8 +12,8 @@
 - [x] 2.1 Implement `evaluateEvidenceSufficiency(contract, evidence, { now })`
 - [x] 2.2 Implement `detectStaleEvidence(evidence, { hashes, now, maxAgeMs })`
 - [x] 2.3 Implement `detectContradictions(contract, evidence)`
-- [ ] 2.4 Unit tests for all six kinds, weak evidence, stale evidence and contradictions
-- [ ] 2.5 Property tests: malformed evidence never throws; evaluator is pure
+- [x] 2.4 Unit tests for all six kinds, weak evidence, stale evidence and contradictions
+- [x] 2.5 Property tests: malformed evidence never throws; evaluator is pure
 
 ## Phase 3: Gate and loop integration
 
@@ -22,16 +22,16 @@
 - [x] 3.3 Map `missing`/`stale` to `VERIFY` and `contradiction` to `REPLAN` in `task-loop.js`
 - [x] 3.4 Require `quality.sufficient !== false` in the completion gate when enabled
 - [x] 3.5 Regression tests: flag off is unchanged; flag on blocks nominal DONE
-- [ ] 3.6 Test that a well-evidenced task per kind is not blocked
+- [x] 3.6 Test that a well-evidenced task per kind is not blocked
 
 ## Phase 4: Observability
 
-- [ ] 4.1 Emit `quality.evaluated` records compatible with the Change 13 schema
-- [ ] 4.2 Document the evidence model and the flag in the change README
+- [x] 4.1 Emit `quality.evaluated` records compatible with the Change 13 schema
+- [x] 4.2 Document the evidence model and the flag in the change README
 
 ## Phase 5: Validation
 
 - [x] 5.1 Run affected suites with `node --test --test-force-exit`
 - [x] 5.2 Run `npm run build` and load-check `dist/`
 - [x] 5.3 Run `openspec validate --changes --strict`
-- [ ] 5.4 Smoke the evaluator with one fixture per task kind
+- [x] 5.4 Smoke the evaluator with one fixture per task kind

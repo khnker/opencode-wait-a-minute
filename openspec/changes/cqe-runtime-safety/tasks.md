@@ -13,25 +13,25 @@
   - [x] Configurar `Promise.race` con timeout configurable (mín 1ms, máx 30000ms)
   - [x] Implementar cancelación: el engine síncrono solo se interrumpe fuera del hilo principal (`worker.terminate()`); `useWorker:false` degrada a timeout descartable
   - [x] Limpiar recursos (clearTimeout, AbortSignal) al cerrar sesión
-  - [ ] Métricas: tiempo real vs. timeout, resultado descartado vs. devuelto
+  - [x] Métricas: tiempo real vs. timeout, resultado descartado vs. devuelto
 
 ### [T-03] Aislamiento por proyecto
-- [ ] Definir identidad del root canónico en `src/context/context.js`
-- [ ] Añadir `root` al contexto de cada sesión/instancia CQE
+- [x] Definir identidad del root canónico en `src/context/context.js`
+- [x] Añadir `root` al contexto de cada sesión/instancia CQE
 - [x] Prohibir reutilización entre roots sin reinicialización explícita
 - [x] Probar con dos repositorios diferentes usando fixtures
 
 ### [T-04] Fallback nativo existente
-- Documentar modos `disabled`, `shadow`, `enabled` en `src/context/context.js`
-- Asegurar que `shadow` compara resultados sin sustituir el nativo
-- `enabled` recurre al nativo ante errores recuperables
-- Probar escenarios: CQE error, CQE resultado inválido, fallback verificado
+- [x] Documentar modos `disabled`, `shadow`, `enabled` en `src/context/context.js`
+- [x] Asegurar que `shadow` compara resultados sin sustituir el nativo
+- [x] `enabled` recurre al nativo ante errores recuperables
+- [x] Probar escenarios: CQE error, CQE resultado inválido, fallback verificado
 
 ### [T-05] Observabilidad estructurada
-- Añadir logging de modo, duración, motivo fallback y resultados descartados
-- No registrar contenido sensible ni credenciales
-- Guardar métricas opcionales para diagnóstico sin bloquear operación
-- Probar logging bajo fallos y éxito
+- [x] Añadir logging de modo, duración, motivo fallback y resultados descartados
+- [x] No registrar contenido sensible ni credenciales
+- [x] Guardar métricas opcionales para diagnóstico sin bloquear operación
+- [x] Probar logging bajo fallos y éxito
 
 ## Criterios de aceptación
 - Ningún resultado de CQE provoca lectura fuera de ámbito autorizado

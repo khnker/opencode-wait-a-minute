@@ -25,6 +25,10 @@ import { routeSkillsV2 } from "../../src/skills/engine.js";
 // Aislamiento: los tests NO deben escribir .wam en el repo del plugin
 process.chdir(fs.mkdtempSync(path.join(os.tmpdir(), "wam-pl-iso-")));
 
+const partText = (part) => (typeof part === "string" ? part : part?.text || "");
+const visibleText = (out) => (out.parts || []).map(partText).join("\n");
+const outputText = (out) => [...(out.parts || []), ...(out.system || [])].map(partText).join("\n");
+
 test("default export es una función (Plugin factory)", () => {
   assert.equal(typeof pluginDefault, "function");
 });
@@ -338,18 +342,19 @@ test("Continuation fast-path: contrato aprobado + continuación inyecta SOLO N2 
   const inp = { parts: [{ type: "text", text: "sigue con el paso 2" }], taskId };
   const out = { parts: [], system: [] };
   await hooks["chat.message"](inp, out);
-  assert.ok(out.parts.length > 0, "emite N2 delta en continuación");
-  const emitted = out.parts.map((p) => p.text || "").join("\n");
+  assert.ok(outputText(out).length > 0, "emite N2 delta en continuación");
+  const emitted = outputText(out);
   assert.ok(emitted.includes("[wam N2 task]"), "solo N2 (live task delta)");
   assert.ok(!emitted.includes("[wam N1"), "no reconstruye N1");
   assert.ok(!emitted.includes("[wam N3"), "no reconstruye N3");
   assert.ok(!emitted.includes("PROPOSED"), "no re-emite contrato");
+  assert.ok(!visibleText(out).includes("[wam"), "el chat visible queda limpio de avisos WAM");
   assert.equal(inp.parts[0].text, "sigue con el paso 2", "no reescribe el prompt de continuación");
 
   const inp2 = { parts: [{ type: "text", text: "listo, terminé la tarea" }], taskId };
   const out2 = { parts: [], system: [] };
   await hooks["chat.message"](inp2, out2);
-  const doneText = out2.parts.map((p) => p.text || "").join("\n");
+  const doneText = outputText(out2);
   // DONE con reqs pendientes: el gate es advisory y NO toma el fast-path N2-only;
   // cae al flujo normal, que emite el aviso de recomendación y no pasa a DONE.
   assert.ok(/Recomendación/.test(doneText), "claim de DONE con pendientes emite aviso de recomendación (advisory)");
@@ -437,9 +442,11 @@ test("no_task_assumption: '¿en qué estábamos?' sin tarea activa → pregunta,
   const hooks = await pluginDefault({ directory: process.cwd(), client: {}, project: {}, $: {} });
   const out = { parts: [], system: [] };
   await hooks["chat.message"]({ parts: [{ type: "text", text: "¿en qué estábamos?" }] }, out);
-  const t = out.parts.map((p) => p.text || "").join("\n");
+  const t = outputText(out);
   assert.ok(/no hay tarea activa|No hay tarea activa/i.test(t), "informa no-active-task sin asumir");
-  assert.ok(!t.includes("[wam N1 project]"), "no inyecta contexto de proyecto");  assert.ok(!t.includes("[wam N2 task]"), "no inyecta contexto de tarea inexistente");
+  assert.ok(!t.includes("[wam N1 project]"), "no inyecta contexto de proyecto");
+  assert.ok(!t.includes("[wam N2 task]"), "no inyecta contexto de tarea inexistente");
+  assert.ok(!visibleText(out).includes("[wam"), "el chat visible queda limpio de avisos WAM");
 });
 
 test("no_task_assumption: con tarea pendiente → ofrece continuar, NO inyecta su contexto", async () => {
@@ -450,7 +457,7 @@ test("no_task_assumption: con tarea pendiente → ofrece continuar, NO inyecta s
   pluginDefault.resumeTask(taskId);
   const out = { parts: [], system: [] };
   await hooks["chat.message"]({ parts: [{ type: "text", text: "¿en qué estábamos?" }] }, out);
-  const t = out.parts.map((p) => p.text || "").join("\n");
+  const t = outputText(out);
   assert.ok(t.includes(`tarea pendiente: ${taskId}`), "ofrece la tarea pendiente: " + t);
   assert.ok(!t.includes("[wam N2 task]"), "NO asume la continuación (no inyecta su contexto)");
   assert.ok(!t.includes("migración postgres"), "no re-emite contenido de la tarea");
@@ -472,7 +479,7 @@ test("task_isolation live: A→B→A — el live context alterna sin contaminaci
 
   const outA = { parts: [], system: [] };
   await hooks["chat.message"]({ parts: [{ type: "text", text: "sigue con la implementación" }], taskId: taskA }, outA);
-  const tA = outA.parts.map((p) => p.text || "").join("\n");
+  const tA = outputText(outA);
   assert.ok(tA.includes(`task: ${taskA}`), "live de A recuperado al volver: " + tA);
   assert.ok(!tA.includes(`task: ${taskB}`), "A no contamina con B");
   assert.ok(!/documentar la API/.test(tA), "contenido de B fuera del pack de A");
@@ -536,14 +543,15 @@ test("delegación advisory: contrato APPROVED con reqs pendientes genera directi
   const st = getTaskState(taskId, tmp);
   assert.ok(st.contract.status === "APPROVED", "contrato aprobado");
 
-  const createdText = created.parts.map((p) => p.text || "").join("\n");
-  assert.ok(createdText.includes("[wam delegation]"), "directiva de delegación visible");
+  const createdText = outputText(created);
+  assert.ok(createdText.includes("[wam delegation]"), "directiva de delegación en contexto oculto");
   assert.ok(/Task\(parallel\)/.test(createdText), "reqs → Task paralelo");
   assert.ok(/contexto: frontend/.test(createdText), "req con hint de dominio frontend");
+  assert.ok(!visibleText(created).includes("[wam delegation]"), "el chat visible no muestra la directiva");
 
   const out = { parts: [], system: [] };
   await hooks["chat.message"]({ sessionID: "sd1", parts: [{ type: "text", text: "tarea terminada, done" }], taskId }, out);
-  const t = out.parts.map((p) => p.text || "").join("\n");
+  const t = outputText(out);
   assert.ok(/Recomendación/.test(t), "claim de DONE con reqs pendientes emite aviso de recomendación (advisory)");
   assert.ok(/Requisitos pendientes|requisito\(s\) sin evidencia/.test(t), "el aviso lista los requisitos pendientes");
   assert.notEqual(getTaskState(taskId, tmp).phase, "DONE", "DONE no se declara con reqs pendientes");

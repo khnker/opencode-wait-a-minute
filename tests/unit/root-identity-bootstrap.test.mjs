@@ -12,6 +12,7 @@ import {
   setActiveSession,
   getSessionId,
   resetSessionCache,
+  resolveRoot,
   resolveWamRoot,
   clearRepoCache,
   isSessionId,
@@ -153,4 +154,33 @@ test("bootstrap: un root con project.md ya no bootstrapea", (t) => {
   fs.mkdirSync(path.join(root, ".wam", "context"), { recursive: true });
   fs.writeFileSync(path.join(root, ".wam", "context", "project.md"), "# Project");
   assert.equal(isBootstrapRoot(root, "task-a"), false);
+});
+
+test("resolveRoot: aliases of the same directory share one canonical identity", (t) => {
+  const parent = tmpRoot("wam-root-alias-");
+  const root = path.join(parent, "repo");
+  const link = path.join(parent, "link");
+  fs.mkdirSync(root);
+  fs.symlinkSync(root, link, "dir");
+  t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
+
+  const canonical = resolveRoot(root);
+  assert.equal(resolveRoot(link), canonical);
+  assert.equal(resolveRoot(path.join(root, ".", "")), canonical);
+  assert.equal(resolveRoot(`${root}${path.sep}`), canonical);
+});
+
+test("getSessionId: symlinked roots resolve to the same session identity", (t) => {
+  const parent = tmpRoot("wam-root-session-alias-");
+  const root = path.join(parent, "repo");
+  const link = path.join(parent, "link");
+  fs.mkdirSync(root);
+  fs.symlinkSync(root, link, "dir");
+  t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
+
+  resetSessionCache();
+  const sid = setActiveSession(root, "ses_alias123");
+  assert.equal(getSessionId(link, "ses_alias123"), sid);
+  assert.equal(getSessionId(`${link}${path.sep}`, "ses_alias123"), sid);
+  assert.equal(getSessionId(link, null), sid);
 });

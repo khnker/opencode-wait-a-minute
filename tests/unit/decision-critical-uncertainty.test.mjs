@@ -48,7 +48,9 @@ test("R5: incertidumbre destructiva → DECISION_CRITICAL → bloquea aprobació
   const inp = { parts: [{ type: "text", text: "terminé, done" }], taskId };
   const out = { parts: [], system: [] };
   await hooks["chat.message"](inp, out);
-  const outText = out.parts.map((p) => p.text).join("\n") || "";
+  const outText = [...(out.parts || []), ...(out.system || [])]
+    .map((p) => (typeof p === "string" ? p : p?.text || ""))
+    .join("\n");
   assert.ok(
     outText.includes("BLOQUEADO") || outText.includes("COMPLETION GATE") || outText.includes("No implementar"),
     "DONE bloqueado (interceptado, no avanza)"
