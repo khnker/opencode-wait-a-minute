@@ -32,11 +32,38 @@ export function shouldClearExecutionGate(task, taskInFlight = false) {
 // guarded by this one, so it must be treated as stale instead of blocking
 // every mutation forever after a restart. Gates without ownerPid predate this
 // marker and are also stale.
+const DEFAULT_EXECUTION_GATE_TTL_MS = 30 * 60 * 1000;
+
+function executionGateTtlMs() {
+  const raw = Number(process.env.WAM_EXECUTION_GATE_TTL_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_EXECUTION_GATE_TTL_MS;
+}
+
+function parseGateTimestamp(value) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 export function isExecutionGateStale(gate, currentPid = process.pid) {
   if (gate?.active !== true) return false;
   const ownerPid = gate?.ownerPid;
   if (!Number.isInteger(ownerPid)) return true;
-  return ownerPid !== currentPid;
+  if (ownerPid !== currentPid) return true;
+  // A same-pid gate can still be orphaned (its pass aborted before the
+  // `finally` ran), so bound its lifetime instead of trusting the pid alone.
+  // Missing or malformed timestamps fail open: a stuck gate must never brick
+  // the session.
+  const startedAt = parseGateTimestamp(gate?.startedAt);
+  if (startedAt === null) return true;
+  return Date.now() - startedAt > executionGateTtlMs();
 }
 
 // A gate is orphaned when its owning loop reached a terminal state but no

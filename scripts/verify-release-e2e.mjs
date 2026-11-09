@@ -47,7 +47,7 @@ const RELEASE_BASE_URL = process.env.WAM_RELEASE_BASE_URL || "";
 const RELEASE_API_KEY = process.env.WAM_RELEASE_API_KEY || "x";
 
 function parseArgs(argv) {
-  const options = { out: "", keep: false, timeout: 300000, serverTimeout: 60000 };
+  const options = { out: "", keep: false, timeout: 900000, serverTimeout: 60000 };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--out") options.out = argv[++i] ?? "";

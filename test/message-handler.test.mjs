@@ -100,7 +100,6 @@ const baseDeps = () => ({
   persistLiveContext: noop,
   assembleContext: () => ({ lines: [], budget_used: 0, budget: 4000, levels: {} }),
   selectContextWithCqe: async () => ({}),
-  detectFileSearchIntent: () => false,
   createSnapshot: noop,
   checkContinuation: () => ({ status: "VALID" }),
   rebuildScope: () => ({ rebuildN1: false, rebuildN3: false }),
@@ -253,7 +252,6 @@ test("handleMessage: cqe file_context → actualiza cqeCalls y persiste estado",
     file_context: [{ path: "src/x.js", snippet: "const x = 1;" }],
     cqeMeta: { elapsedMs: 1, source: "cqe" },
   });
-  deps.detectFileSearchIntent = () => true;
   deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: false });
 
   const out = { message: {}, parts: [] };
@@ -271,13 +269,36 @@ test("handleMessage: cqe file_context → actualiza cqeCalls y persiste estado",
   assert.equal(state.cqeCalls, 1);
 });
 
+test("handleMessage: prompt sin intención de búsqueda también consulta CQE", async () => {
+  const deps = baseDeps();
+  deps.selectContextWithCqe = async () => ({
+    file_context: [{ path: "src/master.js", snippet: "export function computeTotal() {}" }],
+    cqeMeta: { elapsedMs: 1, source: "cqe" },
+  });
+  deps.detectFileSearchIntent = () => false;
+  deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: false });
+
+  const out = { message: {}, parts: [] };
+  await handleMessage(
+    {
+      sessionID: "s-cqe-nosearch",
+      messageID: "m-cqe-nosearch",
+      message: { parts: [{ type: "text", text: "explain how computeTotal works" }] },
+    },
+    out,
+    deps,
+  );
+
+  const state = getTaskState(deps.sessionTasks.get("s-cqe-nosearch") || "t-cqe-nosearch", ROOT);
+  assert.equal(state.cqeCalls, 1);
+});
+
 test("handleMessage: cqe sin resultados → también cuenta la llamada", async () => {
   const deps = baseDeps();
   deps.selectContextWithCqe = async () => ({
     file_context: [],
     cqeMeta: { elapsedMs: 1, source: null, fallbackUsed: true, fallbackReason: "sin resultados" },
   });
-  deps.detectFileSearchIntent = () => true;
   deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: false });
 
   const out = { message: {}, parts: [] };
@@ -300,7 +321,6 @@ test("handleMessage: disableCqe → no incrementa cqeCalls", async () => {
   const deps = baseDeps();
   deps.cfg.disableCqe = true;
   deps.selectContextWithCqe = async () => ({ file_context: [] });
-  deps.detectFileSearchIntent = () => true;
   deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: false });
 
   const out = { message: {}, parts: [] };

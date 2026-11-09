@@ -27,15 +27,6 @@ export function loadDesignTokens(root = process.cwd()) {
   return ctx.tokens || {};
 }
 
-export function detectFileSearchIntent(task) {
-  if (typeof task !== "string" || !task) return false;
-  // Normalize common Spanish diacritics so patterns like "dónde"/"donde" match uniformly.
-  const q = task.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
-  // English + Spanish intent keywords (intent detection only — does not capture the query itself).
-  // `\b` boundaries keep us from matching substrings inside larger words (e.g. "archivo" inside "desarchivo").
-  return /\b(find|search|grep|locate|where\s+is|busca|buscar|encuentra|donde|revisa|revise|ver|archivo|archivos|codigo|file|files)\b/.test(q);
-}
-
 const LEVELS = ["L1", "L2", "L3", "L4"];
 const LIFECYCLE = ["candidate", "active", "superseded", "stale", "invalidated"];
 const PROVENANCE = ["user_decided", "observed", "inferred"];
@@ -614,13 +605,12 @@ export function selectContext(task, { budget = 8000, root, sessionId, log = true
 
 /**
  * Variante async de selectContext que enriquece el paquete con file_context de
- * CQE cuando la tarea es una intención de búsqueda de archivos. Se mantiene
- * separada del selectContext sincrónico para no forzar `await` en callers que
- * no pueden esperarlo (p.ej. assembleContext).
+ * CQE. Se mantiene separada del selectContext sincrónico para no forzar `await`
+ * en callers que no pueden esperarlo (p.ej. assembleContext).
  */
 export async function selectContextWithCqe(task, opts = {}) {
   const pkg = selectContext(task, opts);
-  if (!opts.disableCqe && detectFileSearchIntent(task)) {
+  if (!opts.disableCqe) {
     const t0 = Date.now();
     try {
       const cqeRes = await retrieveWithCqe(task, { repoRoot: opts.root || process.cwd() });

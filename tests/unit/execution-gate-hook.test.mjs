@@ -19,7 +19,7 @@ test("tool.execute.before blocks main-session mutations while the gate is active
       phase: "IMPLEMENTING",
       contract: { status: "APPROVED", requirements: ["change"] },
       requirements: [{ id: "req-1", title: "change", status: "pending", evidence: [] }],
-      executionGate: { active: true, reason: "agent-loop", ownerPid: process.pid },
+      executionGate: { active: true, reason: "agent-loop", ownerPid: process.pid, startedAt: new Date().toISOString() },
     }, root);
     plugin.writeActiveTaskId(taskId, root, { sessionId: sessionID, projectRoot: root });
 
@@ -65,7 +65,7 @@ test("tool.execute.before gates non-WAM subagents but exempts WAM agent sessions
       phase: "IMPLEMENTING",
       contract: { status: "APPROVED", requirements: ["change"] },
       requirements: [{ id: "req-1", title: "change", status: "pending", evidence: [] }],
-      executionGate: { active: true, reason: "agent-loop", ownerPid: process.pid },
+      executionGate: { active: true, reason: "agent-loop", ownerPid: process.pid, startedAt: new Date().toISOString() },
     }, root);
     plugin.writeActiveTaskId(taskId, root, { sessionId: parentSession, projectRoot: root });
 
@@ -143,7 +143,7 @@ test("tool.execute.before releases a same-process gate once its loop is terminal
       phase: "IMPLEMENTING",
       contract: { status: "APPROVED", requirements: ["change"] },
       requirements: [{ id: "req-1", title: "change", status: "pending", evidence: [] }],
-      executionGate: { active: true, reason: "agent-loop", ownerPid: process.pid },
+      executionGate: { active: true, reason: "agent-loop", ownerPid: process.pid, startedAt: new Date().toISOString() },
     }, root);
     const loop = createLoopState({ taskId, sessionId: sessionID });
     saveLoopState(taskId, root, { ...loop, status: "STOPPED", stopReason: "no-progress", lastDecision: "STOP_STAGNATION" });
@@ -175,7 +175,7 @@ test("tool.execute.before keeps a same-process gate while its loop is running", 
       phase: "IMPLEMENTING",
       contract: { status: "APPROVED", requirements: ["change"] },
       requirements: [{ id: "req-1", title: "change", status: "pending", evidence: [] }],
-      executionGate: { active: true, reason: "agent-loop", ownerPid: process.pid },
+      executionGate: { active: true, reason: "agent-loop", ownerPid: process.pid, startedAt: new Date().toISOString() },
     }, root);
     const loop = createLoopState({ taskId, sessionId: sessionID });
     saveLoopState(taskId, root, { ...loop, status: "RUNNING" });

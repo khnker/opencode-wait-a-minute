@@ -239,6 +239,10 @@ test("well-evidenced tasks per kind are not blocked by the quality gate", () => 
   }
 });
 
+test("Spanish correction text infers the debugging task kind", () => {
+  assert.equal(inferTaskKind({ objective: "corrige el error de login" }), TASK_KINDS.DEBUGGING);
+});
+
 test("malformed evidence never throws and the evaluator is pure", () => {
   const task = { id: "malformed", kind: "research", requirements: [{ id: "r1" }] };
   const malformed = [null, 1, "x", {}, { type: "UNKNOWN" }, [null, { nope: true }]];

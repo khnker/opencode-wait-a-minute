@@ -118,7 +118,7 @@ export function inferTaskKind(task = {}) {
 
   if (!text) return TASK_KINDS.UNKNOWN;
   if (/\brefactor/.test(text)) return TASK_KINDS.REFACTORING;
-  if (/\b(debug|bug|fix|failure|error|regression)\b/.test(text)) return TASK_KINDS.DEBUGGING;
+  if (/\b(debug|bug|bugfix|fix|failure|error|errores|regression|falla|fallas|corrige|corregir|correcci[oó]n|arregla|arreglar|arreglo)\b/.test(text)) return TASK_KINDS.DEBUGGING;
   if (/\b(review|audit|inspect)\b/.test(text)) return TASK_KINDS.REVIEW;
   if (/\b(document|documentation|readme|docs)\b/.test(text)) return TASK_KINDS.DOCUMENTATION;
   if (/\b(research|investigate|explore|compare|evaluate|analysis)\b/.test(text)) return TASK_KINDS.RESEARCH;

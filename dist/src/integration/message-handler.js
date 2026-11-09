@@ -16,6 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { hasWamMarkerFor, injectWamParts, isWamSynthetic } from "./part-provenance.js";
+import { logger } from "./logger.js";
 import { reopenTerminalAgentRun, resetAuthorizationSurface } from "../execution/agent-run-state.js";
 import { ensurePermissionPlan, permissionPreflightLines, shouldNotifyPermissionPlan } from "../policy/permission-preflight.js";
 import { buildTaskInferenceDirective } from "../cognition/task-inference-engine.js";
@@ -189,6 +190,13 @@ const ASKING_CMD_RE = /^(answer|resolve|contract|progress|task|skills|assumption
  * @returns {Promise<void>}
  */
 export async function handleMessage(input, output, deps) {
+  const turnStart = performance.now();
+  let phaseStart = turnStart;
+  const phase = (label) => {
+    const now = performance.now();
+    logger.info("turn-timing", `phase=${label} durMs=${(now - phaseStart).toFixed(1)} totalMs=${(now - turnStart).toFixed(1)}`);
+    phaseStart = now;
+  };
   const {
     collector = null,
     bypassed,
@@ -220,7 +228,6 @@ export async function handleMessage(input, output, deps) {
     persistLiveContext,
     assembleContext,
     selectContextWithCqe,
-    detectFileSearchIntent,
     createSnapshot,
     checkContinuation,
     rebuildScope,
@@ -291,6 +298,7 @@ export async function handleMessage(input, output, deps) {
       taskId = resolved.taskId;
       fallbackKind = resolved.fallbackKind;
     }
+    phase("resolveTask");
     if (input.sessionID) {
       sessionTasks.set(input.sessionID, taskId);
       // Persist active-task pointer to disk so /wam contract approve (which
@@ -324,6 +332,7 @@ export async function handleMessage(input, output, deps) {
       const existing = getTaskState(taskId, wamRoot);
       if (existing) validateState(existing);
     } catch {}
+    phase("loadTaskState");
     try { pruneCompletedTasks(wamRoot).catch(() => {}); } catch {}
 
     // Welcome / disambiguation gate: cuando la primera inferencia cayó en
@@ -607,6 +616,7 @@ export async function handleMessage(input, output, deps) {
     }
 
     const updatedState = getTaskState(taskId, wamRoot) || state;
+    if (intentLane.lane === INTENT_LANES.CORRECTION) updatedState.flow = "correction";
 
     // Final completion message: emit once when the gate allows DONE.
     if (
@@ -669,18 +679,20 @@ export async function handleMessage(input, output, deps) {
           );
         }
       } catch {}
+      phase("history");
       try {
         const memory = loadConversationMemory(wamRoot, input.sessionID);
         const memoryText = formatMemoryForContext(memory, promptText, 3);
         if (memoryText) auxInject.push(`[wam memory]\n${memoryText}\n`);
       } catch {}
+      phase("memory");
     }
 
     const reqs = updatedState.requirements || [];
     const pend = reqs.filter((r) => r.status !== "done" && r.status !== "verified");
     const objective = updatedState.contract?.objective || analysis.intent?.goal || null;
     if (intentLane.lane !== INTENT_LANES.CONVERSATION) {
-      const requireApproval = cfg.contractApproval === "required";
+      const requireApproval = cfg.contractApproval === "required" && intentLane.lane !== INTENT_LANES.CORRECTION;
       if (requireApproval && updatedState.contract?.status !== "APPROVED" && reqs.length > 0) {
         const { visible, overflow } = splitVisibleRequirements(reqs);
         const verification = (updatedState.contract?.verification || []).filter(
@@ -760,7 +772,7 @@ export async function handleMessage(input, output, deps) {
         }
       }
 
-      if (detectFileSearchIntent(promptText)) {
+      if (cfg.disableCqe !== true) {
         const cqeT0 = Date.now();
         const cqePack = await selectContextWithCqe(promptText, {
           root: wamRoot,
@@ -811,6 +823,7 @@ export async function handleMessage(input, output, deps) {
         }
       }
     } catch {}
+    phase("cqe");
 
     // Directive inference
     if (updatedState.contract?.objective && updatedState.phase !== "DONE" && analysis.intent?.classification !== "trivial") {
@@ -874,6 +887,7 @@ const { lines } = buildTaskInferenceDirective({
         }
         updatedState.completionGateKey = gateKey;
         persistTaskState(taskId, updatedState, wamRoot);
+        phase("persist");
       }
       // Mismo set de pendientes que el turno anterior: no repetir el aviso.
       // -------------------------------------------------------------
@@ -966,6 +980,7 @@ const { lines } = buildTaskInferenceDirective({
       emitTextPart(output, wamBlockText, { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
     }
 
+    phase("rewrite");
     input.waitAnalysis = analysis;
   } catch (err) {
     console.error("[wait-a-minute] Pre-flight analysis failed:", err);

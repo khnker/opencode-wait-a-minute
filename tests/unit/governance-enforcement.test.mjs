@@ -154,3 +154,28 @@ test("trivial escape reachable via declaredFiles (single src file)", () => {
     enforceGovernance("write", emptyDraft, { declaredFiles: ["src/skills/skill-inference.test.mjs"] })
   );
 });
+
+test("correction flow is never blocked by contract approval", () => {
+  const correction = {
+    phase: "PROPOSED",
+    flow: "correction",
+    contract: { status: "PROPOSED", kind: "debugging" },
+    requirements: [{ id: "r1", status: "pending" }],
+    lastAction: "corrige el error del login",
+  };
+  const decision = enforceGovernance("edit", correction, { requireApproval: true });
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.reason, "correction-flow");
+});
+
+test("development flow still blocks when approval is required", () => {
+  const dev = {
+    phase: "PROPOSED",
+    contract: { status: "PROPOSED" },
+    requirements: [{ id: "r1", status: "pending" }],
+    lastAction: "implementa el nuevo panel",
+  };
+  const decision = enforceGovernance("edit", dev, { requireApproval: true });
+  assert.equal(decision.allowed, false);
+  assert.equal(decision.reason, "contract-not-approved");
+});

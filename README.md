@@ -21,7 +21,7 @@ WAM adds deterministic control, task-state management, context reconstruction, s
 
 WAM ships a CQE adapter (`src/context/cqe-adapter.js`) that integrates [context-query-core](https://github.com/khnker/context-query-core), a fast, in-process code-evidence retriever using SQLite + trigram indexing for lexical and symbolic snippet matching.
 
-Modes: `disabled`, `shadow`, `enabled`. The adapter defaults to `enabled` when invoked directly; override with `WAM_CQE_MODE`, or disable with `WAM_CQE=0`. It runs on file-search-intent prompts in the runtime context-retrieval path via `selectContextWithCqe`; opt out with `WAM_CQE_MODE=disabled` or `cfg.disableCqe`.
+Modes: `disabled`, `shadow`, `enabled`. The adapter defaults to `enabled` when invoked directly; override with `WAM_CQE_MODE`, or disable with `WAM_CQE=0`. Every runtime context retrieval consults CQE via `selectContextWithCqe` and augments the package with bounded `file_context`; opt out with `WAM_CQE_MODE=disabled`, `WAM_CQE=0`, or `cfg.disableCqe`.
 
 Benchmark (fixture corpus, k=5, 10 queries): CQE retrieved **142 tokens vs. 302 for the baseline** ripgrep search — **52.98% fewer tokens** — with higher precision (0.617 vs 0.613) and MRR (0.700 vs 0.683), and comparable recall (0.70 vs 0.75). Reproduce with:
 

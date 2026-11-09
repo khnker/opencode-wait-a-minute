@@ -170,6 +170,21 @@ function logDecision(event) {
   }
 }
 
+const CORRECTION_FLOW_RE =
+  /\b(corrige|corregir|correcci[oó]n|arregla|arreglar|arreglo|fix|bugfix|bug|debug|falla|fallas|error|errores|regression|incorrecto|mal)\b/i;
+
+export function isCorrectionFlow(state) {
+  if (!state) return false;
+  const flow = String(state.flow || "").toLowerCase();
+  if (flow === "correction") return true;
+  const kind = String(state.kind || state.contract?.kind || "").toLowerCase();
+  if (kind === "debugging" || kind === "bugfix") return true;
+  const text = [state.lastAction, state.contract?.objective, state.nextAction]
+    .filter((v) => typeof v === "string")
+    .join(" ");
+  return CORRECTION_FLOW_RE.test(text);
+}
+
 /**
  * @param {string} tool
  * @param {object|null} state - task state ({ phase, contract, requirements }).
@@ -210,6 +225,11 @@ export function enforceGovernance(tool, state, ctx = {}) {
 
   const contractStatus = state?.contract?.status;
   const phase = state?.phase;
+
+  if (isCorrectionFlow(state)) {
+    logDecision({ decision: "allow", reason: "correction-flow", tool, phase });
+    return { allowed: true, reason: "correction-flow" };
+  }
 
   if (contractStatus === "APPROVED") return { allowed: true, reason: "contract-approved" };
   if (isTerminalPhase(phase)) return { allowed: true, reason: "terminal-phase" };

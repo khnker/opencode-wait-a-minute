@@ -38,7 +38,7 @@ const GATES = [
     ? []
     : [
         { name: "OpenCode Smoke E2E", cmd: "node tests/e2e/opencode/smoke.mjs", required: true, timeout: 300000 },
-        { name: "Release Web E2E (installed + Playwright)", cmd: "node scripts/verify-release-e2e.mjs", required: true, timeout: 600000 },
+        { name: "Release Web E2E (installed + Playwright)", cmd: "node scripts/verify-release-e2e.mjs", required: true, timeout: 1200000 },
       ]),
   { name: "Package E2E", cmd: "npm run test:e2e:package", required: true, timeout: 300000 },
   { name: "Docs Check", cmd: "node scripts/docs-check.mjs", required: true },

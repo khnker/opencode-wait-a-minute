@@ -20,13 +20,18 @@ test('RT-01: file-search prompt augments the package with CQE file_context', asy
   }
 });
 
-test('RT-02: non-search prompt leaves file_context unset (native only)', async () => {
+test('RT-02: non-search prompt still augments the package with CQE file_context', async () => {
   const dir = makeFixtureRepo();
   try {
-    const pkg = await selectContextWithCqe('please summarize the deployment checklist', {
+    const pkg = await selectContextWithCqe('please explain how parseConfig works', {
       root: dir,
     });
-    assert.ok(!pkg.file_context || pkg.file_context.length === 0);
+    assert.ok(Array.isArray(pkg.file_context), 'file_context should be populated');
+    assert.ok(pkg.file_context.length > 0, 'expected CQE matches without a search keyword');
+    assert.ok(
+      pkg.rationale.some((r) => /CQE: retrieved \d+ file matches/.test(r)),
+      `expected CQE rationale, got ${JSON.stringify(pkg.rationale)}`,
+    );
   } finally {
     cleanupRepo(dir);
   }

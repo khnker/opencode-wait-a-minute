@@ -49,7 +49,7 @@ test("clears an active gate only when no pass is in flight", () => {
 });
 
 test("treats gates owned by another process (or legacy gates) as stale", () => {
-  assert.equal(isExecutionGateStale({ active: true, ownerPid: 123 }, 123), false);
+  assert.equal(isExecutionGateStale({ active: true, ownerPid: 123, startedAt: new Date().toISOString() }, 123), false);
   assert.equal(isExecutionGateStale({ active: true, ownerPid: 122 }, 123), true);
   assert.equal(isExecutionGateStale({ active: true }, 123), true);
   assert.equal(isExecutionGateStale({ active: false, ownerPid: 122 }, 123), false);
@@ -65,4 +65,41 @@ test("releases an orphan gate only when its loop is terminal and nothing is in f
   assert.equal(shouldReleaseOrphanGate(active, { loopStatus: "STOPPED", inFlight: true }), false);
   assert.equal(shouldReleaseOrphanGate({ executionGate: { active: false } }, { loopStatus: "STOPPED" }), false);
   assert.equal(shouldReleaseOrphanGate(null, { loopStatus: "STOPPED" }), false);
+});
+
+test("marks an expired same-pid gate as stale", () => {
+  const startedAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+  assert.equal(isExecutionGateStale({ active: true, ownerPid: process.pid, startedAt }), true);
+});
+
+test("keeps a fresh same-pid gate active", () => {
+  const startedAt = new Date().toISOString();
+  assert.equal(isExecutionGateStale({ active: true, ownerPid: process.pid, startedAt }), false);
+});
+
+test("honours WAM_EXECUTION_GATE_TTL_MS override", () => {
+  const previous = process.env.WAM_EXECUTION_GATE_TTL_MS;
+  try {
+    process.env.WAM_EXECUTION_GATE_TTL_MS = "1000";
+    const expired = new Date(Date.now() - 2000).toISOString();
+    const fresh = new Date().toISOString();
+    assert.equal(isExecutionGateStale({ active: true, ownerPid: process.pid, startedAt: expired }), true);
+    assert.equal(isExecutionGateStale({ active: true, ownerPid: process.pid, startedAt: fresh }), false);
+  } finally {
+    if (previous === undefined) delete process.env.WAM_EXECUTION_GATE_TTL_MS;
+    else process.env.WAM_EXECUTION_GATE_TTL_MS = previous;
+  }
+});
+
+test("marks an active same-pid gate without a valid timestamp as stale", () => {
+  assert.equal(isExecutionGateStale({ active: true, ownerPid: process.pid }), true);
+  assert.equal(isExecutionGateStale({ active: true, ownerPid: process.pid, startedAt: "not-a-date" }), true);
+});
+
+test("does not mark an inactive gate as stale", () => {
+  assert.equal(isExecutionGateStale({ active: false, ownerPid: process.pid }), false);
+  assert.equal(
+    isExecutionGateStale({ active: false, ownerPid: process.pid, startedAt: new Date(0).toISOString() }),
+    false,
+  );
 });

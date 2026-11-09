@@ -1,3 +1,3 @@
-import { selectContext, selectContextWithCqe, retrieveContext, detectFileSearchIntent } from "./context.js";
+import { selectContext, selectContextWithCqe, retrieveContext } from "./context.js";
 import { detectCouplingIntent, traceCouplingForTask } from "./coupling.js";
-export { selectContext, selectContextWithCqe, retrieveContext, detectFileSearchIntent, detectCouplingIntent, traceCouplingForTask };
+export { selectContext, selectContextWithCqe, retrieveContext, detectCouplingIntent, traceCouplingForTask };

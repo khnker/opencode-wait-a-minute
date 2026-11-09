@@ -29,7 +29,7 @@ import { activeTaskPath, sessionTaskPath, tasksDir as wamTasksDir, taskDir as wa
 
 import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, listDecisions, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
 import { purgeTasks } from "./src/persistence/retention-manager.js";
-import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, selectContextWithCqe, detectFileSearchIntent, retrieveContext, retrieveContextWithCqe, closeSession, resolveWamRoot, migrateLegacyCapsules, setActiveSession, applyBootstrapApproval } from "./src/context/context.js";
+import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, selectContextWithCqe, retrieveContext, retrieveContextWithCqe, closeSession, resolveWamRoot, migrateLegacyCapsules, setActiveSession, applyBootstrapApproval } from "./src/context/context.js";
 import { assembleContext } from "./src/context/assembly.js";
 import { injectCanonicalProjectContext } from "./src/context/canonical-project-context.js";
 import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./src/verification/verification.js";
@@ -1608,7 +1608,6 @@ async function postToolExecution(input, output) {
         persistLiveContext,
         assembleContext,
         selectContextWithCqe,
-        detectFileSearchIntent,
         createSnapshot,
         checkContinuation,
         rebuildScope,
@@ -1627,7 +1626,6 @@ async function postToolExecution(input, output) {
         promoteCapsule,
         selectContext,
         selectContextWithCqe,
-        detectFileSearchIntent,
         retrieveContext,
         closeSession,
         resolveWamRoot,
