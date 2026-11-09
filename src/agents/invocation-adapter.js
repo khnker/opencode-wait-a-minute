@@ -336,6 +336,32 @@ function sessionErrorMessage(data) {
   return `agent session error: ${detail}${status ? ` (${status})` : ""}`;
 }
 
+const NON_RETRYABLE_PROMPT_STATUS_CODES = new Set([400, 401, 403, 404, 422]);
+
+function promptErrorStatus(error) {
+  const raw = error?.data?.statusCode ?? error?.status ?? error?.statusCode;
+  const status = Number(raw);
+  return Number.isFinite(status) ? status : null;
+}
+
+function promptErrorFromResponse(response, sessionID) {
+  const cause = response?.info?.error ?? response?.error;
+  const status = promptErrorStatus(cause);
+  const nonRetryable =
+    status !== null && NON_RETRYABLE_PROMPT_STATUS_CODES.has(status);
+  let message = sessionErrorMessage(response) ?? "agent session error";
+  if (nonRetryable && !message.includes(`(${status})`)) {
+    message = `${message} (${status})`;
+  }
+  return new AgentInvocationError(message, {
+    code: nonRetryable
+      ? AGENT_INVOCATION_ERROR_CODES.INVALID_RESULT
+      : AGENT_INVOCATION_ERROR_CODES.PROMPT_FAILED,
+    cause,
+    sessionID,
+  });
+}
+
 function responseText(parts) {
   if (!Array.isArray(parts)) return "";
   return parts
@@ -431,7 +457,7 @@ export function createOpenCodeV1AgentAdapter({
             { code: AGENT_INVOCATION_ERROR_CODES.PROMPT_TIMEOUT, sessionID: session.id },
           ),
         );
-        if (response?.error) throw response.error;
+        if (response?.error) throw promptErrorFromResponse(response, session.id);
       } catch (cause) {
         if (cause instanceof AgentInvocationError) {
           if (!cause.sessionID) cause.sessionID = session.id;

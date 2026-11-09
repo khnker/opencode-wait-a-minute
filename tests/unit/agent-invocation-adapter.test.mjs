@@ -10,6 +10,7 @@ import {
   toolPolicyForRole,
 } from "../../src/agents/invocation-adapter.js";
 import { RoleContractError } from "../../src/agents/role-contracts.js";
+import { isRetryableAgentError } from "../../src/execution/task-agent-run.js";
 
 function requestFor(role = "ANALYST") {
   return {
@@ -503,4 +504,56 @@ test("times out a prompt that never resolves", async () => {
       /timeout/i.test(error.message),
   );
   assert.ok(Date.now() - started < 1000);
+});
+
+test("classifies transient prompt error responses as retryable", async () => {
+  const client = fakeClient({
+    prompted: {
+      error: {
+        data: {
+          message: "rate limit exceeded (HTTP 429)",
+          statusCode: 429,
+        },
+      },
+    },
+  });
+  const adapter = createOpenCodeV1AgentAdapter({ client });
+
+  await assert.rejects(
+    () => adapter.invoke(requestFor()),
+    (error) => {
+      assert.ok(error instanceof AgentInvocationError);
+      assert.equal(error.code, AGENT_INVOCATION_ERROR_CODES.PROMPT_FAILED);
+      assert.match(error.message, /429/);
+      assert.equal(error.sessionID, "ses-child");
+      assert.equal(isRetryableAgentError(error), true);
+      return true;
+    },
+  );
+});
+
+test("classifies auth prompt error responses as non-retryable", async () => {
+  const client = fakeClient({
+    prompted: {
+      error: {
+        data: {
+          message: "forbidden",
+          statusCode: 403,
+        },
+      },
+    },
+  });
+  const adapter = createOpenCodeV1AgentAdapter({ client });
+
+  await assert.rejects(
+    () => adapter.invoke(requestFor()),
+    (error) => {
+      assert.ok(error instanceof AgentInvocationError);
+      assert.equal(error.code, AGENT_INVOCATION_ERROR_CODES.INVALID_RESULT);
+      assert.match(error.message, /403/);
+      assert.equal(error.sessionID, "ses-child");
+      assert.equal(isRetryableAgentError(error), false);
+      return true;
+    },
+  );
 });
