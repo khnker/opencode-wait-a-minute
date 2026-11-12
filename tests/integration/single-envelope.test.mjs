@@ -49,7 +49,7 @@ test("presentValidation emit:false returns lines without emitting parts", async 
   );
 });
 
-test("validation, phase and CQE summary travel in a single [wam] envelope", async () => {
+test("validation and phase summary travel in a single [wam] envelope", async () => {
   const result = await plugin.presentValidation({
     analysis: ANALYSIS,
     ctx: null,
@@ -58,7 +58,6 @@ test("validation, phase and CQE summary travel in a single [wam] envelope", asyn
   const inject = [];
   assert.equal(mergeValidationLines(inject, result), true);
   inject.push(`fase ${ANALYSIS.phase} → ${ANALYSIS.nextAction}`);
-  inject.push("cqe: 2 archivos en 64ms — top: src/a.mjs, src/b.mjs");
 
   const parts = [wrapWamBlock(inject.join("\n"))];
   const envelopes = parts.filter((part) => part.startsWith("[wam][start]"));
@@ -69,6 +68,5 @@ test("validation, phase and CQE summary travel in a single [wam] envelope", asyn
   assert.ok(envelopes[0].endsWith("[wam][end]"));
   assert.ok(envelopes[0].includes("Recomendación — contrato"));
   assert.ok(envelopes[0].includes("fase IMPLEMENTING"));
-  assert.ok(envelopes[0].includes("cqe: 2 archivos"));
   assert.ok(!envelopes[0].includes("call the task tool with subagent"));
 });

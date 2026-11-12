@@ -21,7 +21,6 @@ import { reopenTerminalAgentRun, resetAuthorizationSurface } from "../execution/
 import { ensurePermissionPlan, permissionPreflightLines, shouldNotifyPermissionPlan } from "../policy/permission-preflight.js";
 import { buildTaskInferenceDirective } from "../cognition/task-inference-engine.js";
 import { buildRoleDirective } from "../cognition/task-role-engine.js";
-import { detectCouplingIntent, traceCouplingForTask } from "../context/selection.js";
 import { loadPrompt } from "../prompts/loader.js";
 import { confirmCompletion } from "../verification/verification-policy.js";
 import { validateState } from "../state/task-state.js";
@@ -227,7 +226,6 @@ export async function handleMessage(input, output, deps) {
     readLiveContext,
     persistLiveContext,
     assembleContext,
-    selectContextWithCqe,
     createSnapshot,
     checkContinuation,
     rebuildScope,
@@ -272,16 +270,15 @@ export async function handleMessage(input, output, deps) {
     // Ensure WAM memory for this session
     const wamRoot = await ensureWamMemory(input.sessionID, promptText);
 
-    // No-task-assumption: resume intent without active task → ask, don't assume
+    // Grounded continuation: a real pending task continues on its own. Only an
+    // unresolved intent asks, so WAM never fabricates a task from "sigamos".
     if (!input.taskId && RESUME_RE.test(promptText)) {
       const active = sessionTasks.get(input.sessionID) || readActiveTaskIdFresh(wamRoot, { sessionId: input.sessionID, projectRoot: wamRoot });
       const st = active ? getTaskState(active, wamRoot) : null;
-      if (st && st.phase !== "DONE") {
-        emitTextPart(output, loadPrompt("notice.pending_task", { active, phase: st.phase }), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
-      } else {
+      if (!(st && st.phase !== "DONE")) {
         emitTextPart(output, loadPrompt("notice.no_active_task"), { sessionID: input.sessionID, messageID: output.message?.id || input.messageID });
+        return;
       }
-      return;
     }
 
     // Effective taskId with session persistence.
@@ -494,9 +491,7 @@ export async function handleMessage(input, output, deps) {
       activeMode: cfg.activeMode,
     });
 
-    const state = waitAMinute.buildPersistedState(taskId, analysis, wamRoot, {
-      requireApproval: cfg.contractApproval === "required",
-    });
+    const state = waitAMinute.buildPersistedState(taskId, analysis, wamRoot, {});
     state.lastAction = promptText;
     const trivialPrompt = typeof waitAMinute.isTrivial === "function"
       ? waitAMinute.isTrivial(promptText)
@@ -568,12 +563,26 @@ export async function handleMessage(input, output, deps) {
      sessionStore.set(`${input.sessionID}:persistentPolicies`, analysis.persistentPolicies || []);
      sessionStore.set(`${input.sessionID}:skillRegistry`, analysis.skillRegistry || {});
 
-    // Blocking questions → ASKING
-    // Router dispatches already carry an explicit plan from the orchestrator:
-    // they must never be parked in ASKING by inferred assumptions.
+    // Blocking questions → ASKING.
+    // Only an unknown explicitly marked `blocking: true` may park the turn: it is
+    // the one case that represents a genuine technical ambiguity. Inferred
+    // assumptions are advisory and must never stop execution.
     const delegatedDispatch = /^\s*\[router\]/i.test(promptText);
-    const blockingUnknowns = delegatedDispatch ? [] : (state.contract?.unknowns || []).filter((u) => u.status === "blocking");
-    const finalQuestions = blockingUnknowns.filter((u) => {
+    const inferredBlocking = delegatedDispatch
+      ? []
+      : (state.contract?.unknowns || []).filter((u) => u.status === "blocking" && u.blocking !== true);
+    if (inferredBlocking.length > 0) {
+      for (const u of inferredBlocking) u.status = "advisory";
+      if (state.phase === "ASKING") {
+        state.phase = state.contract?.status === "APPROVED" ? "IMPLEMENTING" : "PROPOSED";
+        state.nextAction = state.phase === "IMPLEMENTING" ? "Continuar la implementación" : state.nextAction;
+      }
+      persistTaskState(taskId, state, wamRoot);
+    }
+    const finalQuestions = (delegatedDispatch
+      ? []
+      : (state.contract?.unknowns || []).filter((u) => u.status === "blocking" && u.blocking === true)
+    ).filter((u) => {
       const decision = getDecision(u.id, wamRoot);
       if (decision) { console.log(`[wait-a-minute] Found existing decision for ${u.id}: ${decision.decision}`); return false; }
       return true;
@@ -692,30 +701,7 @@ export async function handleMessage(input, output, deps) {
     const pend = reqs.filter((r) => r.status !== "done" && r.status !== "verified");
     const objective = updatedState.contract?.objective || analysis.intent?.goal || null;
     if (intentLane.lane !== INTENT_LANES.CONVERSATION) {
-      const requireApproval = cfg.contractApproval === "required" && intentLane.lane !== INTENT_LANES.CORRECTION;
-      if (requireApproval && updatedState.contract?.status !== "APPROVED" && reqs.length > 0) {
-        const { visible, overflow } = splitVisibleRequirements(reqs);
-        const verification = (updatedState.contract?.verification || []).filter(
-          (v) => typeof v === "string" && v.trim(),
-        );
-        const skillNames = (analysis.skills?.selected || [])
-          .map((s) => (typeof s === "string" ? s : s?.name || s?.id))
-          .filter(Boolean);
-        inject.push(
-          "⛔ [wait-a-minute] CONTRATO PENDIENTE — mostrá al usuario este plan y esperá /wam contract approve antes de ejecutar.",
-          `Objetivo: ${objective || "pending"}`,
-          `Plan (${pend.length}/${reqs.length} pendientes):`,
-          ...visible.map((r) => `  - ${truncate(r.title, 120)}`),
-          ...(overflow > 0 ? [`  ... y ${overflow} más`] : []),
-          ...(verification.length ? [`Verificación: ${verification.join("; ")}`] : []),
-          `Skills cargadas: ${skillNames.length ? skillNames.join(", ") : "ninguna"}`,
-          "En tu mensaje visible incluí: objetivo, plan, sección \"Skills cargadas\" con esos nombres, verificación y pedido de /wam contract approve.",
-          "No ejecutes write/edit/apply_patch hasta que el usuario apruebe. El comando es /wam contract approve.",
-        );
-        updatedState.contractDisplayed = true;
-        updatedState.nextAction = "Mostrar plan y esperar /wam contract approve";
-        persistTaskState(taskId, updatedState, wamRoot);
-      } else if (updatedState.phase === "PROPOSED" && !updatedState.contractDisplayed) {
+      if (updatedState.phase === "PROPOSED" && !updatedState.contractDisplayed) {
         const { visible, overflow } = splitVisibleRequirements(reqs);
         inject.push(
           `Objective: ${objective || "pending"}`,
@@ -764,66 +750,7 @@ export async function handleMessage(input, output, deps) {
       try {
         sessionStore.set(`${input.sessionID}:skillStates`, pack.skillStates || []);
       } catch {}
-
-      if (detectCouplingIntent(promptText)) {
-        const couplingPack = await traceCouplingForTask(promptText, { root: wamRoot });
-        if (couplingPack.ok && couplingPack.lines.length > 0) {
-           contextInject.push(couplingPack.lines.join("\n") + "\n");
-        }
-      }
-
-      if (cfg.disableCqe !== true) {
-        const cqeT0 = Date.now();
-        const cqePack = await selectContextWithCqe(promptText, {
-          root: wamRoot,
-          disableCqe: cfg.disableCqe === true,
-        });
-        const cqeMeta = cqePack.cqeMeta || {};
-        const cqeMs = typeof cqeMeta.elapsedMs === "number" ? cqeMeta.elapsedMs : Date.now() - cqeT0;
-        const cqeFiles = Array.isArray(cqePack.file_context) ? cqePack.file_context : [];
-        if (cqeFiles.length > 0) {
-          const shown = cqeFiles.slice(0, 8).map((f) => {
-            const score = f?.score ?? f?.relevance ?? "?";
-            const toks = f?.tokenEstimate ?? "?";
-            const snippet = String(f?.content || "").replace(/\n+/g, " ").slice(0, 120);
-            const loc = f?.startLine != null ? `:${f.startLine}` : "";
-            return `  - ${f?.path || "?"}${loc} (score ${score}, ~${toks} tok) ${snippet}`;
-          });
-          if (cqeFiles.length > 8) shown.push(`  ... (+${cqeFiles.length - 8} más)`);
-          contextInject.push(`\n[wam cqe file_context: ${cqeFiles.length} archivos en ${cqeMs}ms, fuente ${cqeMeta.source || "?"}]\n${shown.join("\n")}`);
-          contextInject.push(`cqe: ${cqeFiles.length} archivos en ${cqeMs}ms (fuente ${cqeMeta.source || "?"}) — top: ${(cqeFiles.slice(0, 3).map((f) => f?.path || "?")).join(", ")}`);
-        } else {
-          const code = cqeMeta.failureCode || (cqeMeta.fallbackReason === "error" ? "error" : cqeMeta.empty ? "empty" : null);
-          if (code && code !== "empty") {
-            const hint = cqeMeta.failureHint ? ` — ${cqeMeta.failureHint}` : "";
-            const detail = cqeMeta.cqeError ? ` (${cqeMeta.cqeError})` : "";
-            contextInject.push(`[wam cqe] fallo (${code}) en ${cqeMs}ms${detail} — contexto nativo prevalece${hint}`);
-          } else {
-            contextInject.push(`[wam cqe] sin resultados en ${cqeMs}ms — contexto nativo prevalece`);
-          }
-        }
-        if (cqePack.cqeMeta) {
-          const cqeTarget = updatedState || state;
-          if (cqeTarget) {
-            cqeTarget.cqeCalls = (cqeTarget.cqeCalls || 0) + 1;
-            const stats = cqeTarget.cqeStats && typeof cqeTarget.cqeStats === "object" ? cqeTarget.cqeStats : {};
-            const rawBucket = cqeFiles.length > 0 ? "ok" : (cqeMeta.failureCode || (cqeMeta.empty ? "empty" : "error"));
-            const bucket = ["ok", "empty", "error", "timeout", "busy", "warming"].includes(rawBucket) ? rawBucket : "error";
-            cqeTarget.cqeStats = {
-              calls: (stats.calls || 0) + 1,
-              ok: (stats.ok || 0) + (bucket === "ok" ? 1 : 0),
-              empty: (stats.empty || 0) + (bucket === "empty" ? 1 : 0),
-              error: (stats.error || 0) + (bucket === "error" ? 1 : 0),
-              timeout: (stats.timeout || 0) + (bucket === "timeout" ? 1 : 0),
-              busy: (stats.busy || 0) + (bucket === "busy" ? 1 : 0),
-              warming: (stats.warming || 0) + (bucket === "warming" ? 1 : 0),
-            };
-            try { persistTaskState(taskId, cqeTarget, wamRoot); } catch {}
-          }
-        }
-      }
     } catch {}
-    phase("cqe");
 
     // Directive inference
     if (updatedState.contract?.objective && updatedState.phase !== "DONE" && analysis.intent?.classification !== "trivial") {
@@ -906,7 +833,7 @@ const { lines } = buildTaskInferenceDirective({
           `- ${taskId} (${analysis.intent?.classification || "task"})`, "", "## Completed",
           ...(updatedState.contract?.requirements || []).map((r) => `- ${r}`), "", "## Verification",
           ...(updatedState.requirements || []).map((r) => `- ${r.id}: ${r.status}`), "", "## Token Savings",
-          `- CQE file-context calls: ${updatedState.cqeCalls || 0}`, "", "## Status", "COMPLETED",
+          "", "## Status", "COMPLETED",
         ].join("\n"),
       }, wamRoot);
       addRecentChange({

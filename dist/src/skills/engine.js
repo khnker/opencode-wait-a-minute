@@ -1621,7 +1621,7 @@ export function synthesizeContract(prompt = "", mode = "NORMAL", uncertainties =
   const lower = (prompt || "").toLowerCase();
   const criticalUnknowns = (uncertainties || [])
     .filter((u) => u.classification === "DECISION_CRITICAL")
-    .map((u) => ({ id: u.id, question: u.question, classification: u.classification, status: "blocking", options: u.options || [] }));
+    .map((u) => ({ id: u.id, question: u.question, classification: u.classification, status: u.blocking === true ? "blocking" : "advisory", options: u.options || [] }));
 
   if (mode === "FAST" || isMetaOnlyPrompt(prompt)) {
     return { requirements: [], constraints: [], verification: [], unknowns: criticalUnknowns, status: "PROPOSED", rigor: mode, trivial: true };

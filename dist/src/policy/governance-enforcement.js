@@ -244,26 +244,6 @@ export function enforceGovernance(tool, state, ctx = {}) {
     .filter((r) => r.status !== "done" && r.status !== "verified").length;
   const unknowns = state?.contract?.unknowns || state?.unknowns || [];
 
-  // Strict contract approval: required mode pauses mutating tools until the
-  // user explicitly approves with /wam contract approve. The directive carries
-  // the visible plan so the agent can restate it before waiting.
-  if (ctx.requireApproval && pending > 0) {
-    const raw = state.requirements || state.contract?.requirements || [];
-    const plan = raw
-      .filter((r) => typeof r === "string" || (r.status !== "done" && r.status !== "verified"))
-      .map((r, i) => `${i + 1}. ${typeof r === "string" ? r : (r.title || r.id || "")}`)
-      .filter((line) => line.trim() !== "");
-    const objective = state.contract?.objective || state.nextAction || "";
-    const directive = [
-      `[wait-a-minute] CONTRATO PENDIENTE DE APROBACIÓN (${contractStatus || "?"}).`,
-      objective ? `Objetivo: ${objective}` : "",
-      plan.length ? `Plan:\n${plan.join("\n")}` : "",
-      "Mostrá este plan al usuario y esperá /wam contract approve. No ejecutes write/edit/apply_patch hasta la aprobación.",
-    ].filter(Boolean).join("\n");
-    logDecision({ decision: "block", reason: "contract-not-approved", tool, phase });
-    return { allowed: false, reason: "contract-not-approved", directive };
-  }
-
   if (pending === 0 && unknowns.length === 0) {
     logDecision({ decision: "allow", reason: "empty-contract", tool, phase });
     return { allowed: true, reason: "empty-contract" };

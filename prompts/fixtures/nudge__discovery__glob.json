@@ -2,8 +2,8 @@
   "id": "nudge.discovery.glob",
   "vars": {},
   "mustContain": [
-    "'glob' tool",
-    "raw bash file listing/finding"
+    "native Glob tool",
+    "raw bash find/ls"
   ],
   "mustNotContain": []
 }

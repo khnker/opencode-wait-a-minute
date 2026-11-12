@@ -11,6 +11,29 @@
 import { randomBytes } from "node:crypto";
 
 export const WAM_META = "wam";
+
+/**
+ * Builds provider-safe provenance metadata for a WAM part.
+ *
+ * OpenCode forwards a text part's `metadata` to the model as AI SDK
+ * `providerOptions`, whose contract is `Record<string, Record<string,
+ * JSONValue>>`. A flat `{ wam: true, wamMessageId: "..." }` therefore violates
+ * the schema and rejects the whole prompt, so WAM provenance is namespaced
+ * under its own record.
+ *
+ * @param {string|null} [messageID]
+ * @param {string|null} [phase]
+ * @returns {{ [WAM_META]: { synthetic: true, messageId: string|null, phase: string|null } }}
+ */
+export function wamMetadata(messageID, phase) {
+  return {
+    [WAM_META]: {
+      synthetic: true,
+      messageId: messageID ?? null,
+      phase: phase ?? null,
+    },
+  };
+}
 // OpenCode valida PartID como "string que empieza con prt" (qc("prt") → startsWith);
 // el guion bajo es la convención de generación, no un requisito del esquema.
 export const PART_ID_PREFIX = "prt_";
@@ -57,9 +80,7 @@ export function tagWamPart(part, { messageID, sessionID, phase, idFactory = defa
     synthetic: typeof synthetic === "boolean" ? synthetic : true,
     metadata: {
       ...(source.metadata || {}),
-      [WAM_META]: true,
-      wamMessageId: messageID ?? null,
-      wamPhase: phase ?? null,
+      ...wamMetadata(messageID, phase),
     },
   };
 }
@@ -114,14 +135,14 @@ function uniquePartId(usedIds, idFactory) {
  * Checks if a part was injected by WAM.
  */
 export function isWamSynthetic(part) {
-  return !!part && part?.metadata?.[WAM_META] === true;
+  return !!part && !!part?.metadata?.[WAM_META];
 }
 
 /**
  * Checks if a collection of parts contains a marker for a specific messageID.
  */
 export function hasWamMarkerFor(parts, messageID) {
-  return Array.isArray(parts) && parts.some(p => isWamSynthetic(p) && (messageID == null || p.metadata?.wamMessageId === messageID));
+  return Array.isArray(parts) && parts.some(p => isWamSynthetic(p) && (messageID == null || p.metadata?.[WAM_META]?.messageId === messageID));
 }
 
 /**

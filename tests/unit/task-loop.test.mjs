@@ -174,13 +174,13 @@ test("pending authorization keeps priority over hard agent stops", () => {
   assert.deepEqual(result.nextAction, { type: "wait_authorization", id: "auth-1" });
 });
 
-test("unapproved contract keeps priority over hard agent stops", () => {
+test("contract approval flag no longer parks the loop", () => {
   const result = decideNextAction(
     loopInput({ status: "FAILED" }, { authorization: { contractApproved: false } }),
   );
 
   assert.equal(result.decision, "WAIT_USER");
-  assert.equal(result.reason, "contract-not-approved");
+  assert.equal(result.reason, "agent-failed");
 });
 
 test("task-blocked keeps priority over hard agent stops", () => {

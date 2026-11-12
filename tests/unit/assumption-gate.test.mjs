@@ -61,9 +61,10 @@ test("classifyAssumption: impacto material → DECISION_CRITICAL, resto NON_BLOC
   assert.equal(classifyAssumption("se agrega un helper de formato"), "NON_BLOCKING");
 });
 
-test("R2+R3: asunción activa que toca impacto se reclassifica, mirroriza a unknowns y bloquea → ASKING", async () => {
+test("R2: asunción activa que toca impacto se reclassifica y mirroriza como advisory (no bloquea)", async () => {
   // E2E: prompt con impacto material ("deleting accounts") → A1 NON_BLOCKING
-  // se escala a DECISION_CRITICAL por relevancia de la tarea → ASKING.
+  // se escala a DECISION_CRITICAL por relevancia de la tarea, pero ya no
+  // detiene la ejecución: queda como recomendación advisory.
   const hooks = await freshHooks();
   const taskId = `ag-r23-${Date.now()}`;
   const emitted = await send(hooks, "Add support for deleting accounts", taskId);
@@ -72,11 +73,11 @@ test("R2+R3: asunción activa que toca impacto se reclassifica, mirroriza a unkn
   const a1 = st.contract.assumptions.find((a) => a.id === "A1");
   assert.ok(a1, "A1 persistida");
   assert.equal(a1.classification, "DECISION_CRITICAL", "escalada por impacto de la tarea");
-  assert.equal(a1.status, "blocking");
-  assert.equal(st.phase, "ASKING", "tarea entra en ASKING (R3)");
-  assert.ok(emitted.includes("ASKING"), "part ASKING emitido");
+  assert.equal(a1.status, "advisory");
+  assert.notEqual(st.phase, "ASKING", "la asunción inferida no detiene la tarea");
+  assert.ok(emitted.includes("Recomendación"), "se emite recomendación advisory");
   const u1 = st.contract.unknowns.find((u) => u.assumptionId === "A1");
-  assert.ok(u1 && u1.status === "blocking", "unknown mirror con assumptionId");
+  assert.ok(u1 && u1.status === "advisory", "unknown mirror con assumptionId");
 
   // /wam answer resuelve el unknown Y la asunción asociada (tarea activa primero)
   await wam(hooks, `task switch ${taskId}`);
@@ -84,7 +85,7 @@ test("R2+R3: asunción activa que toca impacto se reclassifica, mirroriza a unkn
   const parsed = JSON.parse(out);
   assert.equal(parsed.ok, true);
   const st2 = getTaskState(taskId);
-  assert.equal(st2.phase, "PROPOSED", "answer → PROPOSED");
+  assert.notEqual(st2.phase, "ASKING", "responder no vuelve a bloquear");
   assert.equal(st2.contract.assumptions.find((a) => a.id === "A1").status, "resolved", "asunción resuelta por answer");
   assert.equal(pluginDefault.approveContract(taskId).ok, true, "aprobación permitida tras resolver");
   cleanup(taskId);
@@ -95,7 +96,7 @@ test("R4: evidencia del repo resuelve la asunción sin interacción de usuario",
   const taskId = `ag-r4-${Date.now()}`;
   await send(hooks, "Add support for deleting accounts", taskId);
   const st = getTaskState(taskId);
-  assert.equal(st.phase, "ASKING", "bloqueada por asunción crítica");
+  assert.notEqual(st.phase, "ASKING", "la asunción inferida no parkea la tarea");
 
   await wam(hooks, `task switch ${taskId}`);
   const out = await wam(hooks, `resolve A1 docs/delete-policy.md: soft delete por defecto`);
@@ -109,30 +110,23 @@ test("R4: evidencia del repo resuelve la asunción sin interacción de usuario",
   cleanup(taskId);
 });
 
-test("R5: asunción crítica sin resolver bloquea aprobación y claim de DONE", async () => {
+test("R5: asunción crítica inferida queda advisory y no bloquea aprobación ni DONE", async () => {
   const hooks = await freshHooks();
   const taskId = `ag-r5-${Date.now()}`;
   await send(hooks, "Add support for deleting accounts", taskId);
   const st = getTaskState(taskId);
-  assert.equal(st.phase, "ASKING");
+  assert.notEqual(st.phase, "ASKING", "la asunción inferida no detiene la tarea");
 
-  const rejected = pluginDefault.approveContract(taskId);
-  assert.equal(rejected.ok, false, "aprobación bloqueada");
-  assert.ok(rejected.reason.includes("DECISION_CRITICAL"), `reason indica asunción crítica (${rejected.reason})`);
+  const approved = pluginDefault.approveContract(taskId);
+  assert.equal(approved.ok, true, "la aprobación ya no se bloquea");
 
-  // Resolver solo el unknown NO basta si la asunción quedó sin resolver → pero
-  // answerQuestion resuelve ambas. Para R5 puro: asunción sin unknown → guard de asunciones.
   const st2 = getTaskState(taskId);
-  assert.equal(st2.contract.assumptions.find((a) => a.id === "A1").status, "blocking");
-  assert.ok(!pluginDefault.approveContract(taskId).ok, "sigue bloqueada");
+  assert.equal(st2.contract.assumptions.find((a) => a.id === "A1").status, "advisory");
 
-  // claim de DONE interceptado (ASKING) → no llega al gate
-  const inp = { message: { parts: [{ type: "text", text: "terminé, done" }] }, taskId };
+  // Un claim de DONE no se intercepta por ASKING (puede hacerlo el completion gate).
   const out = { message: {}, parts: [] };
   await hooks["chat.message"]({ sessionID: "ag5", messageID: "ag5-1", message: { parts: [{ type: "text", text: "terminé, done" }] }, taskId }, out);
-  const emitted = out.parts.filter((p) => p.type === "text").map((p) => p.text).join("\n");
-  assert.ok(emitted.includes("BLOQUEADO") || emitted.includes("ASKING"), "DONE interceptado por el clarification gate");
-  assert.equal(getTaskState(taskId).phase, "ASKING", "fase no avanza");
+  assert.notEqual(getTaskState(taskId).phase, "ASKING", "la fase no queda parkeada");
   cleanup(taskId);
 });
 
@@ -160,7 +154,7 @@ test("escalateAssumptions unit: mirror a unknowns con assumptionId y dedupe", ()
   assert.equal(changed, true);
   assert.equal(escalated.length, 1, "solo A1 escala (API + tarea delete)");
   assert.equal(state.contract.assumptions[0].classification, "DECISION_CRITICAL");
-  assert.equal(state.contract.assumptions[0].status, "blocking");
+  assert.equal(state.contract.assumptions[0].status, "advisory");
   assert.equal(state.contract.unknowns.length, 1);
   assert.equal(state.contract.unknowns[0].assumptionId, "A1");
   const again = escalateAssumptions(state, "delete más");

@@ -30,7 +30,7 @@ test("buildUncertainties: dedupe, ids, kind preservado", () => {
   assert.equal(u[0].status, "active");
 });
 
-test("R5: incertidumbre destructiva → DECISION_CRITICAL → bloquea aprobación y DONE", async () => {
+test("R5: incertidumbre destructiva queda advisory y no bloquea aprobación", async () => {
   const taskId = `dcu-${Date.now()}`;
   const hooks = await pluginDefault({ directory: process.cwd(), client: {}, project: {}, $: {} });
   await hooks["chat.message"](
@@ -39,30 +39,14 @@ test("R5: incertidumbre destructiva → DECISION_CRITICAL → bloquea aprobació
   );
   const state = JSON.parse(requireState(taskId));
   assert.ok(state.contract.unknowns?.length > 0, "contrato expone unknowns");
-  assert.equal(state.contract.unknowns[0].status, "blocking");
+  assert.ok(
+    state.contract.unknowns.every((u) => u.status === "advisory"),
+    "las dudas inferidas no bloquean"
+  );
+  assert.notEqual(state.phase, "ASKING", "no entra en ASKING por una duda inferida");
 
   const approved = pluginDefault.approveContract(taskId);
-  assert.equal(approved.ok, false, "aprobación bloqueada");
-  assert.ok(approved.reason.includes("DECISION_CRITICAL"), "razón indica decision-critical");
-
-  const inp = { parts: [{ type: "text", text: "terminé, done" }], taskId };
-  const out = { parts: [], system: [] };
-  await hooks["chat.message"](inp, out);
-  const outText = [...(out.parts || []), ...(out.system || [])]
-    .map((p) => (typeof p === "string" ? p : p?.text || ""))
-    .join("\n");
-  assert.ok(
-    outText.includes("BLOQUEADO") || outText.includes("COMPLETION GATE") || outText.includes("No implementar"),
-    "DONE bloqueado (interceptado, no avanza)"
-  );
-  const after = JSON.parse(requireState(taskId));
-  assert.notEqual(after.phase, "DONE", "no avanza a DONE mientras unknown sin responder");
-
-  // resolución: se marca la unknown como respondida en el contrato persistido
-  state.contract.unknowns.forEach((u) => (u.status = "answered"));
-  persistState(taskId, state);
-  const approved2 = pluginDefault.approveContract(taskId);
-  assert.equal(approved2.ok, true, "aprobación permitida tras resolver unknowns");
+  assert.equal(approved.ok, true, "la aprobación ya no se bloquea");
 
   try {
     fs.rmSync(path.join(process.cwd(), ".wam", "tasks", taskId), { recursive: true, force: true });
@@ -90,7 +74,4 @@ function stateFile(taskId) {
 }
 function requireState(taskId) {
   return fs.readFileSync(stateFile(taskId), "utf-8");
-}
-function persistState(taskId, state) {
-  fs.writeFileSync(stateFile(taskId), JSON.stringify(state, null, 2));
 }

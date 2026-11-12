@@ -29,8 +29,7 @@ node scripts/run-tests.mjs    # full suite with force-exit
 node scripts/prune-wam-artifacts.mjs --apply  # archive one-use test tasks/snapshots
 ```
 
-Prerequisites: Node >= 22.6 and the sibling `../context-query-core` checkout
-(`context-query-core` is a `file:` dependency).
+Prerequisites: Node >= 22.6.
 
 Tests live in `tests/` (legacy, e2e, isolation), as `test-*.mjs` at the repo root and as
 `src/**/*.test.js`. Per-file runs use `node --test --test-force-exit <files>`.
@@ -61,10 +60,9 @@ WAM_E2E_MODEL=<provider/model> WAM_E2E_BASE_URL=<url> npm run gate
 
 `WAM_RELEASE_API_KEY` / `WAM_E2E_API_KEY` are optional (default `x`).
 
-Requirements: Node >= 22.6, `opencode` in PATH, Playwright with Chromium
-(`npm i -g playwright && playwright install chromium`), and the sibling
-`../context-query-core` checkout. The isolated test user does not copy real
-credentials or secrets.
+Requirements: Node >= 22.6, `opencode` in PATH, and Playwright with Chromium
+(`npm i -g playwright && playwright install chromium`). The isolated test user
+does not copy real credentials or secrets.
 
 ## Fresh-session web verification (mandatory)
 
@@ -97,8 +95,6 @@ the reason recorded in the change report).
 
 - Logging is off by default; enable with `WAM_LOGGING=true` or `"logging": true`.
   `plugin.log` rotates at 5 MB.
-- The sessions dashboard is off by default; enable with `WAM_DASHBOARD=true`
-  (optional `WAM_DASHBOARD_PORT`, default 4321).
 - Tests must not write to the project `.wam`; the test runner disables logging and
   redirects `WAM_LOG_FILE`, `WAM_METRICS_DIR` and `WAM_SESSION_DIR` to the OS temp directory.
 - To run the suite while a live WAM session uses the project, use

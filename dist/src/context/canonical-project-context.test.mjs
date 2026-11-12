@@ -131,7 +131,7 @@ test("injectCanonicalProjectContext inyecta el CPC al iniciar tarea y es idempot
     const injected = output.parts.filter((p) => String(p.text || "").includes("[wam CPC"));
     assert.equal(injected.length, 1, "un solo bloque CPC");
     assert.ok(countTokens(injected[0].text) < CPC_TOKEN_BUDGET, "el bloque inyectado respeta el presupuesto");
-    assert.equal(injected[0].metadata?.wam, true, "la parte inyectada queda trazada como sintética de WAM");
+    assert.equal(injected[0].metadata?.wam?.synthetic, true, "la parte inyectada queda trazada como sintética de WAM");
     assert.ok(
       injected[0].text.includes("[wam CPC fact] Proyecto wait-a-minute-plugin"),
       "el contenido canónico del proyecto viaja en el bloque",
@@ -190,7 +190,7 @@ test("injectCanonicalProjectContext agrega el CPC después de las partes existen
     const last = output.parts.at(-1);
     assert.ok(last.text.startsWith("[wam CPC]"), "el CPC va después de las partes existentes");
     assert.equal(last.synthetic, true);
-    assert.equal(last.metadata?.wam, true);
+    assert.equal(last.metadata?.wam?.synthetic, true);
   } finally {
     resetCanonicalProjectContextState();
     fs.rmSync(tmp, { recursive: true, force: true });

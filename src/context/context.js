@@ -17,7 +17,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { generateContract, evaluateContract, mergeAssumptions } from "./sufficiency-contract.js";
-import { retrieveWithCqe, classifyCqeFailure, CQE_FAILURE_HINTS } from "./cqe-adapter.js";
 import { canonicalRoot } from "./path-validator.js";
 import { loadDesignContext } from "../design/design-context.js";
 
@@ -54,7 +53,7 @@ const ALIASES = {
 // --- CHANGE: session identity derived by root + OpenCode sessionID only ---
 
 /**
- * Canonical repository root used for every session/CQE identity and cache key.
+ * Canonical repository root used for every session identity and cache key.
  * Symlinked aliases, `..` and trailing slashes resolve to the same root.
  */
 export function resolveRoot(candidate) {
@@ -226,31 +225,6 @@ export function getSessionId(root, sessionID) {
 
 export function resetSessionCache() {
   if (getSessionId._cache) getSessionId._cache.clear();
-}
-
-// -- Bootstrap: the first task of a root without WAM memory is born approved --
-// A brand-new project has no contract to approve yet; leaving it PROPOSED
-// deadlocks the gate before the first write. Every later task is gated again.
-
-export function isBootstrapRoot(root, taskId) {
-  const base = root || process.cwd();
-  if (fileExists(path.join(base, ".wam", "context", "project.md"))) return false;
-  try {
-    const entries = fs.readdirSync(path.join(base, ".wam", "tasks"), { withFileTypes: true });
-    return !entries.some((e) => e.isDirectory() && e.name !== taskId);
-  } catch {
-    return true;
-  }
-}
-
-export function applyBootstrapApproval(state, taskId, root) {
-  if (!isBootstrapRoot(root, taskId)) return state;
-  return {
-    ...state,
-    phase: "IMPLEMENTING",
-    contract: { ...(state?.contract || {}), status: "APPROVED", approvedBy: "bootstrap" },
-    nextAction: "Implementar — contrato bootstrap aprobado",
-  };
 }
 
 // -- Change 1: capsule CRUD ------------------------------------------------------
@@ -604,53 +578,6 @@ export function selectContext(task, { budget = 8000, root, sessionId, log = true
 }
 
 /**
- * Variante async de selectContext que enriquece el paquete con file_context de
- * CQE. Se mantiene separada del selectContext sincrónico para no forzar `await`
- * en callers que no pueden esperarlo (p.ej. assembleContext).
- */
-export async function selectContextWithCqe(task, opts = {}) {
-  const pkg = selectContext(task, opts);
-  if (!opts.disableCqe) {
-    const t0 = Date.now();
-    try {
-      const cqeRes = await retrieveWithCqe(task, { repoRoot: opts.root || process.cwd() });
-      if (cqeRes && cqeRes.items && cqeRes.items.length > 0) {
-        pkg.file_context = cqeRes.items;
-        pkg.rationale.push(`CQE: retrieved ${cqeRes.items.length} file matches`);
-      }
-      pkg.cqeMeta = {
-        elapsedMs: typeof cqeRes?.elapsedMs === "number" ? cqeRes.elapsedMs : Date.now() - t0,
-        source: cqeRes?.source || null,
-        fallbackUsed: cqeRes?.fallbackUsed ?? false,
-        fallbackReason: cqeRes?.metadata?.fallbackReason || cqeRes?.fallbackReason || null,
-        failureCode: cqeRes?.metadata?.failureCode || null,
-        failureHint: cqeRes?.metadata?.failureCode && cqeRes.metadata.failureCode !== "empty"
-          ? (CQE_FAILURE_HINTS[cqeRes.metadata.failureCode] || null)
-          : null,
-        empty: cqeRes?.metadata?.empty === true,
-        timedOut: cqeRes?.metadata?.timedOut ?? cqeRes?.timedOut ?? false,
-        cqeError: cqeRes?.metadata?.cqeError || cqeRes?.cqeError || null,
-      };
-    } catch (err) {
-      // Non-fatal: CQE es augmentación best-effort; el contexto nativo prevalece.
-      const failureCode = classifyCqeFailure(err);
-      pkg.cqeMeta = {
-        elapsedMs: Date.now() - t0,
-        source: null,
-        fallbackUsed: true,
-        fallbackReason: failureCode === "error" ? "exception" : failureCode,
-        failureCode,
-        failureHint: CQE_FAILURE_HINTS[failureCode] || null,
-        empty: false,
-        timedOut: false,
-        cqeError: err?.message || "exception",
-      };
-    }
-  }
-  return pkg;
-}
-
-/**
  * Recuperación bajo demanda. Distingue "no cargado" de "no existe":
  * retorna { ok, capsules, message } sin fabricar resultados.
  */
@@ -667,31 +594,6 @@ export function retrieveContext(query, { limit = 5, root } = {}) {
     return { ok: false, capsules: [], message: `Sin cápsulas para "${query}" — contexto no disponible (no se fabrica)` };
   }
   return { ok: true, capsules: hits, message: `${hits.length} cápsula(s) encontrada(s)` };
-}
-
-export async function retrieveContextWithCqe(query, { root, maxResults = 5 } = {}) {
-  const repoRoot = resolveRoot(root);
-  const capsule = retrieveContext(query, { root: repoRoot, limit: maxResults });
-  if (capsule.ok) return { ...capsule, source: "capsule" };
-  let cqeRes;
-  try {
-    cqeRes = await retrieveWithCqe(query, { repoRoot, maxResults });
-  } catch (err) {
-    return { ...capsule, cqeMeta: null, cqeError: err?.message || "exception" };
-  }
-  const cqeMeta = {
-    root: cqeRes?.metadata?.repoRoot || repoRoot,
-    mode: cqeRes?.metadata?.mode ?? null,
-    elapsedMs: cqeRes?.elapsedMs ?? null,
-    source: cqeRes?.source || null,
-    failureCode: cqeRes?.metadata?.failureCode ?? null,
-    fallbackUsed: cqeRes?.fallbackUsed ?? false,
-    metrics: cqeRes?.metadata?.metrics ?? null,
-  };
-  if (cqeRes?.items?.length) {
-    return { ok: true, source: cqeRes.source || "cqe", items: cqeRes.items, cqeMeta };
-  }
-  return { ...capsule, cqeMeta, cqeError: cqeRes?.cqeError || cqeRes?.metadata?.cqeError || null };
 }
 
 // -- Change 3: session continuity -------------------------------------------------

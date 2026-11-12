@@ -4,14 +4,12 @@ import { createDialogueLlmFromEnv } from "./src/dialogue/llm-observer.js";
 import { startExperiment, noteSuccess, noteFailure } from "./src/execution/execution-engine.js";
 import { planAutoContinuation, buildAutoLoopPrompt } from "./src/execution/auto-continuation.js";
 import { driveTaskLoop } from "./src/adapters/opencode-v1/session-driver.js";
-import { shouldPauseForContractApproval } from "./src/execution/task-loop.js";
 import { runConfiguredTaskAgentStep, shouldRunTaskAgentPass, applyAgentFailure, formatAgentFailure } from "./src/execution/task-agent-run.js";
 import { agentSignalForLoop } from "./src/execution/agent-run-state.js";
-import { isExecutionGateActive, isExecutionGateStale, isMutatingToolCall, executionGateDirective, shouldClearExecutionGate, shouldReleaseOrphanGate } from "./src/execution/execution-gate.js";
+import { isExecutionGateStale, shouldClearExecutionGate, shouldReleaseOrphanGate } from "./src/execution/execution-gate.js";
 import { loadLoopState } from "./src/state/loop-state.js";
 import { createOpenCodeV1AgentAdapter } from "./src/agents/invocation-adapter.js";
 import { registerSessionLifecycle, unregisterSessionLifecycle } from "./src/integration/session-lifecycle.js";
-import { checkToolPath } from "./src/execution/tool-path-guard.js";
 import { createTaskChildRegistry } from "./src/execution/task-children.js";
 import { migrateLegacyCognition } from "./src/cognition/cognition-store.js";
 import { handleMessage } from "./src/integration/message-handler.js";
@@ -19,8 +17,8 @@ import { splitVisibleRequirements } from "./src/context/requirement-visibility.j
 import { injectWamParts, defaultPartId } from "./src/integration/part-provenance.js";
 import { enqueueVisibleNotice, drainVisibleNotices, buildVisibleNoticePart, updateVisibleNoticePart } from "./src/integration/visible-notices.js";
 import { stripWrappingQuotes } from "./src/shared/command-args.js";
-import { loadWamConfig, isDashboardEnabled } from "./src/config/wam-config.js";
-import { ensurePermissionPlan, permissionPreflightLines, delegationBlocked, shouldBlockForPendingPermission } from "./src/policy/permission-preflight.js";
+import { loadWamConfig } from "./src/config/wam-config.js";
+import { ensurePermissionPlan, permissionPreflightLines, delegationBlocked } from "./src/policy/permission-preflight.js";
 import { configureLogger } from "./src/integration/logger.js";
 import { setLoggingEnabled, setDebugEnabled, registerLogicGate, wamDebug, wamLog, wamWarn, wamError } from "./src/shared/wam-log.js";
 import { evaluateCompletionGate, applyPhaseTransition, isCompletionIntent, COMPLETION_INTENT_REGEX, rejectContractLogic } from "./src/integration/orchestration.js";
@@ -29,7 +27,7 @@ import { activeTaskPath, sessionTaskPath, tasksDir as wamTasksDir, taskDir as wa
 
 import { initMemory, updateProjectMemo, summarizeOperationalContext, updateContext, getOperationalContext, updateTaskMemory, addRecentChange, recordDecision, getDecision, listDecisions, updateLiveContext, compactDecisions } from "./src/persistence/memory.js";
 import { purgeTasks } from "./src/persistence/retention-manager.js";
-import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, selectContextWithCqe, retrieveContext, retrieveContextWithCqe, closeSession, resolveWamRoot, migrateLegacyCapsules, setActiveSession, applyBootstrapApproval } from "./src/context/context.js";
+import { getSessionId, listCapsules, getCapsule, promoteCapsule, selectContext, retrieveContext, closeSession, resolveWamRoot, migrateLegacyCapsules, setActiveSession } from "./src/context/context.js";
 import { assembleContext } from "./src/context/assembly.js";
 import { injectCanonicalProjectContext } from "./src/context/canonical-project-context.js";
 import { evaluateRequirement as evaluateRequirementChecks, verifyRequirement } from "./src/verification/verification.js";
@@ -620,8 +618,9 @@ function persistLiveContext(taskId, state, root) {
 function projectState(analysis) {
   return {
     contract: {
-      // Informativo: nunca gatea aprobación humana (0 fricción).
-      status: "APPROVED",
+      // Los contratos nuevos nacen PROPOSED: la aprobación es siempre explícita
+      // (/wam contract approve); el modo advisory no auto-aprueba.
+      status: "PROPOSED",
       rigor: analysis.completionContract?.rigor || "NORMAL",
       requirements: analysis.completionContract?.requirements || [],
       verification: analysis.completionContract?.verification || [],
@@ -887,7 +886,7 @@ const WaitAMinutePlugin = async (pluginInput) => {
   registerLogicGate("debug", { loaded: wamConfig.debug, source: "wam-config", note: "structured WAM-DEBUG traces" });
   registerLogicGate("autoLoop", { loaded: wamConfig.autoLoop, source: "wam-config", note: "automatic post-DONE continuation" });
   registerLogicGate("permissionPreflight", { loaded: wamConfig.permissionPreflight, source: "wam-config", note: "upfront access permission plan before delegation" });
-  registerLogicGate("contractApproval", { loaded: wamConfig.contractApproval === "required", source: "wam-config", note: "pauses writes until /wam contract approve" });
+  registerLogicGate("contractApproval", { loaded: wamConfig.contractApproval === "required", source: "wam-config", note: "legacy flag; writes are never paused" });
 
   // Track if plugin is bypassed
   let bypassed = false;
@@ -955,129 +954,6 @@ const WaitAMinutePlugin = async (pluginInput) => {
     });
   }
 
-  const dashboardEnabled = isDashboardEnabled();
-  try {
-    const http = await import("node:http");
-    const port = Number(process.env.WAM_DASHBOARD_PORT || process.env.PORT || 4321);
-    const server = http.createServer(async (req, res) => {
-      const url = new URL(req.url, `http://${req.headers.host}`);
-      if (url.pathname === "/api/sessions") {
-        const sessions = [];
-        for (const [sid, root] of sessionRoots.entries()) {
-          const wamRoot = sessionWamRoots.get(sid) || root;
-          const taskId = sessionTasks.get(sid) || "default-task";
-          let state = null;
-          try {
-            state = getTaskState(taskId, wamRoot);
-          } catch {}
-          sessions.push({
-            sessionID: sid,
-            root,
-            wamRoot,
-            taskId,
-            state: state || { phase: "UNKNOWN" },
-          });
-        }
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ sessions }));
-        return;
-      }
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(`<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Wait a Minute Dashboard</title>
-<style>
-body { margin: 0; font-family: system-ui, sans-serif; display: flex; height: 100vh; background: #0f172a; color: #f8fafc; }
-.sidebar { width: 320px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; }
-.sidebar h2 { padding: 16px; margin: 0; font-size: 1.1rem; border-bottom: 1px solid #334155; }
-.session-list { overflow-y: auto; flex: 1; list-style: none; padding: 0; margin: 0; }
-.session-item { padding: 12px 16px; border-bottom: 1px solid #334155; cursor: pointer; transition: background 0.2s; }
-.session-item:hover, .session-item.active { background: #334155; }
-.session-id { font-weight: bold; font-size: 0.9rem; color: #38bdf8; word-break: break-all; }
-.session-meta { font-size: 0.8rem; color: #94a3b8; margin-top: 4px; }
-.main { flex: 1; padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
-.card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; }
-h1, h3 { margin-top: 0; }
-pre { background: #0f172a; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; color: #e2e8f0; }
-.badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; background: #0284c7; color: white; }
-</style>
-</head>
-<body>
-<div class="sidebar">
-<h2>Active Sessions</h2>
-<ul id="sessions" class="session-list"></ul>
-</div>
-<div class="main">
-<div class="card">
-<h1 id="title">Select a Session</h1>
-<div id="details"><p>Choose a session from the left sidebar to inspect its active task, phase, and state details.</p></div>
-</div>
-<div class="card">
-<h3>Raw State</h3>
-<pre id="raw-state">{}</pre>
-</div>
-</div>
-<script>
-let currentSessions = [];
-let selectedSessionId = null;
-async function refresh() {
-  try {
-    const res = await fetch('/api/sessions');
-    const data = await res.json();
-    currentSessions = data.sessions || [];
-    renderList();
-    if (selectedSessionId) {
-      renderDetails(selectedSessionId);
-    } else if (currentSessions.length > 0) {
-      selectedSessionId = currentSessions[0].sessionID;
-      renderList();
-      renderDetails(selectedSessionId);
-    }
-  } catch (e) {}
-}
-function renderList() {
-  const ul = document.getElementById('sessions');
-  ul.innerHTML = currentSessions.map(s => \`
-    <li class="session-item \${s.sessionID === selectedSessionId ? 'active' : ''}" onclick="selectSession('\${s.sessionID}')">
-      <div class="session-id">\${s.sessionID}</div>
-      <div class="session-meta">Task: \${s.taskId} | Phase: <span class="badge">\${s.state?.phase || 'UNKNOWN'}</span></div>
-    </li>
-  \`).join('');
-}
-function selectSession(id) {
-  selectedSessionId = id;
-  renderList();
-  renderDetails(id);
-}
-function renderDetails(id) {
-  const s = currentSessions.find(x => x.sessionID === id);
-  if (!s) return;
-  document.getElementById('title').innerText = \`Session: \${s.sessionID}\`;
-  document.getElementById('details').innerHTML = \`
-    <p><strong>Root Directory:</strong> \${s.root}</p>
-    <p><strong>WAM Root:</strong> \${s.wamRoot}</p>
-    <p><strong>Active Task ID:</strong> \${s.taskId}</p>
-    <p><strong>Current Phase:</strong> <span class="badge">\${s.state?.phase || 'UNKNOWN'}</span></p>
-    <p><strong>Contract:</strong> \${s.state?.contract ? JSON.stringify(s.state.contract, null, 2) : 'None'}</p>
-  \`;
-  document.getElementById('raw-state').innerText = JSON.stringify(s, null, 2);
-}
-setInterval(refresh, 2000);
-refresh();
-</script>
-</body>
-</html>`);
-    });
-    if (dashboardEnabled) {
-      server.listen(port, () => {
-        console.log(`[WaitAMinute] Dashboard running at http://localhost:${port}`);
-      }).on("error", (err) => {
-        console.log(`[WaitAMinute] Dashboard server failed to start:`, err.message);
-      });
-    }
-  } catch (e) {}
 
   async function resolveSessionBase(sessionID) {
     if (sessionRoots.has(sessionID)) return sessionRoots.get(sessionID);
@@ -1228,11 +1104,6 @@ refresh();
       return;
     }
 
-    if (shouldPauseForContractApproval({ contractApproval: cfg.contractApproval, state: preState })) {
-      wamDebug(`[wait-a-minute] task loop paused until contract approval for ${taskId}`);
-      return { reason: "contract-not-approved" };
-    }
-
     if (!skipAgent && cfg.taskLoop.agents?.enabled) {
       if (agentRunInFlight.has(taskId)) return { reason: "in-flight" };
       const passPromise = runTaskAgentPass(sessionID, { root, taskId });
@@ -1279,7 +1150,6 @@ refresh();
       if (!taskId) return;
       const state = getTaskState(taskId, root);
       if (!state || state.phase === "DONE") return;
-      if (shouldPauseForContractApproval({ contractApproval: cfg.contractApproval, state })) return;
       const gate = evaluateCompletionGate(state, "", { enforce: cfg.completionGate?.enforce === true });
       if (!gate.advisory && !gate.blocked) return;
       if (!client?.session?.messages || !client?.session?.prompt) return;
@@ -1607,7 +1477,6 @@ async function postToolExecution(input, output) {
         readLiveContext,
         persistLiveContext,
         assembleContext,
-        selectContextWithCqe,
         createSnapshot,
         checkContinuation,
         rebuildScope,
@@ -1625,7 +1494,6 @@ async function postToolExecution(input, output) {
         getCapsule,
         promoteCapsule,
         selectContext,
-        selectContextWithCqe,
         retrieveContext,
         closeSession,
         resolveWamRoot,
@@ -1816,15 +1684,10 @@ async function postToolExecution(input, output) {
 const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot);
           wamDebug("risk-envelope", `evaluateAction(${tool}) -> level=${risk.level}`, { reason: risk.reason, tool, enforcement: cfg.enforcement });
         if (risk.level === "BLOCKED") {
-          // Zero friction: una tool no catalogada es advisory, igual que guardAction.
-          const uncatalogued = /no catalogada|no catalogued/i.test(risk.reason || "");
-          const directive = uncatalogued
-            ? `[wait-a-minute] Recomendación (${tool}): herramienta no catalogada; WAM no bloquea, continuá si es no destructiva.`
-            : `[wait-a-minute] Recomendación (${tool}): ${risk.reason || "acción fuera del envelope de riesgo"}. Bloqueo solo con WAM_STRICT_BLOCK=1.`;
+          // Zero friction: the risk envelope only recommends. Irreversible
+          // operations are stopped earlier by the runtime guards.
+          const directive = `[wait-a-minute] Recomendación (${tool}): ${risk.reason || "acción fuera del envelope de riesgo"}; continúo.`;
           queueToolDirective(input, directive);
-          if (!uncatalogued && process.env.WAM_STRICT_BLOCK === "1") {
-            throw new WamPolicyBlock(directive, { tool, reason: risk.reason, level: risk.level });
-          }
           wamLog(`[wait-a-minute] ADVISORY (${tool}): ${directive}`);
         }
 
@@ -1841,31 +1704,7 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
         // (fail-open), override explícito (WAM_GOVERNANCE=off), fase terminal,
         // ASKING, y cambios triviales declarados.
         const isSubagent = sessionParents.has(sid);
-        const isWamAgent = /^WAM\s+[A-Z]+\b/.test(sessionTitles.get(sid) || "");
         const toolArgs = input?.args || input?.parameters || output?.args || {};
-        const pathCheck = checkToolPath({ tool, args: toolArgs, projectRoot: taskRoot, isChild: isSubagent });
-        if (!pathCheck.allowed) {
-          wamWarn(`[wait-a-minute] rejected ${tool} path outside project root: ${pathCheck.path}`);
-          throw new Error(`[wait-a-minute] tool path outside project root rejected: ${pathCheck.path}`);
-        }
-        if (shouldBlockForPendingPermission({ tool, enforce: cfg.permissionEnforce === true, plan: st?.permissionPreflight })) {
-          wamWarn(`[wait-a-minute] blocked ${tool}: permission preflight is pending`);
-          throw new Error(`[wait-a-minute] blocked ${tool}: permission preflight pending; approve permissions first (/wam permissions approve)`);
-        }
-        if (
-          !isWamAgent &&
-          isExecutionGateActive(st) &&
-          isMutatingToolCall(tool, input?.args || input?.parameters || output?.args || {})
-        ) {
-          const directive = executionGateDirective(st.executionGate);
-          queueToolDirective(input, directive);
-          throw new WamPolicyBlock(directive, {
-            tool,
-            reason: "agent-execution-gate",
-            level: "BLOCKED",
-            source: "early-agent-loop",
-          });
-        }
         try {
           const contractFiles = st?.contract?.files || st?.contract?.declaredFiles || [];
           const declaredFiles = contractFiles.length ? contractFiles : targetFilesOf(input);
@@ -1884,17 +1723,10 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
               declaredFiles,
               args: toolArgs,
               enforcementEnabled: cfg.enforcement !== false,
-              requireApproval: cfg.contractApproval === "required",
             });
             if (governance.allowed === false) {
-              const block = new WamPolicyBlock(governance.directive || governance.reason, {
-                tool,
-                reason: governance.reason,
-                level: "BLOCKED",
-                source: "contract-approval",
-              });
-              block.wamHardBlock = true;
-              throw block;
+              // Workflow approvals are advisory: never abort a write.
+              queueToolDirective(input, governance.directive || governance.reason);
             }
             wamDebug("governance", `enforceGovernance(${tool}) -> ALLOWED`, { isSubagent, phase: st?.phase, enforcement: cfg.enforcement });
           } catch (err) {
@@ -1926,10 +1758,11 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
             }
          }
 
-          // CQE-first discovery: bash usado para buscar archivos/patrones/
-          // estructuras va a CQE (más rápido que shell). Nativo y habilitado
-          // por defecto en modo aviso (warn); WAM_READ_DELEGATION=off lo
-          // silencia, =enforce lo bloquea. Soft nunca interrumpe la herramienta.
+          // Discovery nudge: bash usado para buscar archivos/patrones/
+          // estructuras conviene reemplazarlo por herramientas nativas
+          // (grep/glob/read/tgrep). Habilitado por defecto en modo aviso
+          // (warn); WAM_READ_DELEGATION=off lo silencia, =enforce lo bloquea.
+          // Soft nunca interrumpe la herramienta.
           if (tool === "bash" || tool === "sh") {
             try {
               const disc = evaluateDiscovery(tool, input?.args || input?.parameters || output?.args || {});
@@ -1938,7 +1771,7 @@ const risk = evaluateAction(tool, input.args || input.parameters || {}, taskRoot
                 // 0 fricción: enforce ya no bloquea; el nudge es advisory.
                 if (mode !== "off") {
                   queueToolDirective(input, disc.nudge);
-                  wamLog(`[wait-a-minute] CQE-FIRST NUDGE (${tool}): ${disc.nudge}`);
+                  wamLog(`[wait-a-minute] DISCOVERY NUDGE (${tool}): ${disc.nudge}`);
                 }
               }
             } catch (err) {
@@ -2231,10 +2064,6 @@ const sel = routeSkillsV2(prompt, {}, waitAMinute.getRegistry(), "STANDARD");
     return "Uso: /wam contract <approve|reject|edit <json>>";
   }
 
-  if (sub === "resume") {
-    return JSON.stringify(waitAMinute.resumeTask(action || taskId, root, sessionID));
-  }
-
   if (sub === "strategy") {
     if (action === "set") {
       const scope = rest.join(" ").trim();
@@ -2389,13 +2218,9 @@ const sel = routeSkillsV2(prompt, {}, waitAMinute.getRegistry(), "STANDARD");
     if (action === "get") {
       const q = stripWrappingQuotes(rest.join(" "));
       if (!q) return "Uso: /wam ctx get <query>";
-      const r = await retrieveContextWithCqe(q, { root });
+      const r = retrieveContext(q, { root });
       if (r.ok && r.capsules) {
         return r.capsules.map((h) => `[${h.capsule.level}] ${h.capsule.context_id} (rel ${h.relevance.toFixed(2)}) ${(h.capsule.purpose || "").slice(0, 80)}`).join("\n");
-      }
-      if (r.items?.length) {
-        const prefix = r.source === "wam-native" ? "[wam-native]" : "[cqe]";
-        return r.items.map((it) => `${prefix} ${it.path}:${it.startLine ?? "?"} (rel ${typeof it.score === "number" ? it.score.toFixed(2) : "?"}) ${String(it.content || "").replace(/\s+/g, " ").trim().slice(0, 120)}`).join("\n");
       }
       return r.message;
     }
@@ -2657,9 +2482,12 @@ const waitAMinute = {
         lastAction: existing.lastAction,
         nextAction: nextActionFrom(existing),
       };
-      if (merged.contract?.status === "APPROVED" && merged.phase === "PROPOSED") {
+      // Advisory: the work continues without an approval step.
+      if (merged.phase === "PROPOSED") {
         merged.phase = "IMPLEMENTING";
-        merged.nextAction = "Implementar requisitos del contrato aprobado";
+        merged.nextAction = merged.contract?.status === "APPROVED"
+          ? "Contrato aprobado — implementar requisitos"
+          : "Implementar requisitos del contrato";
       }
       persistTaskState(taskId, merged, root);
       return merged;
@@ -2681,22 +2509,16 @@ const waitAMinute = {
       if (fresh.contract) fresh.contract.requirements = kept.map((r) => r.title);
     }
     // No persistir un contrato PROPOSED sin requisitos: dejaría un contrato
-    // tracked con 0 pendientes y sin declared files, lo que bloquea write/edit
-    // (fail-closed) sin nada que aprobar. Untracked hasta tener >=1 requisito.
+    // tracked con 0 pendientes y sin declared files, sin trabajo real.
     if (!fresh.requirements || fresh.requirements.length === 0) {
       return fresh;
     }
-    const requireApproval = options.requireApproval === true;
-    const trivial = analysis?.intent?.classification === "trivial" || analysis?.strategy === "FAST";
-    if (requireApproval && !trivial) {
-      fresh.contract = { ...(fresh.contract || {}), status: "PROPOSED" };
-      fresh.nextAction = "Mostrar plan al usuario y esperar /wam contract approve (no ejecutar todavía)";
-      persistTaskState(taskId, fresh, root);
-      return fresh;
-    }
-    const bootstrapped = applyBootstrapApproval(fresh, taskId, root);
-    persistTaskState(taskId, bootstrapped, root);
-    return bootstrapped;
+    // Contract status is informational: the task advances without an approval step.
+    fresh.contract = { ...(fresh.contract || {}), status: "PROPOSED" };
+    fresh.phase = "IMPLEMENTING";
+    fresh.nextAction = "Revisar contrato — /wam contract approve o edit";
+    persistTaskState(taskId, fresh, root);
+    return fresh;
   },
    /**
     * Completion Gate: detecta claims de fin de tarea y bloquea si hay requisitos pendientes.
@@ -2741,19 +2563,6 @@ const waitAMinute = {
   approveContract: function(taskId, root) {
     const state = getTaskState(taskId, root);
     if (!state) return { ok: false, reason: "Sin estado de tarea" };
-    const blocking = (state.contract?.unknowns || []).filter((u) => u.status === "blocking");
-    if (blocking.length > 0) {
-      return { ok: false, reason: `${blocking[0].id} DECISION_CRITICAL sin responder (bloquea aprobación): ${blocking[0].question}` };
-    }
-    const blockingAssumptions = (state.contract?.assumptions || []).filter(
-      (a) => a.classification === "DECISION_CRITICAL" && a.status !== "resolved"
-    );
-    if (blockingAssumptions.length > 0) {
-      return {
-        ok: false,
-        reason: `${blockingAssumptions[0].id} DECISION_CRITICAL sin resolver (bloquea aprobación): ${blockingAssumptions[0].statement} — /wam resolve ${blockingAssumptions[0].id} <evidencia>`,
-      };
-    }
     state.contract = { ...(state.contract || {}), status: "APPROVED" };
     if (state.phase !== "DONE") state.phase = "IMPLEMENTING";
     state.nextAction = nextActionFrom(state);
@@ -3071,7 +2880,7 @@ if (emit !== false && ctx) {
         ...(analysis.phase ? { phase: analysis.phase } : {}),
       };
 
-      // Inyectar contrato/directiva vía emitTextPart para garantizar prefijo [wam] y metadata.wam=true
+      // Inyectar contrato/directiva vía emitTextPart para garantizar prefijo [wam] y metadata.wam (provider-safe)
       if (Array.isArray(ctx.parts) || Array.isArray(ctx.system) ||
           Array.isArray(ctx?.message?.parts) || Array.isArray(ctx?.message?.system)) {
         emitTextPart(ctx, text, emitMeta);

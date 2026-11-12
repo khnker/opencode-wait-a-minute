@@ -96,7 +96,7 @@ message.updated (assistant, finished)
   `/home/nicolas/wam-pw-e2e`):
   - blocked DONE rendered `[wam] ⛔ … Completitud bloqueada` in the session
     body; the API shows it on the assistant message with `synthetic: true`,
-    `metadata.wam: true`, `metadata.wamPhase: "visible-notice"`;
+    `metadata.wam.synthetic: true`, `metadata.wam.phase: "visible-notice"`;
   - allowed DONE rendered `[wam] ✅ … Tarea completada` the same way.
   The model's own reply stayed separate, and the user prompt bubble was
   unchanged.

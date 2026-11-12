@@ -46,7 +46,7 @@ throws if a referenced variable is missing. Names allowed: `[A-Za-z0-9_.-]`.
 ```js
 import { loadPrompt } from "../prompts/loader.js";
 
-return loadPrompt("notice.pending_task", { active, phase: st.phase });
+return loadPrompt("notice.similar_task", { taskId });
 ```
 
 ## API (`src/prompts/loader.js`)
@@ -93,15 +93,15 @@ current prompt (base) against your candidate over **fixed inputs** so the result
 is reproducible.
 
 Fixtures live in `prompts/fixtures/<slug>.json` where `slug` is the prompt id
-with `.` replaced by `__` (e.g. `notice.pending_task` →
-`notice__pending_task.json`). Every registered prompt MUST have a fixture; a
+with `.` replaced by `__` (e.g. `notice.similar_task` →
+`notice__similar_task.json`). Every registered prompt MUST have a fixture; a
 test enforces 100% coverage. Schema:
 
 ```json
 {
-  "id": "notice.pending_task",
-  "vars": { "active": "task-1", "phase": "RUNNING" },
-  "mustContain": ["tarea pendiente: task-1", "no asumo intención"],
+  "id": "notice.similar_task",
+  "vars": { "taskId": "task-1" },
+  "mustContain": ["Tarea similar detectada: task-1"],
   "mustNotContain": []
 }
 ```
@@ -114,8 +114,8 @@ Usage:
 
 ```bash
 npm run prompts:diff                              # every prompt, base vs base (no-op)
-npm run prompts:diff -- --id notice.pending_task  # one id
-npm run prompts:diff -- --id notice.pending_task --candidate /tmp/candidate.md
+npm run prompts:diff -- --id notice.similar_task  # one id
+npm run prompts:diff -- --id notice.similar_task --candidate /tmp/candidate.md
 npm run prompts:diff -- --json                    # { results, summary }
 npm run prompts:diff -- --eval                    # opt-in real-model (not configured; skipped)
 ```

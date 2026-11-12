@@ -36,7 +36,7 @@ const EXCLUDED_DIRNAMES = new Set([
   "upstream",
 ]);
 const EXCLUDED_REL_PREFIXES = ["benchmarks/artifact-outcome"];
-// Any directory whose name starts with "." is skipped (.git, .wam, .cqe, .tgrep, ...).
+// Any directory whose name starts with "." is skipped (.git, .wam, .tgrep, ...).
 
 /**
  * Explicit deterministic classification patterns. A raw literal matching any of

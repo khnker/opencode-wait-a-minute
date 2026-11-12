@@ -346,27 +346,6 @@ export function applyPhaseTransition(state, gate) {
 export function approveContractLogic(state) {
   if (!state) return { ok: false, reason: "Sin estado de tarea" };
 
-  const blocking = (state.contract?.unknowns || []).filter(
-    (u) => u.status === "blocking"
-  );
-  if (blocking.length > 0) {
-    return {
-      ok: false,
-      reason: `${blocking[0].id} DECISION_CRITICAL sin responder (bloquea aprobación): ${blocking[0].question}`,
-    };
-  }
-
-  const blockingAssumptions = (state.contract?.assumptions || []).filter(
-    (a) =>
-      a.classification === "DECISION_CRITICAL" && a.status !== "resolved"
-  );
-  if (blockingAssumptions.length > 0) {
-    return {
-      ok: false,
-      reason: `${blockingAssumptions[0].id} DECISION_CRITICAL sin resolver (bloquea aprobación): ${blockingAssumptions[0].statement} — /wam resolve ${blockingAssumptions[0].id} <evidencia>`,
-    };
-  }
-
   const inferredStrategy =
     (state.contract?.objective ||
       state.intent?.goal ||

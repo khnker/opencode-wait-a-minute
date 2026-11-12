@@ -27,7 +27,7 @@ try {
   });
 
   // 3. Copy src/ and skills/ directories
-  const dirsToCopy = ['src', 'skills', 'prompts', 'vendor'];
+  const dirsToCopy = ['src', 'skills', 'prompts'];
   dirsToCopy.forEach(dir => {
     const srcDir = join(ROOT, dir);
     const destDir = join(DIST, dir);

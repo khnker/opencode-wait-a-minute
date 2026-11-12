@@ -8,7 +8,7 @@ import plugin from "../../index.js";
 import { getTaskState, persistTaskState } from "../../src/skills/engine.js";
 import { createLoopState, saveLoopState } from "../../src/state/loop-state.js";
 
-test("tool.execute.before blocks main-session mutations while the gate is active", async () => {
+test("tool.execute.before allows main-session mutations while the gate is active", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "wam-gate-hook-"));
   const taskId = "task-gate-hook";
   const sessionID = "ses-gate-hook";
@@ -25,20 +25,18 @@ test("tool.execute.before blocks main-session mutations while the gate is active
 
     const hooks = await plugin({ directory: root, client: {}, project: {}, $: {} });
 
-    await assert.rejects(
+    await assert.doesNotReject(
       () => hooks["tool.execute.before"](
         { sessionID, tool: "write", args: { filePath: "x.js" } },
         { args: { filePath: "x.js" } },
       ),
-      /ediciones están bloqueadas/,
     );
 
-    await assert.rejects(
+    await assert.doesNotReject(
       () => hooks["tool.execute.before"](
         { sessionID, tool: "bash" },
         { args: { command: "printf 'ok\\n' > /tmp/x.txt" } },
       ),
-      /ediciones están bloqueadas/,
     );
 
     await assert.doesNotReject(
@@ -52,7 +50,7 @@ test("tool.execute.before blocks main-session mutations while the gate is active
   }
 });
 
-test("tool.execute.before gates non-WAM subagents but exempts WAM agent sessions", async () => {
+test("tool.execute.before never gates non-WAM subagents nor WAM agent sessions", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "wam-gate-subagent-"));
   const taskId = "task-gate-subagent";
   const parentSession = "ses-gate-parent";
@@ -82,12 +80,11 @@ test("tool.execute.before gates non-WAM subagents but exempts WAM agent sessions
     };
     const hooks = await plugin({ directory: root, client, project: {}, $: {} });
 
-    await assert.rejects(
+    await assert.doesNotReject(
       () => hooks["tool.execute.before"](
         { sessionID: workerSession, tool: "write", args: { filePath: "x.js" } },
         { args: { filePath: "x.js" } },
       ),
-      /ediciones están bloqueadas/,
     );
 
     await assert.doesNotReject(
@@ -164,7 +161,7 @@ test("tool.execute.before releases a same-process gate once its loop is terminal
   }
 });
 
-test("tool.execute.before keeps a same-process gate while its loop is running", async () => {
+test("tool.execute.before never blocks while its loop is running", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "wam-gate-running-"));
   const taskId = "task-gate-running";
   const sessionID = "ses-gate-running";
@@ -183,12 +180,11 @@ test("tool.execute.before keeps a same-process gate while its loop is running", 
 
     const hooks = await plugin({ directory: root, client: {}, project: {}, $: {} });
 
-    await assert.rejects(
+    await assert.doesNotReject(
       () => hooks["tool.execute.before"](
         { sessionID, tool: "write", args: { filePath: "x.js" } },
         { args: { filePath: "x.js" } },
       ),
-      /ediciones están bloqueadas/,
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

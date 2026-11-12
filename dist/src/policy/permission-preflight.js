@@ -139,15 +139,6 @@ export function decidePermission(_request = {}) {
  * @param {object|null} [options.plan]
  * @returns {boolean}
  */
-export function shouldBlockForPendingPermission({ tool, enforce = false, plan } = {}) {
-  if (!enforce || !plan || plan.status !== "pending") return false;
-  const mutating = new Set(["write", "edit", "bash", "sh", "pty_spawn", "task", "todowrite"]);
-  if (!mutating.has(tool)) return false;
-  const required = new Set((plan.required || []).map((r) => r?.type).filter(Boolean));
-  const needed = tool === "bash" || tool === "sh" ? "bash" : "edit";
-  return required.has(needed);
-}
-
 /** Delegation never blocks; an ungranted plan only yields a recommendation. */
 export function delegationBlocked(state) {
   const plan = state?.permissionPreflight || null;

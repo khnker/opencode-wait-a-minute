@@ -407,11 +407,16 @@ test("exhausted WAIT_USER surfaces once and persists the marker", async (t) => {
   assert.equal(calls.length, 1);
 });
 
-test("non-agent WAIT_USER surfaces on the transition only", async (t) => {
+test("agent WAIT_USER surfaces on the transition only", async (t) => {
   const root = tmpRoot(t);
   const sid = "ses-contract";
   const calls = [];
-  const task = { state: "PROPOSED", contract: { status: "PROPOSED" } };
+  const task = {
+    state: "EXECUTING",
+    requirements: [{ id: "req-1", status: "pending" }],
+    agentRun: { status: "BLOCKED" },
+  };
+  const agent = { status: "BLOCKED" };
   let loop = createLoopState({ taskId: "task-2", sessionId: sid });
 
   const run = () =>
@@ -421,6 +426,7 @@ test("non-agent WAIT_USER surfaces on the transition only", async (t) => {
       sessionId: sid,
       client: fakeClient(calls),
       config: CONFIG,
+      agent,
       deps: {
         loadTask: () => task,
         evaluateGate: () => ({ ok: false, pending: [] }),
@@ -434,7 +440,7 @@ test("non-agent WAIT_USER surfaces on the transition only", async (t) => {
 
   const first = run();
   assert.equal(first.decision, "WAIT_USER");
-  assert.equal(first.reason, "contract-not-approved");
+  assert.equal(first.reason, "agent-blocked");
   assert.equal(first.prompted, true);
   assert.equal(calls.length, 1);
 
@@ -622,7 +628,7 @@ test("repeated failed agent passes do not re-surface WAIT_USER", async (t) => {
   assert.equal(calls.length, 1);
 });
 
-test("approved contract ignores a pending authorization", (t) => {
+test("pending authorization is never bypassed by an approved contract", (t) => {
   const root = tmpRoot(t);
   const sid = "ses-auth-approved";
 
@@ -631,6 +637,7 @@ test("approved contract ignores a pending authorization", (t) => {
     taskId: "task-auth-approved",
     sessionId: sid,
     config: CONFIG,
+    agent: null,
     deps: {
       loadTask: () => ({
         state: "EXECUTING",
@@ -647,8 +654,8 @@ test("approved contract ignores a pending authorization", (t) => {
     },
   });
 
-  assert.equal(out.decision, "CONTINUE");
-  assert.equal(out.reason, "work-remaining");
+  assert.equal(out.decision, "WAIT_AUTHORIZATION");
+  assert.equal(out.reason, "authorization-pending");
 });
 
 test("pending authorization re-surfaces after the user turn resets the marker", async (t) => {

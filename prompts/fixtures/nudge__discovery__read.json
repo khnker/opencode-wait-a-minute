@@ -2,9 +2,8 @@
   "id": "nudge.discovery.read",
   "vars": {},
   "mustContain": [
-    "'read' tool",
-    "context-query-engine",
-    "raw bash file reading"
+    "native Read tool",
+    "raw bash cat/head/tail/sed"
   ],
   "mustNotContain": []
 }

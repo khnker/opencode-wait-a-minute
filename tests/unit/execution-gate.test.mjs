@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  executionGateDirective,
   isExecutionGateActive,
   isExecutionGateStale,
   isMutatingToolCall,
@@ -30,14 +29,41 @@ test("blocks mutating shell commands", () => {
   assert.equal(isMutatingToolCall("bash", { command: "rm -f f" }), true);
 });
 
+test("ignores shell-like text inside quotes", () => {
+  const sql =
+    "docker exec comparador-postgres psql -U comparador -d comparador_serving -At " +
+    "-c \"WITH f AS (SELECT 1) SELECT count(*) FROM f WHERE jsonb_array_length(x) >= 2 AND a||b = c;\"";
+  assert.equal(isMutatingToolCall("bash", { command: sql }), false);
+  assert.equal(isMutatingToolCall("bash", { command: "psql -c 'SELECT cp.id FROM t cp'" }), false);
+  assert.equal(isMutatingToolCall("bash", { command: 'echo "rm -rf x > y"' }), false);
+  assert.equal(isMutatingToolCall("bash", { command: 'grep -rn "a>b" src' }), false);
+});
+
+test("ignores heredoc bodies", () => {
+  const command = "psql <<'SQL'\nSELECT 1 WHERE n >= 2;\nSQL";
+  assert.equal(isMutatingToolCall("bash", { command }), false);
+});
+
+test("blocks real operators, wrappers and nested shells", () => {
+  assert.equal(isMutatingToolCall("bash", { command: "echo hi >> f" }), true);
+  assert.equal(isMutatingToolCall("bash", { command: "echo hi >| f" }), true);
+  assert.equal(isMutatingToolCall("bash", { command: "sudo rm -f f" }), true);
+  assert.equal(isMutatingToolCall("bash", { command: "sed -i.bak s/a/b/ f" }), true);
+  assert.equal(isMutatingToolCall("bash", { command: "perl -pi -e 's/a/b/' f" }), true);
+  assert.equal(isMutatingToolCall("bash", { command: 'bash -c "rm -rf build"' }), true);
+  assert.equal(isMutatingToolCall("bash", { command: 'sh -lc "npm install"' }), true);
+  assert.equal(isMutatingToolCall("bash", { command: "git stash pop" }), true);
+});
+
+test("ignores harmless redirects", () => {
+  assert.equal(isMutatingToolCall("bash", { command: "cmd 2>/dev/null" }), false);
+  assert.equal(isMutatingToolCall("bash", { command: "cmd 2>&1" }), false);
+  assert.equal(isMutatingToolCall("bash", { command: "git stash list" }), false);
+});
+
 test("detects an active gate and renders a directive", () => {
   assert.equal(isExecutionGateActive({ executionGate: { active: true } }), true);
   assert.equal(isExecutionGateActive({ executionGate: { active: false } }), false);
-  assert.match(
-    executionGateDirective({ reason: "analysis-loop" }),
-    /pipeline de análisis read-only/,
-  );
-  assert.match(executionGateDirective({ reason: "agent-loop" }), /loop de agentes/);
 });
 
 test("clears an active gate only when no pass is in flight", () => {

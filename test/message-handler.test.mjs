@@ -99,7 +99,6 @@ const baseDeps = () => ({
   readLiveContext: () => "",
   persistLiveContext: noop,
   assembleContext: () => ({ lines: [], budget_used: 0, budget: 4000, levels: {} }),
-  selectContextWithCqe: async () => ({}),
   createSnapshot: noop,
   checkContinuation: () => ({ status: "VALID" }),
   rebuildScope: () => ({ rebuildN1: false, rebuildN3: false }),
@@ -246,97 +245,6 @@ test("handleMessage: DONE con contrato APPROVED y todo verificado no toma el fas
   assert.equal(transitioned, true, "un DONE verificado debe pasar por la transición de fase");
 });
 
-test("handleMessage: cqe file_context → actualiza cqeCalls y persiste estado", async () => {
-  const deps = baseDeps();
-  deps.selectContextWithCqe = async () => ({
-    file_context: [{ path: "src/x.js", snippet: "const x = 1;" }],
-    cqeMeta: { elapsedMs: 1, source: "cqe" },
-  });
-  deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: false });
-
-  const out = { message: {}, parts: [] };
-  await handleMessage(
-    {
-      sessionID: "s-cqe",
-      messageID: "m-cqe",
-      message: { parts: [{ type: "text", text: "search for parseConfig definitions" }] },
-    },
-    out,
-    deps,
-  );
-
-  const state = getTaskState(deps.sessionTasks.get("s-cqe") || "t-cqe", ROOT);
-  assert.equal(state.cqeCalls, 1);
-});
-
-test("handleMessage: prompt sin intención de búsqueda también consulta CQE", async () => {
-  const deps = baseDeps();
-  deps.selectContextWithCqe = async () => ({
-    file_context: [{ path: "src/master.js", snippet: "export function computeTotal() {}" }],
-    cqeMeta: { elapsedMs: 1, source: "cqe" },
-  });
-  deps.detectFileSearchIntent = () => false;
-  deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: false });
-
-  const out = { message: {}, parts: [] };
-  await handleMessage(
-    {
-      sessionID: "s-cqe-nosearch",
-      messageID: "m-cqe-nosearch",
-      message: { parts: [{ type: "text", text: "explain how computeTotal works" }] },
-    },
-    out,
-    deps,
-  );
-
-  const state = getTaskState(deps.sessionTasks.get("s-cqe-nosearch") || "t-cqe-nosearch", ROOT);
-  assert.equal(state.cqeCalls, 1);
-});
-
-test("handleMessage: cqe sin resultados → también cuenta la llamada", async () => {
-  const deps = baseDeps();
-  deps.selectContextWithCqe = async () => ({
-    file_context: [],
-    cqeMeta: { elapsedMs: 1, source: null, fallbackUsed: true, fallbackReason: "sin resultados" },
-  });
-  deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: false });
-
-  const out = { message: {}, parts: [] };
-  await handleMessage(
-    {
-      sessionID: "s-cqe-empty",
-      messageID: "m-cqe-empty",
-      message: { parts: [{ type: "text", text: "search for parseConfig definitions" }] },
-    },
-    out,
-    deps,
-  );
-
-  const state = getTaskState(deps.sessionTasks.get("s-cqe-empty") || "t-cqe-empty", ROOT);
-  assert.equal(state.cqeCalls, 1);
-  assert.ok(out.parts.some((p) => String(p.text || "").includes("sin resultados")));
-});
-
-test("handleMessage: disableCqe → no incrementa cqeCalls", async () => {
-  const deps = baseDeps();
-  deps.cfg.disableCqe = true;
-  deps.selectContextWithCqe = async () => ({ file_context: [] });
-  deps.waitAMinute.evaluateCompletionGate = () => ({ blocked: false, allDone: false });
-
-  const out = { message: {}, parts: [] };
-  await handleMessage(
-    {
-      sessionID: "s-cqe-off",
-      messageID: "m-cqe-off",
-      message: { parts: [{ type: "text", text: "search for parseConfig definitions" }] },
-    },
-    out,
-    deps,
-  );
-
-  const state = getTaskState(deps.sessionTasks.get("s-cqe-off") || "t-cqe-off", ROOT);
-  assert.equal(state?.cqeCalls || 0, 0);
-});
 
 test("handleMessage: bypassed=true → no-op", async () => {
   const deps = baseDeps();

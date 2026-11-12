@@ -1,0 +1,10 @@
+{
+  "id": "nudge.discovery.edit",
+  "vars": {},
+  "mustContain": [
+    "Edit/Write",
+    "sed -i",
+    "awk writing to files"
+  ],
+  "mustNotContain": []
+}

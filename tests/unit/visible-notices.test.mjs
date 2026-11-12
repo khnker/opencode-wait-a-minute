@@ -54,7 +54,7 @@ test("buildVisibleNoticePart tags a synthetic text part", () => {
   assert.equal(part.synthetic, true);
   assert.equal(part.sessionID, "s1");
   assert.equal(part.messageID, "m1");
-  assert.equal(part.metadata.wam, true);
+  assert.equal(part.metadata.wam.phase, "visible-notice");
 });
 
 test("updateVisibleNoticePart prefers the v2 part endpoint", async () => {

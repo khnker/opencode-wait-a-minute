@@ -46,20 +46,20 @@ test("non-gated tools never throw (bash/read/task)", () => {
   assert.doesNotThrow(() => enforceGovernance("task", draft));
 });
 
-test("required mode gates mutating bash but not read-only bash", () => {
-  const blocked = enforceGovernance("bash", draft, {
+test("required mode never gates on contract approval", () => {
+  const destructive = enforceGovernance("bash", draft, {
     requireApproval: true,
     args: { command: "rm -rf src" },
   });
-  assert.equal(blocked.allowed, false);
-  assert.equal(blocked.reason, "contract-not-approved");
+  if (!destructive.allowed) {
+    assert.notEqual(destructive.reason, "contract-not-approved");
+  }
 
   const install = enforceGovernance("bash", draft, {
     requireApproval: true,
     args: { command: "npm install left-pad" },
   });
-  assert.equal(install.allowed, false);
-  assert.equal(install.reason, "contract-not-approved");
+  assert.equal(install.allowed, true);
 
   for (const command of ["git status", "git diff", "npm test", "grep -R foo src"]) {
     assert.doesNotThrow(() =>
@@ -168,7 +168,7 @@ test("correction flow is never blocked by contract approval", () => {
   assert.equal(decision.reason, "correction-flow");
 });
 
-test("development flow still blocks when approval is required", () => {
+test("development flow never blocks on contract approval", () => {
   const dev = {
     phase: "PROPOSED",
     contract: { status: "PROPOSED" },
@@ -176,6 +176,5 @@ test("development flow still blocks when approval is required", () => {
     lastAction: "implementa el nuevo panel",
   };
   const decision = enforceGovernance("edit", dev, { requireApproval: true });
-  assert.equal(decision.allowed, false);
-  assert.equal(decision.reason, "contract-not-approved");
+  assert.equal(decision.allowed, true);
 });

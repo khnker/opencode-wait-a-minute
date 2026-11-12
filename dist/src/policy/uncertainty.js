@@ -104,8 +104,8 @@ export function escalateAssumptions(state, taskText = "") {
           : "NON_BLOCKING";
       if (cls === "DECISION_CRITICAL") {
         a.classification = cls;
-        a.status = "blocking";
-        const existing = unknowns.find((u) => u.status === "blocking" && !u.assumptionId);
+        a.status = "advisory";
+        const existing = unknowns.find((u) => !u.assumptionId);
         if (existing) {
           existing.assumptionId = a.id;
         } else if (!unknowns.some((u) => u.assumptionId === a.id)) {
@@ -115,7 +115,7 @@ export function escalateAssumptions(state, taskText = "") {
               id: `U${unknowns.length + 1}`,
               kind: "ASSUMED",
               question: loadPrompt("question.escalation", { statement: a.statement }),
-              status: "blocking",
+              status: "advisory",
               assumptionId: a.id,
             },
           ];

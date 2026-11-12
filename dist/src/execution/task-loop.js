@@ -1,6 +1,6 @@
 /** Task loop — pure, deterministic controller for execution-loop decisions. */
 import { migrateLegacyPhase } from "./execution-state.js";
-import { WAM_META } from "../integration/part-provenance.js";
+import { wamMetadata } from "../integration/part-provenance.js";
 import { isRetryableAgentError } from "./task-agent-run.js";
 
 export const TASK_LOOP_DECISIONS = Object.freeze([
@@ -19,12 +19,6 @@ export const TASK_LOOP_DECISIONS = Object.freeze([
  * Required contract approval pauses the autonomous loop until the user
  * approves. Fail open when no contract exists: there is nothing to approve.
  */
-export function shouldPauseForContractApproval({ contractApproval, state } = {}) {
-  if (contractApproval !== "required") return false;
-  if (!state || !state.contract) return false;
-  return state.contract.status !== "APPROVED";
-}
-
 const ACTIONABLE = new Set(["CONTINUE", "REPLAN", "VERIFY"]);
 
 export function decideAgentLoopAction(agent) {
@@ -184,12 +178,9 @@ export function decideNextAction({
   } else if (authorization.denied === true) {
     decision = "BLOCK";
     reason = "authorization-denied";
-  } else if (authorization.pendingAuth && authorization.contractApproved !== true) {
+  } else if (authorization.pendingAuth) {
     decision = "WAIT_AUTHORIZATION";
     reason = "authorization-pending";
-  } else if (authorization.contractApproved === false) {
-    decision = "WAIT_USER";
-    reason = "contract-not-approved";
   } else if (taskState === "BLOCKED" || task.blocked) {
     decision = "BLOCK";
     reason = "task-blocked";
@@ -279,7 +270,7 @@ export function buildTaskLoopPrompt(result = {}) {
     lines.push("Next: resolve the block or reply with new instructions.");
   } else if (next.type === "stop") {
     lines.push(`Stopped: ${next.reason || result.stopReason || "unknown"}`);
-    lines.push("Next: reply with a concrete change or resume command to continue.");
+    lines.push("Next: send the new evidence or correction and the loop will continue.");
   } else if (next.type) {
     lines.push(`Next: ${next.type}`);
   }
@@ -290,7 +281,7 @@ export function buildTaskLoopPrompt(result = {}) {
         type: "text",
         text: lines.join("\n"),
         synthetic: true,
-        metadata: { [WAM_META]: true },
+        metadata: wamMetadata(),
       },
     ],
   };

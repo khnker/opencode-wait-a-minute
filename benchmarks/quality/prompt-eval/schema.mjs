@@ -1,7 +1,7 @@
 /**
  * Schema + hand-rolled validators for the prompt-quality benchmark.
  *
- * The package ships no schema dependency (only `context-query-core`), so the
+ * The package ships no schema dependency, so the
  * contract is enforced with explicit validators. Every failure throws
  * `PromptEvalSchemaError` with an actionable message and an `errors` array: a
  * malformed suite fails loudly instead of being silently skipped.

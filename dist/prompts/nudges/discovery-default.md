@@ -1,8 +1,8 @@
 ---
 id: nudge.discovery.default
 name: Discovery nudge: default
-purpose: Fallback nudge recommending dedicated tools/CQE MCP.
-responsibility: Owns the fallback nudge recommending dedicated tools or the CQE MCP over raw bash discovery.
+purpose: Fallback nudge recommending native tools over raw bash file access.
+responsibility: Owns the fallback nudge recommending native tools over raw bash file access.
 consumer: src/policy/discovery-classifier.js#nudgeFor
 inputs: []
 output: single-line string
@@ -11,4 +11,4 @@ verification: src/prompts/characterization.test.mjs
 dependencies: []
 status: active
 ---
-Consider using dedicated tools (`grep`, `glob`, `read`) or the `context-query-engine` MCP instead of raw bash discovery.
+Use native tools (Read, Grep, Glob, Edit/Write) instead of raw bash file access; content-search secondary fallback: tgrep (https://github.com/microsoft/tgrep).

@@ -60,7 +60,6 @@ test("Real Integration Test with Live OpenCode WAM Pipeline", async () => {
     readLiveContext: () => ({}),
     persistLiveContext: () => {},
     assembleContext: () => "",
-    selectContextWithCqe: async () => ({ text: "" }),
     createSnapshot: () => {},
     checkContinuation: () => ({ isContinuation: false }),
     rebuildScope: () => {},

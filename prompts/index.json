@@ -4,7 +4,7 @@
       "id": "nudge.discovery.grep",
       "path": "nudges/discovery-grep.md",
       "status": "active",
-      "responsibility": "Owns the nudge steering search toward the grep tool or CQE MCP.",
+      "responsibility": "Owns the nudge steering search toward native Grep and tgrep as secondary fallback.",
       "consumers": [
         "src/policy/discovery-classifier.js#nudgeFor"
       ],
@@ -16,7 +16,7 @@
       "id": "nudge.discovery.glob",
       "path": "nudges/discovery-glob.md",
       "status": "active",
-      "responsibility": "Owns the nudge steering file listing toward the glob tool.",
+      "responsibility": "Owns the nudge steering file listing toward native Glob.",
       "consumers": [
         "src/policy/discovery-classifier.js#nudgeFor"
       ],
@@ -28,7 +28,7 @@
       "id": "nudge.discovery.read",
       "path": "nudges/discovery-read.md",
       "status": "active",
-      "responsibility": "Owns the nudge steering file reading toward the read tool or CQE MCP.",
+      "responsibility": "Owns the nudge steering file reading toward native Read.",
       "consumers": [
         "src/policy/discovery-classifier.js#nudgeFor"
       ],
@@ -40,7 +40,19 @@
       "id": "nudge.discovery.default",
       "path": "nudges/discovery-default.md",
       "status": "active",
-      "responsibility": "Owns the fallback nudge recommending dedicated tools or the CQE MCP over raw bash discovery.",
+      "responsibility": "Owns the fallback nudge recommending native tools over raw bash file access.",
+      "consumers": [
+        "src/policy/discovery-classifier.js#nudgeFor"
+      ],
+      "testRefs": [
+        "src/prompts/characterization.test.mjs"
+      ]
+    },
+    {
+      "id": "nudge.discovery.edit",
+      "path": "nudges/discovery-edit.md",
+      "status": "active",
+      "responsibility": "Owns the nudge steering shell in-place edits toward native Edit/Write.",
       "consumers": [
         "src/policy/discovery-classifier.js#nudgeFor"
       ],
@@ -113,18 +125,6 @@
       "path": "notices/welcome-or-disambiguate.md",
       "status": "active",
       "responsibility": "Owns the welcome prompt that greets the user and asks them to describe their intended task.",
-      "consumers": [
-        "src/integration/message-handler.js"
-      ],
-      "testRefs": [
-        "src/prompts/characterization.test.mjs"
-      ]
-    },
-    {
-      "id": "notice.pending_task",
-      "path": "notices/pending-task.md",
-      "status": "active",
-      "responsibility": "Owns the prompt offering to resume an existing pending task.",
       "consumers": [
         "src/integration/message-handler.js"
       ],
@@ -412,7 +412,7 @@
       "id": "policy.discovery.rules",
       "path": "policies/discovery.md",
       "status": "active",
-      "responsibility": "Owns the persistent Discovery policy: gather context before acting and prefer indexed lookups.",
+      "responsibility": "Owns the persistent Discovery policy: gather context before acting and prefer native lookups.",
       "consumers": [
         "src/skills/engine.js"
       ],

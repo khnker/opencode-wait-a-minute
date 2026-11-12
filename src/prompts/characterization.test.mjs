@@ -8,10 +8,11 @@ import assert from "node:assert/strict";
 import { loadPrompt } from "./loader.js";
 
 const STATIC = {
-  "nudge.discovery.grep": "Prefer '/wam ctx get \"<query>\"' (CQE index, fastest) over raw bash search; fallback: dedicated 'grep' tool.",
-  "nudge.discovery.glob": "Prefer '/wam ctx get \"<query>\"' (CQE index, fastest) over raw bash file listing/finding; fallback: dedicated 'glob' tool.",
-  "nudge.discovery.read": "Consider using the dedicated 'read' tool or 'context-query-engine' MCP (read_file) instead of raw bash file reading.",
-  "nudge.discovery.default": "Consider using dedicated tools (`grep`, `glob`, `read`) or the `context-query-engine` MCP instead of raw bash discovery.",
+  "nudge.discovery.grep": "Use the native Grep tool instead of raw bash grep; secondary fallback: tgrep (https://github.com/microsoft/tgrep).",
+  "nudge.discovery.glob": "Use the native Glob tool instead of raw bash find/ls.",
+  "nudge.discovery.read": "Use the native Read tool (offset/limit) instead of raw bash cat/head/tail/sed.",
+  "nudge.discovery.default": "Use native tools (Read, Grep, Glob, Edit/Write) instead of raw bash file access; content-search secondary fallback: tgrep (https://github.com/microsoft/tgrep).",
+  "nudge.discovery.edit": "Use the native Edit/Write tool instead of sed -i or awk writing to files.",
   "warning.runtime.guarded_no_hypothesis": "GUARDED action without hypothesisId — attach hypothesis before mutating.",
   "notice.no_active_task": "[wait-a-minute] No hay tarea activa. Dime qué tarea nueva quieres — no asumo intención previa.",
   "notice.blocked_generic": "⛔ [wait-a-minute] BLOQUEADO: Tienes preguntas sin responder.",

@@ -1,7 +1,7 @@
 /**
  * Real WAM Flow Execution Runner
  * Simulates a real user prompt through the actual WAM message handler
- * and outputs state transitions, evidence, token savings, and CQE telemetry.
+ * and outputs state transitions, evidence, and token savings.
  */
 
 import path from "node:path";

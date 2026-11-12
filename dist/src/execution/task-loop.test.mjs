@@ -1,43 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decideNextAction, buildTaskLoopPrompt, shouldPauseForContractApproval, TASK_LOOP_DECISIONS } from "./task-loop.js";
+import { decideNextAction, buildTaskLoopPrompt, TASK_LOOP_DECISIONS } from "./task-loop.js";
 import { isWamSynthetic } from "../integration/part-provenance.js";
 import { extractPrompt } from "../integration/message-handler.js";
-
-test("required contract approval pauses the autonomous loop while PROPOSED", () => {
-  assert.equal(
-    shouldPauseForContractApproval({
-      contractApproval: "required",
-      state: { contract: { status: "PROPOSED" } },
-    }),
-    true
-  );
-  assert.equal(
-    shouldPauseForContractApproval({
-      contractApproval: "required",
-      state: { contract: { status: "APPROVED" } },
-    }),
-    false
-  );
-});
-
-test("contract guard fails open without a contract or in advisory mode", () => {
-  assert.equal(
-    shouldPauseForContractApproval({ contractApproval: "required", state: {} }),
-    false
-  );
-  assert.equal(
-    shouldPauseForContractApproval({ contractApproval: "required", state: null }),
-    false
-  );
-  assert.equal(
-    shouldPauseForContractApproval({
-      contractApproval: "advisory",
-      state: { contract: { status: "PROPOSED" } },
-    }),
-    false
-  );
-});
 
 test("CONTINUE with pending gate while executing increments iteration", () => {
   const result = decideNextAction({
@@ -139,14 +104,9 @@ test("authorization and blocked states win over execution", () => {
   assert.equal(denied.decision, "BLOCK");
   assert.equal(denied.reason, "authorization-denied");
 
-  const unapproved = decideNextAction({ task: { state: "EXECUTING" }, authorization: { contractApproved: false } });
-  assert.equal(unapproved.decision, "WAIT_USER");
-  assert.equal(unapproved.reason, "contract-not-approved");
-  assert.equal(unapproved.checkpoint.status, "WAITING_USER");
-
   const approved = decideNextAction({
     task: { state: "EXECUTING", contract: { status: "APPROVED" } },
-    authorization: { pendingAuth: { id: "auth-1" }, contractApproved: true },
+    authorization: { contractApproved: true },
     completionGate: { pending: ["req-1"] },
   });
   assert.equal(approved.decision, "CONTINUE");
@@ -302,7 +262,7 @@ test("buildTaskLoopPrompt explains authorization and block next steps", () => {
     stopReason: "budget-exhausted",
   });
   assert.match(stop.parts[0].text, /Stopped: budget-exhausted/);
-  assert.match(stop.parts[0].text, /resume command/);
+  assert.match(stop.parts[0].text, /new evidence or correction/);
 });
 
 test("quality contradictions replan even when the gate looks complete", () => {

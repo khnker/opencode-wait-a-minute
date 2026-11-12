@@ -118,13 +118,9 @@ export function driveTaskLoop({
         repeatedRejectedHypothesis: deps.repeatedRejectedHypothesis === true,
         fingerprint,
       };
-      const contractRequired = contractApproval === "required";
       const authorization = {
         pendingAuth: task.pendingAuthorization || null,
         denied: task.pendingAuthorization?.status === "denied",
-        contractApproved: contractRequired
-          ? (task.contract?.status === "APPROVED" ? true : (task.contract?.status ? false : undefined))
-          : true,
       };
       const budget = {
         exhausted: (loop.iteration || 0) >= (loop.maxIterations ?? config.maxIterations),

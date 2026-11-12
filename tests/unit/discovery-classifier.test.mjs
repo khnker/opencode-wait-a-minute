@@ -79,6 +79,29 @@ test("nudgeFor: returns actionable suggestion for discovery", () => {
 test("nudgeFor: null for justified commands", () => {
   assert.equal(nudgeFor("npm test"), null);
   assert.equal(nudgeFor("cd src && npm run build"), null);
+  assert.equal(nudgeFor("git commit -m x"), null);
+});
+
+test("nudgeFor: names the native Grep tool and tgrep fallback", () => {
+  const nudge = nudgeFor("grep -rn foo .");
+  assert.match(nudge, /native Grep tool/);
+  assert.match(nudge, /tgrep/);
+  assert.doesNotMatch(nudge, /raw bash search/);
+});
+
+test("nudgeFor: sed reads point to native Read", () => {
+  assert.match(nudgeFor("sed -n '1,20p' file.js"), /native Read tool/);
+});
+
+test("nudgeFor: sed -i gets the Edit/Write nudge", () => {
+  const classification = classifyBash("sed -i 's/a/b/' file.js");
+  assert.equal(classification.kind, "justified");
+  assert.equal(classification.shellEdit, true);
+  assert.match(nudgeFor("sed -i 's/a/b/' file.js"), /native Edit\/Write tool/);
+});
+
+test("nudgeFor: awk writes get the Edit/Write nudge", () => {
+  assert.match(nudgeFor("awk 'BEGIN{print > \"f\"}' file.js"), /native Edit\/Write tool/);
 });
 
 test("workdirSuggestion: suggests workdir for cd", () => {

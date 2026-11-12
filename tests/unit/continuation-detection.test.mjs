@@ -21,7 +21,7 @@ describe("classifyMessage (continuation detection)", () => {
   });
 
   it("WAM commands are detected", () => {
-    const WAM_CMD_RE = /^(answer|resolve|contract|progress|task|skills|assumptions|compress|resume|backlog|ctx|decision)\b/;
+    const WAM_CMD_RE = /^(answer|resolve|contract|progress|task|skills|assumptions|compress|backlog|ctx|decision)\b/;
     
     assert.ok(WAM_CMD_RE.test("answer U1 si"));
     assert.ok(WAM_CMD_RE.test("progress req-1 done"));

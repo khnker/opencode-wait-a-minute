@@ -14,9 +14,16 @@ import {
 test("tagWamPart marks provenance", () => {
   const p = tagWamPart({ type: "text", text: "x" }, { messageID: "m1", phase: "emit" });
   assert.equal(p.synthetic, true);
-  assert.equal(p.metadata[WAM_META], true);
-  assert.equal(p.metadata.wamMessageId, "m1");
-  assert.equal(p.metadata.wamPhase, "emit");
+  assert.equal(p.metadata[WAM_META].synthetic, true);
+  assert.equal(p.metadata[WAM_META].messageId, "m1");
+  assert.equal(p.metadata[WAM_META].phase, "emit");
+});
+
+test("tagWamPart metadata is provider-options safe", () => {
+  const p = tagWamPart({ type: "text", text: "x" }, { messageID: "m1", phase: "visible-notice" });
+  for (const [key, value] of Object.entries(p.metadata)) {
+    assert.ok(value && typeof value === "object" && !Array.isArray(value), `metadata.${key} must be a JSON object`);
+  }
 });
 
 test("tagWamPart preserves metadata and applies idFactory", () => {
@@ -44,7 +51,7 @@ test("injectWamParts prepends tagged parts to parts sink", () => {
   injectWamParts(target, ["injected"], { messageID: "m1", phase: "emit" });
   assert.equal(target.parts.length, 2);
   assert.equal(target.parts[0].text, "injected");
-  assert.equal(target.parts[0].metadata[WAM_META], true);
+  assert.equal(target.parts[0].metadata[WAM_META].synthetic, true);
 });
 
 test("injectWamParts appends when requested and falls back to system", () => {

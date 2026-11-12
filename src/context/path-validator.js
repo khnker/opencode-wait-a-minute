@@ -16,7 +16,7 @@ export function canonicalRoot(candidate) {
 }
 
 /**
- * Resolve a CQE-provided path against the authorized repo root.
+ * Resolve a provided path against the authorized repo root.
  * Returns the canonical real path only when it stays inside the root.
  */
 export function validatePath(candidate, repoRoot) {

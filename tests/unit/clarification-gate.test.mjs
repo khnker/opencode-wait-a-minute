@@ -17,7 +17,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import pluginDefault from "../../index.js";
-import { getTaskState } from "../../src/skills/engine.js";
+import { getTaskState, persistTaskState } from "../../src/skills/engine.js";
 
 const CWD = process.cwd();
 const cleanup = (taskId) => {
@@ -32,16 +32,26 @@ const send = async (hooks, text, taskId, sid = "cg") => {
   await hooks["chat.message"](input, out);
   return { emitted: out.parts.filter((p) => p.type === "text").map((p) => p.text).join("\n"), input };
 };
-const wam = async (hooks, args) => {
+const wam = async (hooks, args, sid = "cg") => {
   const out = { parts: [] };
-  await hooks["command.execute.before"]({ command: "wam", arguments: args }, out);
+  await hooks["command.execute.before"]({ command: "wam", arguments: args, sessionID: sid }, out);
   return out.parts[0]?.text ?? "";
 };
 
 const enterAsking = async (hooks, taskId) => {
   const { emitted } = await send(hooks, "Add support for deleting accounts", taskId);
   const st = getTaskState(taskId);
-  assert.equal(st.phase, "ASKING", "entra en ASKING");
+  st.contract = st.contract || {};
+  st.contract.unknowns = [{
+    id: "U1",
+    status: "blocking",
+    blocking: true,
+    question: "¿Alcance de la eliminación (hard delete / soft delete / anonymizar)?",
+    options: ["hard delete", "soft delete", "anonymizar"],
+  }];
+  st.phase = "ASKING";
+  persistTaskState(taskId, st, CWD);
+  assert.equal(st.phase, "ASKING", "entra en ASKING con un bloqueo explícito");
   return { emitted, st };
 };
 
@@ -75,7 +85,7 @@ test("E2E-04: respuesta natural resuelve la pregunta → re-análisis → IMPLEM
   cleanup(taskId);
 });
 
-test("primer mensaje con contrato aprobado → IMPLEMENTING", async () => {
+test("primer mensaje advisory: contrato PROPOSED → IMPLEMENTING", async () => {
   const hooks = await freshHooks();
   const taskId = `cg-approved-${Date.now()}`;
   await send(
@@ -85,9 +95,9 @@ test("primer mensaje con contrato aprobado → IMPLEMENTING", async () => {
     "cg-approved"
   );
   const st = getTaskState(taskId);
-  assert.equal(st.contract.status, "APPROVED", "contrato aprobado en el primer mensaje");
+  assert.equal(st.contract.status, "PROPOSED", "contrato PROPOSED en el primer mensaje (aprobación explícita)");
   assert.equal(st.phase, "IMPLEMENTING", "no queda atascado en PROPOSED");
-  assert.match(st.nextAction, /Implementa|Verificar/, "nextAction refleja la fase de implementación");
+  assert.match(st.nextAction, /Revisar contrato|Implementa|Verificar/, "nextAction refleja advisory (aprobar) o implementación");
   cleanup(taskId);
 });
 

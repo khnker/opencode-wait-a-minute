@@ -23,8 +23,8 @@
  *   - autoLoop:    auto-continue after a rejected post-DONE review       (default true)
  *   - permissionPreflight: request access permissions before delegating  (default true)
  *   - permissionEnforce: hard-enforce permission decisions              (default false)
- *   - contractApproval: "required" pauses writes until /wam contract approve;
- *                       "advisory" proceeds after a recommendation       (default advisory)
+ *   - contractApproval: legacy compatibility flag; no longer pauses writes
+ *                       (kept so existing configs keep loading)      (default advisory)
  *   - taskLoop:    drive the execution loop after session.idle           (default enabled)
  *   - qualityContracts: enforce task-specific evidence requirements      (default disabled)
  *
@@ -36,7 +36,7 @@
  *   - autoLoop:    WAM_AUTO_LOOP=<bool> | WAM_DISABLE_AUTO_LOOP=1
  *   - permissionPreflight: WAM_PERMISSION_PREFLIGHT=<bool> | WAM_DISABLE_PERMISSION_PREFLIGHT=1
  *   - permissionEnforce: WAM_PERMISSION_ENFORCE=<bool>
- *   - contractApproval: WAM_CONTRACT_APPROVAL=required|advisory
+ *   - contractApproval: WAM_CONTRACT_APPROVAL accepted but ignored (legacy)
  *   - task loop agents: WAM_TASK_LOOP_AGENTS=1, WAM_AGENT_MAX_REVISIONS=<int>,
  *     WAM_AGENT_MAX_REPLANS=<int>, WAM_AGENT_MAX_HISTORY=<int>,
  *     WAM_AGENT_TOOL_TIMEOUT_MS=<positive-int>, WAM_AGENT_EARLY_PASS=<bool>
@@ -89,10 +89,6 @@ export function parseBoolean(value) {
   if (TRUE_VALUES.has(v)) return true;
   if (FALSE_VALUES.has(v)) return false;
   return undefined;
-}
-
-export function isDashboardEnabled(env = process.env) {
-  return parseBoolean(env.WAM_DASHBOARD) === true;
 }
 
 function firstDefined(...values) {

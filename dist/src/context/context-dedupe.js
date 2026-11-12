@@ -29,18 +29,8 @@ export function normalizeContextText(text) {
     .toLowerCase();
 }
 
-const CQE_FIRST_LINE_RE = /^(?:cqe:|\[wam cqe)/i;
-const FILE_TOKEN_RE = /(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+\.[A-Za-z][A-Za-z0-9]{0,7}|[A-Za-z0-9_.-]+\.[A-Za-z][A-Za-z0-9]{0,7}/g;
-
-function cqeFileKey(text) {
-  const raw = String(text || "").trim();
-  if (!CQE_FIRST_LINE_RE.test(raw)) return null;
-  const files = [...raw.matchAll(FILE_TOKEN_RE)].map((m) => m[0]);
-  return `cqe:${[...new Set(files)].sort().join(",")}`;
-}
-
 export function hashContextBlock(text) {
-  const key = cqeFileKey(text) ?? normalizeContextText(text);
+  const key = normalizeContextText(text);
   return crypto.createHash("sha256").update(key).digest("hex").slice(0, 16);
 }
 

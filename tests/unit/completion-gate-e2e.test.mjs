@@ -76,7 +76,7 @@ test("G5: DONE sin evidencia → advisory (markRequirement lo rechaza y gate lo 
   assert.ok(gate.includes("sin evidencia"), "gate lista requisito done-sin-evidencia como pendiente");
 });
 
-test("G5: contrato nace aprobado; DONE con reqs sin verificar es advisory", async () => {
+test("G5: contrato nace PROPOSED; DONE con reqs sin verificar es advisory", async () => {
   const taskId = `g5-d-${Date.now()}`;
   await runHook("implementar X y agregar tests", taskId);
   const st = getTaskState(taskId);
@@ -86,7 +86,7 @@ test("G5: contrato nace aprobado; DONE con reqs sin verificar es advisory", asyn
   }
   const gate = pluginDefault.evaluateCompletionGate(st, "todo listo, done");
   cleanup(taskId);
-  assert.equal(st.contract.status, "APPROVED");
+  assert.equal(st.contract.status, "PROPOSED");
   assert.equal(gate.blocked, false, "no bloquea el claim de DONE");
   assert.equal(gate.advisory, true, "devuelve recomendación");
   assert.match(gate.recommendation, /Recomendación:/);

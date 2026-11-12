@@ -59,13 +59,13 @@ export function classifyBash(command) {
       return { kind: "justified", primary, reason: "find -delete/-fprint* writes or -exec runs a non-read-only program" };
     }
     if (stageCmd === "sed" && bare.some((t) => /^-[a-zA-Z]*i/.test(t) || t.startsWith("--in-place"))) {
-      return { kind: "justified", primary, reason: "sed -i edits files in place" };
+      return { kind: "justified", primary, reason: "sed -i edits files in place", shellEdit: true };
     }
     if (stageCmd === "sort" && bare.some((t) => t.startsWith("-o") || /^--output(?:=|$)/.test(t))) {
       return { kind: "justified", primary, reason: "sort -o writes its output to a file" };
     }
     if (stageCmd === "awk" && (/\bsystem\s*\(/.test(stage) || /\bprintf?\s*>{1,2}/.test(stage))) {
-      return { kind: "justified", primary, reason: "awk system() or print redirection writes" };
+      return { kind: "justified", primary, reason: "awk system() or print redirection writes", shellEdit: true };
     }
     if (stageCmd === "rg" && bare.some((t) => /^--pre(?:=|$)/.test(t))) {
       return { kind: "justified", primary, reason: "rg --pre executes an external program" };
@@ -144,20 +144,23 @@ function splitPipeline(clean) {
 
 export function nudgeFor(command) {
   const classification = classifyBash(command);
-  if (classification.kind !== "read-only") {
-    return null;
+  if (classification.kind === "read-only") {
+    const primary = classification.primary;
+    if (primary === "grep" || primary === "rg") {
+      return loadPrompt("nudge.discovery.grep");
+    }
+    if (primary === "ls" || primary === "find" || primary === "tree") {
+      return loadPrompt("nudge.discovery.glob");
+    }
+    if (primary === "cat" || primary === "head" || primary === "tail" || primary === "sed") {
+      return loadPrompt("nudge.discovery.read");
+    }
+    return loadPrompt("nudge.discovery.default");
   }
-  const primary = classification.primary;
-  if (primary === "grep" || primary === "rg") {
-    return loadPrompt("nudge.discovery.grep");
+  if (classification.shellEdit) {
+    return loadPrompt("nudge.discovery.edit");
   }
-  if (primary === "ls" || primary === "find" || primary === "tree") {
-    return loadPrompt("nudge.discovery.glob");
-  }
-  if (primary === "cat" || primary === "head" || primary === "tail") {
-    return loadPrompt("nudge.discovery.read");
-  }
-  return loadPrompt("nudge.discovery.default");
+  return null;
 }
 
 export function workdirSuggestion(command) {

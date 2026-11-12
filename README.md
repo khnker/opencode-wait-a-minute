@@ -17,20 +17,6 @@ WAM keeps more state than it sends.
 
 WAM adds deterministic control, task-state management, context reconstruction, skill routing, and evidence-backed verification to OpenCode agents. It correlates task state, skills, context, evidence, and verification to determine what should happen next.
 
-#### Context-Query-Core Integration (CQE)
-
-WAM ships a CQE adapter (`src/context/cqe-adapter.js`) that integrates [context-query-core](https://github.com/khnker/context-query-core), a fast, in-process code-evidence retriever using SQLite + trigram indexing for lexical and symbolic snippet matching.
-
-Modes: `disabled`, `shadow`, `enabled`. The adapter defaults to `enabled` when invoked directly; override with `WAM_CQE_MODE`, or disable with `WAM_CQE=0`. Every runtime context retrieval consults CQE via `selectContextWithCqe` and augments the package with bounded `file_context`; opt out with `WAM_CQE_MODE=disabled`, `WAM_CQE=0`, or `cfg.disableCqe`.
-
-Benchmark (fixture corpus, k=5, 10 queries): CQE retrieved **142 tokens vs. 302 for the baseline** ripgrep search — **52.98% fewer tokens** — with higher precision (0.617 vs 0.613) and MRR (0.700 vs 0.683), and comparable recall (0.70 vs 0.75). Reproduce with:
-
-```bash
-node benchmarks/retrieval/run-ab.mjs --corpus fixture --k 5
-```
-
-The adapter is designed to be safe: it never alters task state, distinguishes empty results from errors, and falls back to native retrieval on any issue.
-
 [Install](#install) [Documentation](#documentation)
 
 PROVEN IN RC1
@@ -163,10 +149,9 @@ Once installed, WAM intercepts requests before skill resolution and agent execut
 - `/wam config get` — show effective config; set `WAM_GOVERNANCE=off` or `.wam/config.json` to disable globally.
 - Automatic post-DONE loop — when a DONE claim is rejected, WAM re-drives the session itself until the gate is clean. Bounded per pending set (3 attempts) and total (10). Disable with `"autoLoop": false` in `.wam/config.json` or `WAM_AUTO_LOOP=0`.
 - Permission preflight — before delegating to a subagent, WAM derives the access permissions the approved task needs and surfaces them as a recommendation; delegation is never blocked (`/wam permissions approve` / `deny` only update the plan, `/wam status` shows it). Disable with `"permissionPreflight": false` in `.wam/config.json` or `WAM_DISABLE_PERMISSION_PREFLIGHT=1`.
-- Contract approval — `"contractApproval": "advisory" | "required"` in `.wam/config.json` (default `advisory`; override with `WAM_CONTRACT_APPROVAL`). In `required` mode, `write`, `edit`, `apply_patch`, `patch` and `todo_write` are blocked until the user sends `/wam contract approve`; the model first restates the visible plan and the hard block repeats it with the objective, pending requirements and verification.
+- Contract approval — `"contractApproval"` in `.wam/config.json` (or `WAM_CONTRACT_APPROVAL`) is accepted for backward compatibility but no longer pauses writes or the task loop. The agent advances immediately; the synthesized contract stays informational and `/wam contract approve` remains optional.
 - Context projection — `"contextProjection": "legacy" | "shadow" | "active"` in `.wam/config.json` (default `active`; override with `WAM_CONTEXT_PROJECTION`). `shadow` measures the projection against the legacy brief without injecting it; `legacy` keeps the previous brief.
 - Logging — off by default. Enable with `"logging": true` in `.wam/config.json` or `WAM_LOGGING=1`.
-- Sessions dashboard — off by default. Enable with `WAM_DASHBOARD=1` (optional `WAM_DASHBOARD_PORT`, default `4321`).
 
 ## Debugging and diagnostics
 WAM emits structured, greppable traces when debug mode is on. They audit which WAM logic is loaded, which is skipped, and what runtime decisions were made — useful for benchmarking, regression detection and logic-gap analysis.

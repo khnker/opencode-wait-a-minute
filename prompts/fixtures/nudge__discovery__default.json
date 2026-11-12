@@ -2,9 +2,9 @@
   "id": "nudge.discovery.default",
   "vars": {},
   "mustContain": [
-    "dedicated tools",
-    "context-query-engine",
-    "raw bash discovery"
+    "Read, Grep, Glob, Edit/Write",
+    "raw bash file access",
+    "tgrep"
   ],
   "mustNotContain": []
 }

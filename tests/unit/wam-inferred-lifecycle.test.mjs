@@ -34,7 +34,7 @@ function partText(out) {
   return p?.text || "";
 }
 
-test("WAM inferred lifecycle: PROPOSED → APPROVED → IMPLEMENTING → VERIFYING → DONE + archive", async () => {
+test("WAM inferred lifecycle: PROPOSED → IMPLEMENTING → VERIFYING → DONE + archive (advisory)", async () => {
   const taskId = `wam-inferred-${Date.now()}`;
 
   // 1. User says "I want to implement X"
@@ -42,7 +42,7 @@ test("WAM inferred lifecycle: PROPOSED → APPROVED → IMPLEMENTING → VERIFYI
   const st1 = getTaskState(taskId);
   assert.ok(st1, "task state created after user prompt");
   assert.equal(st1.phase, "IMPLEMENTING", "phase = IMPLEMENTING after first prompt");
-  assert.equal(st1.contract.status, "APPROVED", "contract starts APPROVED — no approval wait");
+  assert.equal(st1.contract.status, "PROPOSED", "contract starts PROPOSED — approval is explicit");
   assert.ok(st1.requirements.length > 0, "requirements synthesized");
   assert.ok(partText(out1).length > 0, "WAM emits a part (contract proposal)");
 

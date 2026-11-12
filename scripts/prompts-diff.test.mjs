@@ -28,7 +28,7 @@ function withTempCandidate(body, fn) {
 test("fixture coverage: every catalog id has a fixture file", () => {
   const missing = CATALOG.map((p) => p.id).filter((id) => !fs.existsSync(fixturePathForId(id)));
   assert.deepEqual(missing, [], `missing fixtures for: ${missing.join(", ")}`);
-  assert.equal(CATALOG.length, 44, "catalog should register 43 prompts");
+  assert.equal(CATALOG.length, 44, "catalog should register 44 prompts");
 });
 
 test("self-diff of every prompt is unchanged and exits 0", () => {
@@ -43,11 +43,11 @@ test("self-diff of every prompt is unchanged and exits 0", () => {
 });
 
 test("runDiff loads the fixture and renders base identically when no candidate", () => {
-  const r = runDiff({ id: "notice.pending_task", candidatePath: null, root: REPO_ROOT });
+  const r = runDiff({ id: "notice.similar_task", candidatePath: null, root: REPO_ROOT });
   assert.equal(r.changed, false);
   assert.equal(r.verdict, "unchanged");
-  assert.ok(r.baseRender.includes("task-42"));
-  assert.ok(r.baseRender.includes("RUNNING"));
+  assert.ok(r.baseRender.includes("task-9"));
+  assert.ok(r.baseRender.includes("/wam task switch task-9"));
 });
 
 test("candidate dropping a mustContain is rejected (exit 1)", () => {

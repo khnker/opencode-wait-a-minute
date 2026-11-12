@@ -449,18 +449,18 @@ test("no_task_assumption: '¿en qué estábamos?' sin tarea activa → pregunta,
   assert.ok(!visibleText(out).includes("[wam"), "el chat visible queda limpio de avisos WAM");
 });
 
-test("no_task_assumption: con tarea pendiente → ofrece continuar, NO inyecta su contexto", async () => {
+test("no_task_assumption: con tarea pendiente → continúa automáticamente, sin /wam resume", async () => {
   const taskId = `resume-${Date.now()}`;
   const hooks = await pluginDefault({ directory: process.cwd(), client: {}, project: {}, $: {} });
   await hooks["chat.message"]({ parts: [{ type: "text", text: "implementar migración postgres con tests" }], taskId }, { parts: [], system: [] });
   pluginDefault.approveContract(taskId);
   pluginDefault.resumeTask(taskId);
   const out = { parts: [], system: [] };
-  await hooks["chat.message"]({ parts: [{ type: "text", text: "¿en qué estábamos?" }] }, out);
+  await hooks["chat.message"]({ parts: [{ type: "text", text: "sigamos" }] }, out);
   const t = outputText(out);
-  assert.ok(t.includes(`tarea pendiente: ${taskId}`), "ofrece la tarea pendiente: " + t);
-  assert.ok(!t.includes("[wam N2 task]"), "NO asume la continuación (no inyecta su contexto)");
-  assert.ok(!t.includes("migración postgres"), "no re-emite contenido de la tarea");
+  assert.ok(t.includes("[wam N2 task]"), "continúa la tarea pendiente con su contexto: " + t);
+  assert.ok(!t.includes("/wam resume"), "no pide el comando eliminado");
+  assert.ok(!t.includes("tarea pendiente:"), "no vuelve a preguntar si continuar");
   try {
     fs.rmSync(path.join(process.cwd(), ".wam", "tasks", taskId), { recursive: true, force: true });
   } catch {}
@@ -539,15 +539,19 @@ test("delegación advisory: contrato APPROVED con reqs pendientes genera directi
     { sessionID: "sd1", parts: [{ type: "text", text: "arregla el bug del frontend y agrega tests e2e" }], taskId },
     created
   );
+  assert.ok(!outputText(created).includes("[wam delegation]"), "contrato PROPOSED no emite directivas de delegación");
+
   pluginDefault.approveContract(taskId, tmp);
   const st = getTaskState(taskId, tmp);
   assert.ok(st.contract.status === "APPROVED", "contrato aprobado");
 
-  const createdText = outputText(created);
+  const delegated = { parts: [], system: [] };
+  await hooks["chat.message"]({ sessionID: "sd1", parts: [{ type: "text", text: "continuá con la implementación" }], taskId }, delegated);
+  const createdText = outputText(delegated);
   assert.ok(createdText.includes("[wam delegation]"), "directiva de delegación en contexto oculto");
   assert.ok(/Task\(parallel\)/.test(createdText), "reqs → Task paralelo");
   assert.ok(/contexto: frontend/.test(createdText), "req con hint de dominio frontend");
-  assert.ok(!visibleText(created).includes("[wam delegation]"), "el chat visible no muestra la directiva");
+  assert.ok(!visibleText(delegated).includes("[wam delegation]"), "el chat visible no muestra la directiva");
 
   const out = { parts: [], system: [] };
   await hooks["chat.message"]({ sessionID: "sd1", parts: [{ type: "text", text: "tarea terminada, done" }], taskId }, out);
@@ -605,24 +609,24 @@ test("subagent session receives no WAM injection", async () => {
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
 });
 
-test("incertidumbre: prompt ambiguo no pide aprobación; el contrato nace APPROVED", async () => {
+test("incertidumbre: prompt ambiguo no pide aprobación; el contrato queda PROPOSED", async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wam-unc-"));
   const hooks = await pluginDefault({ directory: tmp, client: {}, project: {}, $: {} });
   const taskId = `unc-${Date.now()}`;
 
-  // primer mensaje ambiguo → contrato nace APPROVED (no espera un sí/no)
+  // primer mensaje ambiguo → contrato nace PROPOSED (no se auto-aprueba)
   const out1 = { parts: [], system: [] };
   await hooks["chat.message"]({ sessionID: "su1", parts: [{ type: "text", text: "haz algo con eso" }], taskId }, out1);
   let st = getTaskState(taskId, tmp);
-  assert.equal(st.contract?.status, "APPROVED", "ambiguo → contrato APPROVED (sin espera de aprobación)");
+  assert.equal(st.contract?.status, "PROPOSED", "ambiguo → contrato PROPOSED (aprobación explícita)");
   const t1 = out1.parts.map((p) => p.text || "").join("\n");
   assert.ok(!/¿Apruebo|Responde sí/.test(t1), "no pide aprobación explícita");
 
-  // confirmación natural → aprueba sin comando /wam
+  // confirmación natural → NO aprueba: solo /wam contract approve
   const out2 = { parts: [], system: [] };
   await hooks["chat.message"]({ sessionID: "su1", parts: [{ type: "text", text: "si hazlo" }], taskId }, out2);
   st = getTaskState(taskId, tmp);
-  assert.equal(st.contract?.status, "APPROVED", "confirmación 'si' aprueba el contrato");
+  assert.equal(st.contract?.status, "PROPOSED", "texto natural no aprueba el contrato");
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
 });
 

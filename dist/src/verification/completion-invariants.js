@@ -137,20 +137,20 @@ export function evaluateCompletionInvariants(state, options = {}) {
 
   const unknowns = Array.isArray(state.contract?.unknowns) ? state.contract.unknowns : [];
   const blockingUnknowns = unknowns.filter(
-    (unknown) => unknown?.status === "blocking",
+    (unknown) => unknown?.status === "blocking" && unknown?.blocking === true,
   );
   for (const unknown of blockingUnknowns) {
-    pending.push(`${unknown.id} - ${unknown.question} (DECISION_CRITICAL sin responder)`);
+    pending.push(`${unknown.id} - ${unknown.question} (duda técnica explícita sin responder)`);
   }
 
   const assumptions = Array.isArray(state.contract?.assumptions) ? state.contract.assumptions : [];
   const blockingAssumptions = assumptions.filter(
     (assumption) =>
-      assumption?.classification === "DECISION_CRITICAL" &&
+      assumption?.blocking === true &&
       assumption?.status !== "resolved",
   );
   for (const assumption of blockingAssumptions) {
-    pending.push(`${assumption.id} - ${assumption.statement} (DECISION_CRITICAL sin resolver)`);
+    pending.push(`${assumption.id} - ${assumption.statement} (duda técnica explícita sin resolver)`);
   }
 
   if (state.requirements !== undefined && !Array.isArray(state.requirements)) {

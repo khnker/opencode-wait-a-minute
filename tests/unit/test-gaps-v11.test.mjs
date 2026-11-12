@@ -16,11 +16,11 @@ test("Lifecycle: status + phase evolution", async () => {
     cleanup(taskId);
     const hooks = await pluginDefault({ directory: CWD, client: {}, project: {}, $: {} });
 
-    // 1. Nueva tarea con contrato auto-aprobado -> IMPLEMENTING
+    // 1. Nueva tarea advisory: contrato PROPOSED, el trabajo continúa (IMPLEMENTING)
     await hooks["chat.message"]({ sessionID: "lfy", message: { parts: [{ type: "text", text: "implementar X y agregar tests" }] }, taskId }, { message: {}, parts: [] });
     let state = getTaskState(taskId);
     assert.equal(state.phase, "IMPLEMENTING");
-    assert.equal(state.contract.status, "APPROVED", "los contratos arrancan APPROVED (sin espera de aprobación)");
+    assert.equal(state.contract.status, "PROPOSED", "los contratos arrancan PROPOSED (aprobación explícita)");
 
     // 2. Aprobación explícita: idempotente, sigue APPROVED e IMPLEMENTING
     const approved = pluginDefault.approveContract(taskId);

@@ -34,20 +34,20 @@ function send(hooks, taskId, text, seq) {
   }));
 }
 
-test("contract approval requires explicit confirmation and emits post-refresh nextAction", async () => {
+test("contract approval is explicit: advisory never auto-approves nor prompts", async () => {
   const taskId = `gate-${Date.now()}`;
   const hooks = await pluginDefault({ directory: CWD, client: {}, project: {}, $: {} });
 
   try {
-    // El contrato es informativo: nace APPROVED y nunca pide confirmación.
+    // El contrato nace PROPOSED: advisory no bloquea ni pide confirmación.
     await send(hooks, taskId, "implementa un endpoint REST para usuarios en nestjs", 1);
     let state = getTaskState(taskId);
-    assert.equal(state.contract.status, "APPROVED", "el contrato nace aprobado (advisory)");
+    assert.equal(state.contract.status, "PROPOSED", "el contrato nace PROPOSED (advisory)");
 
     // Free text never approves nor rejects a contract.
     const no = await send(hooks, taskId, "no", 2);
     state = getTaskState(taskId);
-    assert.equal(state.contract.status, "APPROVED", "texto libre nunca cambia el contrato");
+    assert.equal(state.contract.status, "PROPOSED", "texto libre nunca aprueba el contrato");
     assert.ok(!no.emitted.includes("¿Apruebo"), "no hay pregunta de aprobación");
     assert.ok(!no.emitted.includes("Contrato rechazado"), "no hay rechazo por texto libre");
   } finally {

@@ -39,7 +39,7 @@ describe("part-provenance contract", () => {
     assertValidPart(sink.parts[0]);
     assert.equal(sink.parts[0].sessionID, "ses_test");
     assert.equal(sink.parts[0].messageID, "msg_test");
-    assert.equal(sink.parts[0].metadata.wamPhase, "cpc");
+    assert.equal(sink.parts[0].metadata.wam.phase, "cpc");
   });
 
   it("validateWamPart rechaza exactamente el part que rompía la sesión", () => {

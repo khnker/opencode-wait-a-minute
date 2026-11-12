@@ -37,14 +37,14 @@ test("Pre-flight cognitivo: analiza intención, contexto de proyecto y riesgo", 
   assert.ok(a.complexity, "evalúa complejidad");
 });
 
-test("Completion Contract: propone requisitos, verificación y restricciones (nace PROPOSED, espera aprobación)", async () => {
+test("Completion Contract: propone requisitos, verificación y restricciones (nace PROPOSED y avanza)", async () => {
   const taskId = `rv-ct-${Date.now()}`;
   await runHook("implementar auth con refresh token y migración", taskId);
   const st = getTaskState(taskId);
   cleanup(taskId);
   assert.ok(st, "estado persistido");
-  // Root nuevo → contrato PROPOSED y fase PROPOSED: requiere /wam contract approve
-  assert.equal(st.phase, "PROPOSED");
+  // El contrato nace PROPOSED (informativo); la tarea avanza sin aprobación.
+  assert.equal(st.phase, "IMPLEMENTING");
   assert.equal(st.contract?.status, "PROPOSED");
   assert.ok(st.contract?.requirements?.length >= 1, "propone requisitos");
   assert.ok(Array.isArray(st.contract?.verification), "define verificación");

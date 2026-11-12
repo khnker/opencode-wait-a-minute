@@ -1,8 +1,8 @@
 ---
 id: nudge.discovery.glob
 name: Discovery nudge: glob
-purpose: Steer agent away from raw bash listing toward CQE first (/wam ctx get), glob tool as fallback.
-responsibility: Owns the nudge steering file listing toward CQE first, glob tool as fallback.
+purpose: Steer agent away from raw bash listing toward native Glob.
+responsibility: Owns the nudge steering file listing toward native Glob.
 consumer: src/policy/discovery-classifier.js#nudgeFor
 inputs: []
 output: single-line string
@@ -11,4 +11,4 @@ verification: src/prompts/characterization.test.mjs
 dependencies: []
 status: active
 ---
-Prefer '/wam ctx get "<query>"' (CQE index, fastest) over raw bash file listing/finding; fallback: dedicated 'glob' tool.
+Use the native Glob tool instead of raw bash find/ls.

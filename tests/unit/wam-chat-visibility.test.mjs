@@ -31,7 +31,7 @@ test("WAM chat visibility: notices are synthetic and never replace the user text
   assert.ok(interventionPart, "Debe contener el aviso sintético de WAM");
   assert.doesNotMatch(interventionPart.text, /Intervención activa/, "ya no hay gate de intervención");
   assert.strictEqual(interventionPart.synthetic, true, "Los avisos de WAM deben ser synthetic");
-  assert.strictEqual(interventionPart.metadata.wam, true, "Debe tener metadata.wam = true");
+  assert.strictEqual(interventionPart.metadata.wam.synthetic, true, "Debe tener metadata.wam.synthetic = true");
 
   const nonSynthetic = output.parts.filter((p) => p.type === "text" && p.synthetic !== true);
   assert.deepStrictEqual(

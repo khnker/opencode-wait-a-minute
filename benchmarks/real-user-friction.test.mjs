@@ -44,7 +44,6 @@ test("Real User Friction & Message Injection Test", async () => {
     readLiveContext: () => ({}),
     persistLiveContext: () => {},
     assembleContext: () => "",
-    selectContextWithCqe: () => [],
     createSnapshot: () => {},
     checkContinuation: () => false,
     rebuildScope: () => {},

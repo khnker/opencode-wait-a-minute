@@ -2,9 +2,9 @@
   "id": "nudge.discovery.grep",
   "vars": {},
   "mustContain": [
-    "'grep' tool",
-    "context-query-engine",
-    "instead of raw bash search"
+    "native Grep tool",
+    "raw bash grep",
+    "tgrep (https://github.com/microsoft/tgrep)"
   ],
   "mustNotContain": []
 }

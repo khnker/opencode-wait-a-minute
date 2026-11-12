@@ -15,8 +15,8 @@ test("loader: loads a static prompt verbatim", () => {
 
 test("loader: interpolates all placeholder occurrences", () => {
   assert.equal(
-    loadPrompt("notice.pending_task", { active: "task-1", phase: "RUNNING" }),
-    "[wait-a-minute] Hay una tarea pendiente: task-1 (fase RUNNING). ¿Quieres continuarla? Responde /wam resume task-1 o define una tarea nueva — no asumo intención.",
+    loadPrompt("notice.similar_task", { taskId: "task-9" }),
+    "[wait-a-minute] Tarea similar detectada: task-9 (usa /wam task switch task-9 para retomar)",
   );
 });
 

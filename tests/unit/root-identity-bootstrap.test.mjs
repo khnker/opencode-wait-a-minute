@@ -16,8 +16,6 @@ import {
   resolveWamRoot,
   clearRepoCache,
   isSessionId,
-  isBootstrapRoot,
-  applyBootstrapApproval,
 } from "../../src/context/context.js";
 
 // Estos tests verifican el puntero por root (`<root>/.wam/active_session.json`).
@@ -117,43 +115,6 @@ test("resolveWamRoot: contenedor sin .wam sigue matcheando el repo nombrado", (t
   clearRepoCache();
 
   assert.equal(resolveWamRoot("arregla el bug del frontend", proj), repo);
-});
-
-// -- F3: bootstrap -----------------------------------------------------------
-
-test("bootstrap: la primera tarea nace aprobada y la segunda sigue PROPOSED", (t) => {
-  const root = tmpRoot("wam-bootstrap-");
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-
-  assert.equal(isBootstrapRoot(root, "task-a"), true);
-  const first = applyBootstrapApproval(
-    { phase: "PROPOSED", contract: { status: "PROPOSED" }, requirements: [{ id: "req-1", status: "pending" }] },
-    "task-a",
-    root,
-  );
-  assert.equal(first.phase, "IMPLEMENTING");
-  assert.equal(first.contract.status, "APPROVED");
-  assert.equal(first.contract.approvedBy, "bootstrap");
-
-  fs.mkdirSync(path.join(root, ".wam", "tasks", "task-a"), { recursive: true });
-  assert.equal(isBootstrapRoot(root, "task-b"), false);
-  const second = applyBootstrapApproval(
-    { phase: "PROPOSED", contract: { status: "PROPOSED" } },
-    "task-b",
-    root,
-  );
-  assert.equal(second.phase, "PROPOSED");
-  assert.equal(second.contract.status, "PROPOSED");
-  assert.equal(second.contract.approvedBy, undefined);
-});
-
-test("bootstrap: un root con project.md ya no bootstrapea", (t) => {
-  const root = tmpRoot("wam-bootstrap-off-");
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-
-  fs.mkdirSync(path.join(root, ".wam", "context"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".wam", "context", "project.md"), "# Project");
-  assert.equal(isBootstrapRoot(root, "task-a"), false);
 });
 
 test("resolveRoot: aliases of the same directory share one canonical identity", (t) => {

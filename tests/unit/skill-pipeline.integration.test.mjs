@@ -127,7 +127,7 @@ describe("skill pipeline integration (detect -> select -> inject)", () => {
     assert.ok(isWamSynthetic(part), "injected part must be tagged as WAM synthetic");
     assert.equal(part.type, "text");
     assert.equal(part.id, "prt_0000000000000001");
-    assert.equal(part.metadata.wamMessageId, "msg-skill-1");
+    assert.equal(part.metadata.wam.messageId, "msg-skill-1");
     assert.ok(part.text.includes(expect[0]), "injected part must carry the skill content");
   });
 
@@ -136,8 +136,8 @@ describe("skill pipeline integration (detect -> select -> inject)", () => {
     const tagged = tagWamPart(source, { messageID: "m", phase: "emit" });
     assert.equal(source.synthetic, undefined);
     assert.equal(tagged.synthetic, true);
-    assert.equal(tagged.metadata.wam, true);
-    assert.equal(tagged.metadata.wamMessageId, "m");
+    assert.equal(tagged.metadata.wam.synthetic, true);
+    assert.equal(tagged.metadata.wam.messageId, "m");
     assert.ok(isWamSynthetic(tagged));
   });
 });
